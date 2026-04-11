@@ -52,12 +52,14 @@ Likely metric types:
 - duration
 - percent
 - checklist progress
+- performance measurement such as elapsed time for a fixed-distance effort
 
 Important design direction:
 
 - a metric may exist even when no goal is active
 - a goal may reference an existing metric rather than owning the entire history itself
 - one goal may eventually support more than one metric, but the initial design should avoid unnecessary complexity unless a clear use case requires it
+- a metric may have multiple timestamped entries on the same day, such as morning and evening weight measurements or multiple rowing attempts
 
 ### Rule
 
@@ -83,6 +85,8 @@ Expected characteristics:
 - may contain attached file or image references later
 - should support edit history or replacement tracking
 - should be attributable to one or more metric streams and optionally to a goal context
+- should preserve exact measurement time so multiple same-day entries remain distinct
+- may include attempt metadata when the entry represents a performance effort or workout attempt
 
 ### Reminder Configuration
 
@@ -124,6 +128,7 @@ Examples:
 - rolling-window score
 - forecast output
 - widget snapshot data
+- best-attempt summaries for performance goals
 
 Derived state may be cached for performance, but it must be rebuildable.
 
@@ -143,6 +148,33 @@ A share link exposes a widget or dashboard through a public identifier with cont
 
 An audit event records a meaningful action performed by a user or the system.
 
+### Backup Snapshot
+
+A backup snapshot represents a known backup artifact that administrators can inspect and potentially restore from.
+
+Expected characteristics:
+
+- stable identifier
+- creation time
+- source type such as scheduled or on-demand
+- storage location or opaque storage reference
+- size and retention metadata where available
+- status such as pending, completed, failed, expired, or deleted
+- actor when user-triggered
+
+### Restore Operation
+
+A restore operation represents an explicit administrative request to restore application state from a backup snapshot.
+
+Expected characteristics:
+
+- references a target backup snapshot
+- initiated by an administrator
+- has requested, started, completed, failed, or cancelled states
+- stores confirmation metadata and reason text where required
+- records result details sufficient for operations and audit review
+- may reference pre-restore safety actions such as creating a fresh backup before restore
+
 ## Proposed Relationship Model
 
 At a conceptual level:
@@ -152,6 +184,7 @@ At a conceptual level:
 - one user owns many dashboards
 - one user owns many widgets
 - one user owns many notifications
+- one administrator may initiate many backup snapshots and restore operations
 - one metric has many entries
 - one goal has one or more rules
 - one goal may have reminder configuration
@@ -162,6 +195,7 @@ At a conceptual level:
 - one share link targets one widget or one dashboard
 - one user has many sessions
 - one user or system process emits many audit events
+- one backup snapshot may have many restore operations over time
 
 ## Ownership Model
 
@@ -186,6 +220,8 @@ The default ownership rule is simple:
 - dashboards
 - widgets
 - share links
+- backup snapshots
+- restore operations
 - audit events
 - seed application records
 
@@ -214,6 +250,10 @@ Reminder rules should influence when the user is notified, not what the system c
 ### Keep auditability visible
 
 Any entity that changes through system jobs should be designed so the resulting state can be correlated with audit events.
+
+### Treat restore as an explicit operational domain concept
+
+Restore should not be an undocumented shell-side escape hatch. If the UI can request restore behavior, the domain model needs first-class records for backup inventory and restore execution history so the system can explain what happened, who requested it, and what source artifact was used.
 
 ### Plan for controlled evolution
 

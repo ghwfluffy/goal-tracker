@@ -1,8 +1,5 @@
--- Setup user
-GRANT ALL PRIVILEGES ON DATABASE budget TO ghw;
-GRANT ALL ON ALL TABLES IN SCHEMA public TO ghw;
-GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO ghw;
-
 -- Bootstrap-only setup. App schema is managed by SQL migrations in
--- python/mp/db/migrations and applied at API startup.
+-- api/alembic and applied by the Python layer. The PostgreSQL image
+-- creates the configured user and database from environment variables,
+-- so this file only handles bootstrap-safe database extensions.
 CREATE EXTENSION IF NOT EXISTS pgcrypto;

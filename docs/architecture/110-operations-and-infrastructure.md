@@ -83,7 +83,22 @@ Current direction:
 
 - backup ownership is controlled by configured UID and GID from environment
 - backups are part of the normal Compose-managed environment
-- restore procedures should eventually be documented once the stack exists
+- the application should persist backup metadata so administrators can inspect available backups through the admin UI
+- administrators should be able to trigger an on-demand backup through the admin UI
+- restore procedures should be supported through the admin UI as a controlled workflow, not only as shell-only operational knowledge
+
+## Restore Direction
+
+Restore is a high-risk operation and should be modeled explicitly.
+
+Current direction:
+
+- only administrators can access restore capabilities
+- the UI should present available backups, backup metadata, and clear warnings before restore
+- restore requests should go through a server-side job or maintenance path with explicit status tracking
+- the system should strongly consider taking a fresh backup immediately before restore when feasible
+- restore progress and outcome should be visible to administrators after the request is submitted
+- restore execution should favor simple full-instance recovery first unless a later approved design justifies more granular restore behavior
 
 ## Environment Configuration
 
@@ -108,6 +123,8 @@ Operational design priorities are:
 - safe restarts during development and testing
 - simple observability when something breaks
 
+That same philosophy applies to backup and restore. The UI should expose these capabilities in a way that reduces shell dependence for normal admin operations while still keeping the underlying execution model simple, auditable, and conservative.
+
 This applies to reminder processing too. Scheduled reminder evaluation should be simple to reason about, easy to run locally, and visible enough to debug when reminders do or do not fire as expected.
 
 ## Future Documentation To Add
@@ -117,5 +134,6 @@ When implementation begins, this document should be extended with:
 - exact Compose service definitions
 - startup order requirements
 - backup and restore procedures
+- admin backup/restore workflow details
 - local development startup commands
 - production deployment notes

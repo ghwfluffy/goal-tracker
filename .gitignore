@@ -1,2 +1,13 @@
 *.swp
 different-project_weightloss-goal-graph
+.env.local
+api/.coverage
+api/.pytest_cache/
+api/.ruff_cache/
+api/.mypy_cache/
+api/venv/
+web/node_modules/
+web/dist/
+web/coverage/
+__pycache__/
+outfile.tmp

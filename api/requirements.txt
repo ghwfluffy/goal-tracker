@@ -1,10 +1,15 @@
+alembic
 cryptography
 fastapi
 flake8
+httpx
 mypy
 psycopg2-binary
 pydantic
+pydantic-settings
+pytest
 python-multipart
 ruff
 sqlalchemy
+types-PyYAML
 uvicorn

@@ -22,8 +22,10 @@ Planned tools:
 Coverage priorities:
 
 - auth flows
+- admin backup and restore authorization/safety flows
 - goal creation and editing
 - entry submission and validation
+- multi-entry-per-day metric history and attempt-based performance goals
 - reminder generation logic
 - share-link management
 - seed-data application logic
@@ -38,6 +40,7 @@ Coverage priorities:
 - upgrade from prior revisions
 - compatibility of new schema with existing data
 - interaction between schema upgrades and seed-data upgrades
+- backup catalog and restore-operation schema behavior where persistence is involved
 
 ## Frontend Tests
 
@@ -54,6 +57,7 @@ Coverage priorities:
 - dashboard and widget management
 - share-link management UI
 - auth/session-aware navigation behavior
+- admin backup inventory and restore confirmation flows
 
 ## End-To-End Tests
 
@@ -64,6 +68,8 @@ Planned tool:
 Early smoke coverage should validate:
 
 - login
+- reach admin backup screen
+- create an on-demand backup
 - create goal
 - submit entry
 - receive or observe a due reminder in a deterministic test case
@@ -86,6 +92,7 @@ The test system should reuse the same deterministic example-data concepts where 
 Recommended fixture categories:
 
 - minimal auth fixture
+- admin operations fixture
 - single-user goal fixture
 - multi-user ownership boundary fixture
 - reminder-due fixture

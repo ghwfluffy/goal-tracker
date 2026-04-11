@@ -12,6 +12,7 @@ Examples of actions that should generate audit records:
 - login and logout events where practical
 - password changes
 - admin actions on users or registration codes
+- backup creation, deletion, expiration, and restore requests
 - goal creation, update, archival, completion, and deletion
 - entry creation and correction
 - share-link creation and revocation
@@ -52,7 +53,9 @@ Likely future jobs:
 - reminder evaluation and notification generation
 - notification expiration or cleanup
 - share-link expiration cleanup
-- backup or maintenance reporting hooks
+- scheduled backup creation
+- backup retention cleanup
+- restore execution jobs or maintenance hooks
 - seed-data upgrade runner
 
 ## Job Rules

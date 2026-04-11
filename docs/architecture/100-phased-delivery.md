@@ -54,6 +54,7 @@ Current intended scope:
 - share-link expiration support
 - profile/settings management for share links
 - seeded example/demo user profiles and upgrade path
+- admin backup inventory and on-demand backup creation
 
 ## Phase 3: Advanced Evaluation
 
@@ -73,6 +74,7 @@ Current intended scope:
 - better public-share presentation
 - richer dashboard composition
 - operational polish around backups, maintenance, and observability
+- admin restore workflow with confirmation UX and operational status visibility
 
 ## Not Yet Scheduled
 

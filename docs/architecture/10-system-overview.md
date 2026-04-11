@@ -16,6 +16,7 @@ The product centers on a few ideas:
 - the system reminds users when expected actions have not been completed
 - dashboards and widgets present the current state
 - selected widgets can be shared through revocable public links
+- administrators can manage backups and controlled restores through the application UI
 
 ## Scope Direction
 
@@ -80,6 +81,7 @@ The API owns:
 - notification and reminder logic
 - widget and dashboard persistence
 - share link management
+- backup catalog, restore request handling, and operational guardrails
 - audit logging
 - example-data seeding and seed upgrades
 
@@ -90,6 +92,7 @@ The frontend owns:
 - notification display and reminder-management UX
 - dashboard composition UX
 - share-link management UI
+- admin backup and restore UX
 
 The database owns:
 
@@ -97,6 +100,7 @@ The database owns:
 - server-side session persistence
 - audit/event history
 - notification state and reminder configuration
+- backup metadata and restore-operation history
 - seed version state for flagged example-data accounts
 
 ## Architectural Principles
@@ -120,3 +124,7 @@ Public sharing should happen through explicit share-link records, not by exposin
 ### Operational simplicity
 
 This project does not need complex distributed systems behavior. A straightforward single-database design is preferred if it remains maintainable and testable.
+
+### Admin-driven recoverability
+
+Backups and restores should be operationally simple, visible, and intentionally gated. The architecture should support admin-only UI flows for listing backups, creating on-demand backups, and initiating controlled restore operations with strong auditability and clear safeguards.

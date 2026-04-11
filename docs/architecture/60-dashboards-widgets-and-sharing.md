@@ -28,6 +28,7 @@ Important design direction:
 
 - widgets must support metric-history views that are not tied to an active goal
 - a user should be able to keep a long-running metric widget, such as `weight` history, across multiple goal phases
+- widgets should be able to distinguish `done`, `missed`, `skipped`, and `unknown` when the underlying goal pattern is schedule-based
 
 ## Organization Model
 
@@ -49,6 +50,7 @@ Examples:
 - rolling average of `weight`
 - `cardio_minutes` history over the last 90 days
 - summary card for latest metric value and trend
+- performance-attempt chart such as 2km row times across all attempts
 
 This is useful because metrics can persist longer than any one goal and may remain valuable to view between goal cycles.
 
@@ -84,6 +86,7 @@ Current direction:
 - render widgets in-app first
 - support server-side PNG rendering in a later phase
 - avoid exposing internal database identifiers in public URLs
+- support widgets that can explain why a scheduled day is excluded, such as exception dates rendered as `skipped`
 
 ## Privacy Model
 

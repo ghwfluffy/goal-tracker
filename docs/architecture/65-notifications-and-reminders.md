@@ -64,6 +64,7 @@ Important timing inputs:
 - user timezone
 - goal or metric schedule
 - goal start date
+- date-only end dates resolved as end-of-day in the goal timezone
 - grace window
 - quiet hours if the user configures them later
 
@@ -76,6 +77,7 @@ Expected behavior:
 - reminders for a goal do not begin before the goal start date
 - once the goal is active, reminder generation follows the goal cadence and reminder settings
 - historical metric data may exist before the goal start date, but reminder responsibility begins at the goal start date
+- exception dates should suppress reminder generation for excluded scheduled days
 
 ## Notification Channels
 

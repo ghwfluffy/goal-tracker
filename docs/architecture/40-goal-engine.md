@@ -17,6 +17,7 @@ The current planned first-class patterns are:
 
 - habit completion
 - target value
+- performance target over repeated attempts
 - task completion with optional checklist
 - rolling-window allowance
 - milestone sequence
@@ -38,6 +39,8 @@ Expected schedule fields:
 - backfill policy
 - grace window for late confirmation
 - exception dates or exception windows
+
+Date-only end dates should resolve to end-of-day in the goal timezone.
 
 ## Occurrence States
 
@@ -66,6 +69,12 @@ Expected entry capabilities:
 
 For metrics such as `weight`, entries should usually attach to the user-owned metric stream first, with goals consuming that metric history as needed.
 
+The entry model must also support:
+
+- multiple metric entries on the same day
+- repeated attempts for a performance goal on the same day
+- exact timestamps so "latest", "best", and day-bucketed views can all be derived correctly
+
 ## Shared Metrics Versus Goal-Bound Data
 
 Not every tracked value should be owned only by a goal.
@@ -82,6 +91,7 @@ Examples:
 - a "reach 100 lbs" goal should evaluate progress from the `weight` metric history
 - a widget should be able to show the `weight` metric history even when no weight goal is active
 - a one-off task completion goal may not need a reusable standalone metric at all
+- a rowing pace or elapsed-time metric should preserve every attempt so a goal can evaluate best qualifying performance by a deadline
 
 ## Goal Start Date Semantics
 
@@ -102,9 +112,29 @@ The system should compute progress differently depending on goal pattern:
 
 Evaluate whether required occurrences were completed in the relevant time window.
 
+This pattern should support threshold-based daily habits such as "30 minutes of cardio every day until April 30", where the daily occurrence is `done` only if the recorded duration meets or exceeds the required threshold.
+
 ### Target value
 
 Evaluate current value against target, start value, and optional target date, typically using a referenced metric stream.
+
+This pattern should support goals such as "240 lbs by April 30", using a reusable metric stream that can accept multiple same-day measurements and a date-only deadline interpreted as end-of-day in the goal timezone.
+
+### Performance target over repeated attempts
+
+Evaluate a repeated-attempt metric against a defined target threshold by an optional deadline.
+
+Examples:
+
+- row 2km in under 12 minutes by April 30
+- complete a fixed route in under a target time
+
+Expected rule options:
+
+- evaluate best attempt to date
+- evaluate latest attempt
+- keep all attempts in history for charts and auditability
+- allow goal status and widgets to explain which attempt currently satisfies or misses the target
 
 ### Task completion
 
@@ -113,6 +143,8 @@ Evaluate completion from explicit final status and optional subtasks.
 ### Rolling-window allowance
 
 Evaluate recent behavior over the last `N` days or occurrences and compute a compliance score.
+
+This pattern should support abstinence-style goals with explicit exception dates. For example, a goal such as "no drinking until April 30, excluding April 28 and April 30" should treat those excluded dates as `skipped`, not `missed`.
 
 ### Milestone sequence
 
@@ -175,6 +207,24 @@ That means the product should support:
 - viewing metric history outside any specific goal
 - rendering widgets directly from metric series
 - reusing the same metric data across successive goals
+
+## Scenario Coverage
+
+The current architecture should explicitly support cases like:
+
+- `240 lbs by April 30`
+  - target-value goal over a reusable `weight` metric
+  - multiple same-day measurements are allowed
+  - the effective deadline is end-of-day on April 30 in the goal timezone
+- `30 min cardio every day until April 30`
+  - daily threshold-based habit goal
+  - April 30 is included in the required schedule
+- `2km row in under 12 minutes by April 30`
+  - performance-target goal over a repeated-attempt metric
+  - every attempt is stored with exact time and value
+- `no drinking until April 30`, excluding April 28 and April 30
+  - abstinence or allowance-style goal with explicit exception dates
+  - excluded dates evaluate as `skipped`
 
 ## Design Constraints
 

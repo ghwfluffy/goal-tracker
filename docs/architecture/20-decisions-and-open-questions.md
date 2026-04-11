@@ -64,6 +64,16 @@ Implications:
 - reminders for a goal should not begin before the start date
 - metric history may predate the goal, but goal evaluation windows begin at the goal start date unless the goal pattern explicitly says otherwise
 
+### Date-only end dates resolve to end-of-day
+
+When a goal is configured with a date-only target or end date, that deadline should be interpreted as end-of-day in the goal's timezone rather than the start of that day.
+
+Implications:
+
+- a goal such as "240 lbs by April 30" remains active through the end of April 30 in the goal timezone
+- a daily cadence goal "until April 30" includes April 30 as an evaluable day
+- reminder and status logic must use the goal timezone when resolving date-only deadlines
+
 ### Notifications and reminders are part of the product
 
 The system should remind users about expected actions such as marking a daily goal complete or entering a metric value.
@@ -88,6 +98,17 @@ Implications:
 ### Testing is a core design concern
 
 The project should include backend tests, migration tests, frontend tests, and end-to-end smoke coverage as the system grows.
+
+### Backup and restore are admin capabilities
+
+Backup creation, backup listing, and controlled restore flows are part of the architecture and should be available through the administrator UI, not only through direct container or shell access.
+
+Implications:
+
+- backup and restore actions need explicit authorization checks
+- restore workflows need strong confirmation and safety rules
+- backup inventory and restore history need durable records
+- these flows must produce meaningful audit events
 
 ## Current Planned Decisions
 
@@ -124,6 +145,7 @@ Planned direction:
 - separate long-lived user metric history from goal-specific evaluation rules
 - allow goals to reference an existing metric stream such as `weight`
 - allow widgets to visualize the metric stream even when no goal is currently active
+- metric streams support multiple timestamped entries on the same day rather than forcing one value per day
 
 ### Notification delivery
 
@@ -132,6 +154,24 @@ Planned direction:
 - support in-app notifications/reminders as a first-class feature
 - design the notification model so additional channels such as email can be added later
 - keep reminder scheduling deterministic and auditable
+
+### Performance-attempt goals
+
+Planned direction:
+
+- the architecture should support goals evaluated from repeated performance attempts, such as rowing 2km under a target time
+- the underlying metric history stores every attempt with its exact timestamp and measured value
+- the rule layer decides whether goal status is based on best attempt, latest attempt, rolling average, or another explicit evaluation rule
+
+### Backup and restore workflow
+
+Planned direction:
+
+- a backup service continues to create scheduled database backups to mounted storage
+- the application stores backup metadata records so admins can inspect available backups in the UI
+- admins can trigger an on-demand backup from the UI
+- admins can initiate a controlled restore workflow from the UI, with the actual restore executed by a privileged backend or maintenance path rather than by arbitrary browser-side behavior
+- restore operations should be modeled as explicit jobs with status, actor, timestamps, and result details
 
 ## Open Questions
 
@@ -143,3 +183,4 @@ These items should be proposed explicitly in the next approval round:
 4. the first approved set of forecast algorithms
 5. the final public-sharing permissions for widgets versus full dashboards
 6. the exact notification/reminder schema and delivery model
+7. the exact safety model for restore execution, such as full-instance restore only versus scoped restore support

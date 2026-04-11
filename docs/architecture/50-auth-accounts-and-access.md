@@ -61,6 +61,7 @@ Default access rules:
 
 - users can manage their own goals, dashboards, widgets, share links, and profile
 - admins can perform administrative account and registration-code operations
+- admins can create backups, inspect backup inventory, and initiate restore workflows
 - public access is only through explicit share-link records
 
 ## Media And User Input Safety
@@ -77,3 +78,4 @@ The current design direction remains:
 - session signing or cookie protection keys should never silently use unsafe defaults in production
 - rate limiting remains an ingress concern at Nginx
 - auth flows and privileged writes should generate audit events
+- restore actions should require stronger confirmation than normal CRUD, and the architecture should assume admin-only access plus explicit server-side validation before any destructive step runs
