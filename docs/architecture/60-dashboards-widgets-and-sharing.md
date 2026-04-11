@@ -9,6 +9,7 @@ Expected uses:
 - category-specific views such as health, work, finances, or personal development
 - daily summary screens
 - focused progress pages for one area of life
+- quick mobile-friendly check-in views for entering updates away from a desktop
 
 ## Widgets
 
@@ -29,6 +30,7 @@ Important design direction:
 - widgets must support metric-history views that are not tied to an active goal
 - a user should be able to keep a long-running metric widget, such as `weight` history, across multiple goal phases
 - widgets should be able to distinguish `done`, `missed`, `skipped`, and `unknown` when the underlying goal pattern is schedule-based
+- dashboards and widgets should remain usable on phone-sized screens, even when the desktop layout is richer
 
 ## Organization Model
 

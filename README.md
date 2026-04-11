@@ -43,13 +43,14 @@ The project is in the foundation stage right now.
 What already exists:
 
 - a working web app shell
+- first-account bootstrap and sign-in flow
+- a signed-in app shell with session restoration
 - a backend API foundation
 - a landing page that successfully calls the API and renders application status
 - architecture documents covering the long-term product design
 
 What comes next:
 
-- accounts and sign-in
 - persistent goal and metric storage
 - manual update flows
 - dashboard and widget building

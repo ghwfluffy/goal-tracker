@@ -40,6 +40,14 @@ Phase 0 now includes backend auth/session foundation endpoints:
 
 The first account bootstrap path creates the initial administrator and starts a server-side session using an HTTP-only cookie.
 
+The frontend home page now consumes that auth foundation and can:
+
+1. detect whether bootstrap is still required
+2. create the first administrator account
+3. sign in with an existing account
+4. restore the current session
+5. sign out
+
 ## Local Run Commands
 
 Backend:

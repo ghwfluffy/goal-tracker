@@ -58,6 +58,7 @@ Coverage priorities:
 - share-link management UI
 - auth/session-aware navigation behavior
 - admin backup inventory and restore confirmation flows
+- responsive behavior for phone-sized and desktop-sized layouts in key user flows
 
 ## End-To-End Tests
 

@@ -37,6 +37,7 @@ Current intended scope:
 - tags or basic categorization
 - manual entry creation and editing
 - goal history and status views
+- responsive layouts for phone and desktop use in the core tracking flows
 - first goal patterns:
   - habit completion
   - target value
@@ -81,7 +82,7 @@ Current intended scope:
 These are intentionally not part of the near-term phased plan:
 
 - third-party integrations
-- mobile clients
+- separate native mobile clients
 - collaborative cross-user goals
 - mobile push notifications
 - arbitrary formula builders

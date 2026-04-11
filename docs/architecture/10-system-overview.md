@@ -17,6 +17,7 @@ The product centers on a few ideas:
 - dashboards and widgets present the current state
 - selected widgets can be shared through revocable public links
 - administrators can manage backups and controlled restores through the application UI
+- the same web app should work well on both desktop and mobile browsers so users can review goals and add updates from a phone
 
 ## Scope Direction
 
@@ -30,7 +31,7 @@ The design favors:
 
 The design does not currently prioritize:
 
-- mobile apps
+- separate native mobile apps
 - third-party data imports
 - advanced collaborative/team workflows
 - mobile push notification systems
@@ -93,6 +94,7 @@ The frontend owns:
 - dashboard composition UX
 - share-link management UI
 - admin backup and restore UX
+- responsive layouts that work well on both desktop and mobile browsers
 
 The database owns:
 
@@ -120,6 +122,10 @@ Ownership boundaries should be first-class from the start. User-private data sho
 ### Controlled public sharing
 
 Public sharing should happen through explicit share-link records, not by exposing internal identifiers or private routes.
+
+### Cross-device usability
+
+The primary product should be a responsive web application that works well on desktop and phone-sized screens. Users should be able to review progress and submit manual updates from a mobile browser without requiring a separate native mobile app.
 
 ### Operational simplicity
 
