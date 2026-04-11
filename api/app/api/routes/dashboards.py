@@ -22,7 +22,9 @@ from app.services.dashboards import (
     get_dashboard_for_user,
     get_dashboard_widget_for_user,
     get_widget_current_progress_percent,
+    get_widget_failure_risk_percent,
     get_widget_target_met,
+    get_widget_time_completion_percent,
     list_dashboards_for_user,
     update_dashboard,
     update_dashboard_widget,
@@ -33,7 +35,15 @@ from app.services.metrics import MetricNotFoundError, get_metric_for_user
 router = APIRouter(prefix="/dashboards")
 
 MetricType = Literal["number", "date"]
-WidgetType = Literal["metric_history", "metric_summary", "goal_progress", "goal_summary"]
+WidgetType = Literal[
+    "metric_history",
+    "metric_summary",
+    "goal_progress",
+    "goal_summary",
+    "goal_completion_percent",
+    "goal_success_percent",
+    "goal_failure_risk",
+]
 
 
 class MetricEntrySummary(BaseModel):
@@ -84,6 +94,8 @@ class WidgetSummary(BaseModel):
     metric: MetricReferenceSummary | None
     goal: GoalReferenceSummary | None
     current_progress_percent: float | None
+    time_completion_percent: float | None
+    failure_risk_percent: float | None
     target_met: bool | None
     series: list[WidgetSeriesPoint]
 
@@ -236,6 +248,16 @@ def serialize_widget(widget: DashboardWidget) -> WidgetSummary:
         goal=serialize_goal_reference(widget.goal) if widget.goal is not None else None,
         current_progress_percent=(
             round(current_progress_percent, 2) if current_progress_percent is not None else None
+        ),
+        time_completion_percent=(
+            round(time_completion_percent, 2)
+            if (time_completion_percent := get_widget_time_completion_percent(widget)) is not None
+            else None
+        ),
+        failure_risk_percent=(
+            round(failure_risk_percent, 2)
+            if (failure_risk_percent := get_widget_failure_risk_percent(widget)) is not None
+            else None
         ),
         target_met=get_widget_target_met(widget),
         series=serialize_widget_series(widget),

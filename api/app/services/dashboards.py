@@ -19,17 +19,26 @@ WIDGET_TYPE_METRIC_HISTORY = "metric_history"
 WIDGET_TYPE_METRIC_SUMMARY = "metric_summary"
 WIDGET_TYPE_GOAL_PROGRESS = "goal_progress"
 WIDGET_TYPE_GOAL_SUMMARY = "goal_summary"
+WIDGET_TYPE_GOAL_COMPLETION_PERCENT = "goal_completion_percent"
+WIDGET_TYPE_GOAL_SUCCESS_PERCENT = "goal_success_percent"
+WIDGET_TYPE_GOAL_FAILURE_RISK = "goal_failure_risk"
 
 SUPPORTED_WIDGET_TYPES = {
     WIDGET_TYPE_METRIC_HISTORY,
     WIDGET_TYPE_METRIC_SUMMARY,
     WIDGET_TYPE_GOAL_PROGRESS,
     WIDGET_TYPE_GOAL_SUMMARY,
+    WIDGET_TYPE_GOAL_COMPLETION_PERCENT,
+    WIDGET_TYPE_GOAL_SUCCESS_PERCENT,
+    WIDGET_TYPE_GOAL_FAILURE_RISK,
 }
 
 GOAL_WIDGET_TYPES = {
     WIDGET_TYPE_GOAL_PROGRESS,
     WIDGET_TYPE_GOAL_SUMMARY,
+    WIDGET_TYPE_GOAL_COMPLETION_PERCENT,
+    WIDGET_TYPE_GOAL_SUCCESS_PERCENT,
+    WIDGET_TYPE_GOAL_FAILURE_RISK,
 }
 
 METRIC_WIDGET_TYPES = {
@@ -108,7 +117,13 @@ def normalize_rolling_window_days(rolling_window_days: int | None) -> int | None
 
 
 def default_widget_dimensions(widget_type: str) -> tuple[int, int]:
-    if widget_type in {WIDGET_TYPE_METRIC_SUMMARY, WIDGET_TYPE_GOAL_SUMMARY}:
+    if widget_type in {
+        WIDGET_TYPE_METRIC_SUMMARY,
+        WIDGET_TYPE_GOAL_SUMMARY,
+        WIDGET_TYPE_GOAL_COMPLETION_PERCENT,
+        WIDGET_TYPE_GOAL_SUCCESS_PERCENT,
+        WIDGET_TYPE_GOAL_FAILURE_RISK,
+    }:
         return DEFAULT_SUMMARY_WIDGET_WIDTH, DEFAULT_SUMMARY_WIDGET_HEIGHT
     return DEFAULT_CHART_WIDGET_WIDTH, DEFAULT_CHART_WIDGET_HEIGHT
 
@@ -406,6 +421,8 @@ def create_dashboard_widget(
         raise DashboardError("Widgets can only reference your own metrics.")
     if goal is not None and goal.user_id != user.id:
         raise DashboardError("Widgets can only reference your own goals.")
+    if goal is not None and goal.target_date is not None:
+        normalized_window = None
 
     default_width, default_height = default_widget_dimensions(normalized_widget_type)
     normalized_width = grid_w if grid_w is not None else default_width
@@ -488,7 +505,9 @@ def update_dashboard_widget(
 ) -> DashboardWidget:
     if title is not None:
         widget.title = normalize_name(title, field_name="Widget title", max_length=120)
-    if rolling_window_days is not None or widget.rolling_window_days is not None:
+    if widget.goal is not None and widget.goal.target_date is not None:
+        widget.rolling_window_days = None
+    elif rolling_window_days is not None or widget.rolling_window_days is not None:
         widget.rolling_window_days = normalize_rolling_window_days(rolling_window_days)
     if any(value is not None for value in (grid_x, grid_y, grid_w, grid_h)):
         normalized_x, normalized_y, normalized_width, normalized_height = normalize_widget_layout(
@@ -591,6 +610,61 @@ def calculate_progress_percent(
     return max(0.0, min(progress_ratio * 100.0, 100.0))
 
 
+def goal_start_datetime(goal: Goal) -> datetime:
+    user_timezone = get_user_timezone(goal.user)
+    return datetime.combine(goal.start_date, time.min, tzinfo=user_timezone).astimezone(UTC)
+
+
+def goal_end_datetime(goal: Goal) -> datetime | None:
+    if goal.target_date is None:
+        return None
+
+    user_timezone = get_user_timezone(goal.user)
+    return datetime.combine(
+        goal.target_date + timedelta(days=1),
+        time.min,
+        tzinfo=user_timezone,
+    ).astimezone(UTC)
+
+
+def goal_time_completion_percent(goal: Goal, *, as_of: datetime | None = None) -> float | None:
+    end_datetime = goal_end_datetime(goal)
+    if end_datetime is None:
+        return None
+
+    start_datetime = goal_start_datetime(goal)
+    comparison_datetime = as_of or utcnow()
+    if comparison_datetime <= start_datetime:
+        return 0.0
+    if comparison_datetime >= end_datetime:
+        return 100.0
+
+    total_seconds = (end_datetime - start_datetime).total_seconds()
+    if total_seconds <= 0:
+        return 100.0
+
+    elapsed_seconds = (comparison_datetime - start_datetime).total_seconds()
+    return round(max(0.0, min((elapsed_seconds / total_seconds) * 100.0, 100.0)), 2)
+
+
+def goal_success_percent(goal: Goal) -> float | None:
+    if goal.metric.metric_type == "date":
+        return goal_progress_as_of_date(goal)
+
+    points = build_goal_progress_points(goal, rolling_window_days=None)
+    if len(points) == 0:
+        return None
+    return points[-1].progress_percent
+
+
+def goal_failure_risk_percent(goal: Goal) -> float | None:
+    time_completion_percent = goal_time_completion_percent(goal)
+    success_percent = goal_success_percent(goal)
+    if time_completion_percent is None or success_percent is None:
+        return None
+    return round(max(0.0, time_completion_percent - success_percent), 2)
+
+
 def is_target_met(
     *, baseline_value: float | int, target_value: float | int, current_value: float | int
 ) -> bool:
@@ -612,10 +686,12 @@ class GoalProgressPoint:
 def build_goal_progress_points(
     goal: Goal, *, rolling_window_days: int | None
 ) -> list[GoalProgressPoint]:
+    effective_window = None if goal.target_date is not None else rolling_window_days
+
     if goal.metric.metric_type == "date":
         date_points = build_goal_date_progress_points(goal)
-        if rolling_window_days is not None:
-            window_threshold = utcnow() - timedelta(days=rolling_window_days)
+        if effective_window is not None:
+            window_threshold = utcnow() - timedelta(days=effective_window)
             date_points = [
                 point
                 for point in date_points
@@ -650,10 +726,17 @@ def build_goal_progress_points(
     user_timezone = get_user_timezone(goal.user)
     start_cutoff = datetime.combine(goal.start_date, time.min, tzinfo=user_timezone).astimezone(UTC)
     numeric_window_threshold: datetime | None = (
-        utcnow() - timedelta(days=rolling_window_days) if rolling_window_days is not None else None
+        utcnow() - timedelta(days=effective_window) if effective_window is not None else None
     )
 
-    points: list[GoalProgressPoint] = []
+    points: list[GoalProgressPoint] = [
+        GoalProgressPoint(
+            recorded_at=start_cutoff,
+            number_value=baseline_entry.number_value,
+            date_value=baseline_entry.date_value,
+            progress_percent=0.0,
+        )
+    ]
     for entry in ordered_entries:
         recorded_at = normalize_recorded_at(entry.recorded_at)
         if recorded_at < start_cutoff:
@@ -663,6 +746,8 @@ def build_goal_progress_points(
 
         current_value = metric_entry_numeric_value(goal.metric, entry)
         if current_value is None:
+            continue
+        if current_value == baseline_value and len(points) == 1:
             continue
 
         points.append(
@@ -684,15 +769,19 @@ def build_goal_progress_points(
 def get_widget_current_progress_percent(widget: DashboardWidget) -> float | None:
     if widget.goal is None:
         return None
-    if widget.goal.metric.metric_type == "date":
-        return goal_progress_as_of_date(widget.goal)
-    points = build_goal_progress_points(
-        widget.goal,
-        rolling_window_days=widget.rolling_window_days,
-    )
-    if len(points) == 0:
+    return goal_success_percent(widget.goal)
+
+
+def get_widget_time_completion_percent(widget: DashboardWidget) -> float | None:
+    if widget.goal is None:
         return None
-    return points[-1].progress_percent
+    return goal_time_completion_percent(widget.goal)
+
+
+def get_widget_failure_risk_percent(widget: DashboardWidget) -> float | None:
+    if widget.goal is None:
+        return None
+    return goal_failure_risk_percent(widget.goal)
 
 
 def get_widget_target_met(widget: DashboardWidget) -> bool | None:

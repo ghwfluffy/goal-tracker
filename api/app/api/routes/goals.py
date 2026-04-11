@@ -13,8 +13,10 @@ from app.db import Goal, Metric, MetricEntry, User, get_db
 from app.services.goals import (
     GoalError,
     create_goal,
-    goal_progress_as_of_date,
+    goal_current_progress_percent,
+    goal_failure_risk_percent,
     goal_target_met,
+    goal_time_completion_percent,
     list_goals_for_user,
 )
 from app.services.metrics import (
@@ -57,6 +59,8 @@ class GoalSummary(BaseModel):
     success_threshold_percent: float | None
     exception_dates: list[str]
     current_progress_percent: float | None
+    time_progress_percent: float | None
+    failure_risk_percent: float | None
     target_met: bool | None
     metric: GoalMetricSummary
 
@@ -139,7 +143,9 @@ def serialize_goal(goal: Goal) -> GoalSummary:
         exception_dates=[
             exception_date.exception_date.isoformat() for exception_date in goal.exception_dates
         ],
-        current_progress_percent=goal_progress_as_of_date(goal),
+        current_progress_percent=goal_current_progress_percent(goal),
+        time_progress_percent=goal_time_completion_percent(goal),
+        failure_risk_percent=goal_failure_risk_percent(goal),
         target_met=goal_target_met(goal),
         metric=serialize_goal_metric(goal.metric),
     )

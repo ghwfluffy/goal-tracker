@@ -9,7 +9,6 @@ import ProgressSpinner from "primevue/progressspinner";
 import Tag from "primevue/tag";
 
 import type { DashboardWidgetSummary } from "../lib/api";
-import { formatDateOnly, formatTimestampInBrowserTimezone } from "../lib/time";
 import { useDashboardsStore } from "../stores/dashboards";
 import { useGoalsStore } from "../stores/goals";
 import { useMetricsStore } from "../stores/metrics";
@@ -97,8 +96,10 @@ const activeMetrics = computed(() => {
 const widgetTypeOptions = [
   { label: "Metric summary", value: "metric_summary" },
   { label: "Metric history", value: "metric_history" },
-  { label: "Goal summary", value: "goal_summary" },
   { label: "Goal progress", value: "goal_progress" },
+  { label: "Goal success percent", value: "goal_success_percent" },
+  { label: "Goal completion percent", value: "goal_completion_percent" },
+  { label: "Goal failure risk", value: "goal_failure_risk" },
 ] satisfies Array<{ label: string; value: WidgetType }>;
 
 const widgetUsesMetric = computed(() => {
@@ -178,42 +179,6 @@ function parseRollingWindow(value: string): number | null {
 
   const parsed = Number.parseInt(value, 10);
   return Number.isNaN(parsed) ? null : parsed;
-}
-
-function formatWidgetType(widgetType: WidgetType): string {
-  return widgetType.replaceAll("_", " ");
-}
-
-function formatMetricValue(widget: DashboardWidgetSummary): string {
-  const metric = widget.metric ?? widget.goal?.metric ?? null;
-  const latestEntry = metric?.latest_entry ?? null;
-  if (metric === null || latestEntry === null) {
-    return "No value yet";
-  }
-
-  if (metric.metric_type === "number") {
-    const value = latestEntry.number_value;
-    return value === null
-      ? "No value yet"
-      : `${value.toFixed(metric.decimal_places ?? 0)}${metric.unit_label ? ` ${metric.unit_label}` : ""}`;
-  }
-
-  return formatDateOnly(latestEntry.date_value);
-}
-
-function goalProgressLabel(widget: DashboardWidgetSummary): string {
-  if (widget.current_progress_percent === null) {
-    return "Progress needs a target value and enough history.";
-  }
-
-  return `${Math.round(widget.current_progress_percent)}% complete`;
-}
-
-function widgetSubjectLabel(widget: DashboardWidgetSummary): string {
-  if (widget.metric !== null) {
-    return widget.metric.name;
-  }
-  return widget.goal?.title ?? "Goal";
 }
 
 function openCreateDashboardDialog(): void {
@@ -335,6 +300,17 @@ function openEditWidgetDialog(widget: DashboardWidgetSummary): void {
   widgetDialogVisible.value = true;
 }
 
+const selectedWidgetGoal = computed(() => {
+  if (widgetUsesMetric.value) {
+    return null;
+  }
+  return goalsStore.goals.find((goal) => goal.id === widgetGoalIdInput.value) ?? null;
+});
+
+const widgetUsesGoalTimeline = computed(() => {
+  return !widgetUsesMetric.value && selectedWidgetGoal.value?.target_date !== null;
+});
+
 async function submitWidgetDialog(): Promise<void> {
   if (selectedDashboard.value === null) {
     return;
@@ -345,7 +321,7 @@ async function submitWidgetDialog(): Promise<void> {
     const created = await dashboardsStore.createWidget(selectedDashboard.value.id, {
       goal_id: widgetUsesMetric.value ? null : widgetGoalIdInput.value || null,
       metric_id: widgetUsesMetric.value ? widgetMetricIdInput.value || null : null,
-      rolling_window_days: parseRollingWindow(widgetRollingWindowDaysInput.value),
+      rolling_window_days: widgetUsesGoalTimeline.value ? null : parseRollingWindow(widgetRollingWindowDaysInput.value),
       title: widgetTitleInput.value,
       widget_type: widgetTypeInput.value,
     });
@@ -358,7 +334,7 @@ async function submitWidgetDialog(): Promise<void> {
   }
 
   const updated = await dashboardsStore.updateWidget(selectedDashboard.value.id, widgetEditId.value, {
-    rolling_window_days: parseRollingWindow(widgetRollingWindowDaysInput.value),
+    rolling_window_days: widgetUsesGoalTimeline.value ? null : parseRollingWindow(widgetRollingWindowDaysInput.value),
     title: widgetTitleInput.value,
   });
   if (updated) {
@@ -681,18 +657,9 @@ onBeforeUnmount(() => {
           :style="widgetGridStyle(widget)"
         >
           <div class="widget-card-header">
-            <div>
-              <p class="panel-eyebrow">{{ formatWidgetType(widget.widget_type) }}</p>
-              <h4>{{ widget.title }}</h4>
-              <p class="widget-subject">{{ widgetSubjectLabel(widget) }}</p>
-            </div>
+            <h4>{{ widget.title }}</h4>
 
             <div class="widget-card-actions">
-              <Tag
-                v-if="widget.goal !== null"
-                :value="widget.target_met ? 'On target' : 'Tracking'"
-                :severity="widget.target_met ? 'success' : 'info'"
-              />
               <button
                 v-if="editMode"
                 class="widget-icon-button widget-move-handle"
@@ -722,21 +689,6 @@ onBeforeUnmount(() => {
               </button>
             </div>
           </div>
-
-          <p v-if="widget.metric !== null" class="widget-summary">
-            Latest value: <strong>{{ formatMetricValue(widget) }}</strong>
-          </p>
-          <p v-else class="widget-summary">
-            {{ goalProgressLabel(widget) }}
-          </p>
-
-          <p v-if="widget.goal !== null" class="widget-meta">
-            Goal window: {{ widget.goal.start_date }}
-            <span v-if="widget.goal.target_date !== null"> to {{ widget.goal.target_date }}</span>
-          </p>
-          <p v-else-if="widget.metric?.latest_entry !== null" class="widget-meta">
-            Last update: {{ formatTimestampInBrowserTimezone(widget.metric.latest_entry.recorded_at) }}
-          </p>
 
           <DashboardWidgetChart :widget="widget" />
 
@@ -812,14 +764,6 @@ onBeforeUnmount(() => {
       :style="{ width: 'min(34rem, calc(100vw - 2rem))' }"
     >
       <div class="dialog-form widget-dialog-form">
-        <div class="widget-dialog-intro">
-          <p class="panel-eyebrow">Widget setup</p>
-          <p class="widget-dialog-copy">
-            Choose what this widget tracks, then adjust the time window if the chart should focus
-            on a shorter slice of history.
-          </p>
-        </div>
-
         <label class="field widget-field">
           <span class="label">Title</span>
           <InputText v-model="widgetTitleInput" class="dialog-control" placeholder="Weight trend" />
@@ -865,7 +809,7 @@ onBeforeUnmount(() => {
           </label>
         </div>
 
-        <label class="field widget-field">
+        <label v-if="!widgetUsesGoalTimeline" class="field widget-field">
           <span class="label">Rolling window days</span>
           <input
             v-model="widgetRollingWindowDaysInput"
@@ -879,6 +823,9 @@ onBeforeUnmount(() => {
             Leave blank to use the full available history for this widget.
           </span>
         </label>
+        <div v-else class="widget-dialog-note">
+          Goal widgets with a target date always render the full start-to-end timeline.
+        </div>
 
         <div class="dialog-actions widget-dialog-actions">
           <Button
@@ -920,10 +867,7 @@ onBeforeUnmount(() => {
   align-items: center;
 }
 
-.dashboard-description,
-.widget-summary,
-.widget-meta,
-.widget-subject {
+.dashboard-description {
   color: #475569;
 }
 
@@ -970,7 +914,7 @@ onBeforeUnmount(() => {
 .widget-card {
   position: relative;
   display: grid;
-  gap: 0.75rem;
+  gap: 0.5rem;
   min-height: 0;
   overflow: hidden;
 }
@@ -987,6 +931,11 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+.widget-card h4 {
+  font-size: 1rem;
+  line-height: 1.2;
 }
 
 .widget-icon-button {
@@ -1047,22 +996,19 @@ onBeforeUnmount(() => {
 }
 
 .widget-dialog-form {
-  gap: 1.2rem;
+  gap: 1rem;
 }
 
-.widget-dialog-intro {
-  display: grid;
-  gap: 0.4rem;
-  padding: 1rem 1.1rem;
-  border-radius: 1rem;
-  background:
-    linear-gradient(135deg, rgba(239, 246, 255, 0.95), rgba(248, 250, 252, 0.95));
-  border: 1px solid rgba(191, 219, 254, 0.9);
-}
-
-.widget-dialog-copy,
-.field-hint {
+.field-hint,
+.widget-dialog-note {
   color: #64748b;
+}
+
+.widget-dialog-note {
+  padding: 0.9rem 1rem;
+  border-radius: 0.9rem;
+  background: rgba(248, 250, 252, 0.95);
+  border: 1px solid rgba(226, 232, 240, 0.95);
 }
 
 .widget-dialog-grid {

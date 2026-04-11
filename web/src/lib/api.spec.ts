@@ -429,6 +429,7 @@ describe("auth api helpers", () => {
           current_progress_percent: null,
           description: "Cut steadily.",
           exception_dates: [],
+          failure_risk_percent: null,
           id: "goal-1",
           metric: {
             decimal_places: 1,
@@ -445,6 +446,7 @@ describe("auth api helpers", () => {
           target_value_date: null,
           target_value_number: 220.5,
           target_met: null,
+          time_progress_percent: null,
           title: "Reach 220",
         }),
         {
@@ -579,6 +581,7 @@ describe("auth api helpers", () => {
           JSON.stringify({
             current_progress_percent: null,
             display_order: 1,
+            failure_risk_percent: null,
             grid_h: 4,
             grid_w: 6,
             grid_x: 0,
@@ -596,6 +599,7 @@ describe("auth api helpers", () => {
             rolling_window_days: 30,
             series: [],
             target_met: null,
+            time_completion_percent: null,
             title: "Weight trend",
             widget_type: "metric_history",
           }),
@@ -611,6 +615,7 @@ describe("auth api helpers", () => {
           JSON.stringify({
             current_progress_percent: null,
             display_order: 1,
+            failure_risk_percent: null,
             grid_h: 5,
             grid_w: 12,
             grid_x: 0,
@@ -628,6 +633,7 @@ describe("auth api helpers", () => {
             rolling_window_days: 90,
             series: [],
             target_met: null,
+            time_completion_percent: null,
             title: "Weight trend",
             widget_type: "metric_history",
           }),

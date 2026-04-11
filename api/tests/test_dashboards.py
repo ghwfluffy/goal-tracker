@@ -139,6 +139,9 @@ def test_dashboard_widgets_include_metric_and_goal_series(client: TestClient) ->
         "grid_h": 4,
     }
     assert [point["progress_percent"] for point in goal_widget["series"]] == [0.0, 40.0]
+    assert goal_widget["rolling_window_days"] is None
+    assert goal_widget["time_completion_percent"] is not None
+    assert goal_widget["failure_risk_percent"] is not None
 
     move_widget_response = client.patch(
         f"/api/v1/dashboards/{dashboard_id}/widgets/{metric_widget['id']}",
@@ -224,3 +227,89 @@ def test_date_goal_progress_widget_uses_compliance_percent(client: TestClient) -
     assert goal_widget["goal"]["exception_dates"] == ["2026-04-03"]
     assert goal_widget["series"][0]["progress_percent"] == 100.0
     assert goal_widget["series"][-1]["progress_percent"] == 77.78
+    assert goal_widget["rolling_window_days"] is None
+    assert goal_widget["time_completion_percent"] is not None
+    assert goal_widget["failure_risk_percent"] is not None
+
+
+def test_goal_percent_widgets_return_schedule_and_risk_fields(client: TestClient) -> None:
+    bootstrap_admin(client)
+
+    metric_response = client.post(
+        "/api/v1/metrics",
+        json={
+            "name": "Weight",
+            "metric_type": "number",
+            "decimal_places": 1,
+            "unit_label": "lbs",
+            "initial_number_value": 250.0,
+            "recorded_at": "2026-04-01T12:00:00Z",
+        },
+    )
+    assert metric_response.status_code == 201
+    metric_id = metric_response.json()["id"]
+
+    update_response = client.post(
+        f"/api/v1/metrics/{metric_id}/entries",
+        json={
+            "number_value": 235.0,
+            "recorded_at": "2026-04-10T12:00:00Z",
+        },
+    )
+    assert update_response.status_code == 200
+
+    goal_response = client.post(
+        "/api/v1/goals",
+        json={
+            "title": "Reach 220",
+            "start_date": "2026-04-01",
+            "target_date": "2026-06-01",
+            "target_value_number": 220.0,
+            "metric_id": metric_id,
+        },
+    )
+    assert goal_response.status_code == 201
+    goal_id = goal_response.json()["id"]
+
+    dashboard_response = client.post("/api/v1/dashboards", json={"name": "Main"})
+    assert dashboard_response.status_code == 201
+    dashboard_id = dashboard_response.json()["id"]
+
+    success_widget_response = client.post(
+        f"/api/v1/dashboards/{dashboard_id}/widgets",
+        json={
+            "title": "Goal success",
+            "widget_type": "goal_success_percent",
+            "goal_id": goal_id,
+            "rolling_window_days": 14,
+        },
+    )
+    assert success_widget_response.status_code == 201
+    success_widget = success_widget_response.json()
+    assert success_widget["current_progress_percent"] == 50.0
+    assert success_widget["rolling_window_days"] is None
+
+    completion_widget_response = client.post(
+        f"/api/v1/dashboards/{dashboard_id}/widgets",
+        json={
+            "title": "Goal completion",
+            "widget_type": "goal_completion_percent",
+            "goal_id": goal_id,
+        },
+    )
+    assert completion_widget_response.status_code == 201
+    completion_widget = completion_widget_response.json()
+    assert completion_widget["time_completion_percent"] is not None
+    assert completion_widget["failure_risk_percent"] is not None
+
+    risk_widget_response = client.post(
+        f"/api/v1/dashboards/{dashboard_id}/widgets",
+        json={
+            "title": "Goal risk",
+            "widget_type": "goal_failure_risk",
+            "goal_id": goal_id,
+        },
+    )
+    assert risk_widget_response.status_code == 201
+    risk_widget = risk_widget_response.json()
+    assert risk_widget["failure_risk_percent"] is not None

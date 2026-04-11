@@ -307,6 +307,52 @@ def test_date_metric_goal_uses_exception_dates_and_success_threshold(client: Tes
     assert payload["success_threshold_percent"] == 80.0
     assert payload["exception_dates"] == ["2026-04-03"]
     assert payload["current_progress_percent"] == 77.78
+    assert payload["time_progress_percent"] is not None
+    assert payload["failure_risk_percent"] is not None
+    assert payload["target_met"] is False
+
+
+def test_number_metric_goal_includes_progress_and_failure_risk(client: TestClient) -> None:
+    bootstrap_admin(client)
+
+    metric_response = client.post(
+        "/api/v1/metrics",
+        json={
+            "name": "Weight",
+            "metric_type": "number",
+            "decimal_places": 1,
+            "unit_label": "lbs",
+            "initial_number_value": 250.0,
+            "recorded_at": "2026-04-01T12:00:00Z",
+        },
+    )
+    assert metric_response.status_code == 201
+    metric_id = metric_response.json()["id"]
+
+    entry_response = client.post(
+        f"/api/v1/metrics/{metric_id}/entries",
+        json={
+            "number_value": 245.0,
+            "recorded_at": "2026-04-11T12:00:00Z",
+        },
+    )
+    assert entry_response.status_code == 200
+
+    goal_response = client.post(
+        "/api/v1/goals",
+        json={
+            "title": "Reach 220 lbs",
+            "start_date": "2026-04-01",
+            "target_date": "2026-07-10",
+            "target_value_number": 220.0,
+            "metric_id": metric_id,
+        },
+    )
+    assert goal_response.status_code == 201
+    payload = goal_response.json()
+    assert payload["current_progress_percent"] == 16.67
+    assert payload["time_progress_percent"] is not None
+    assert payload["failure_risk_percent"] is not None
     assert payload["target_met"] is False
 
 

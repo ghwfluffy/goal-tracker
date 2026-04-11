@@ -129,6 +129,7 @@ export interface GoalSummary {
   current_progress_percent: number | null;
   description: string | null;
   exception_dates: string[];
+  failure_risk_percent: number | null;
   id: string;
   metric: GoalMetricSummary;
   start_date: string;
@@ -138,6 +139,7 @@ export interface GoalSummary {
   target_value_date: string | null;
   target_value_number: number | null;
   target_met: boolean | null;
+  time_progress_percent: number | null;
   title: string;
 }
 
@@ -191,6 +193,7 @@ export interface DashboardWidgetSeriesPoint {
 export interface DashboardWidgetSummary {
   current_progress_percent: number | null;
   display_order: number;
+  failure_risk_percent: number | null;
   grid_h: number;
   grid_w: number;
   grid_x: number;
@@ -201,8 +204,16 @@ export interface DashboardWidgetSummary {
   rolling_window_days: number | null;
   series: DashboardWidgetSeriesPoint[];
   target_met: boolean | null;
+  time_completion_percent: number | null;
   title: string;
-  widget_type: "metric_history" | "metric_summary" | "goal_progress" | "goal_summary";
+  widget_type:
+    | "metric_history"
+    | "metric_summary"
+    | "goal_progress"
+    | "goal_summary"
+    | "goal_completion_percent"
+    | "goal_success_percent"
+    | "goal_failure_risk";
 }
 
 export interface DashboardSummary {
@@ -238,7 +249,14 @@ export interface CreateDashboardWidgetPayload {
   metric_id: string | null;
   rolling_window_days: number | null;
   title: string;
-  widget_type: "metric_history" | "metric_summary" | "goal_progress" | "goal_summary";
+  widget_type:
+    | "metric_history"
+    | "metric_summary"
+    | "goal_progress"
+    | "goal_summary"
+    | "goal_completion_percent"
+    | "goal_success_percent"
+    | "goal_failure_risk";
 }
 
 export interface UpdateDashboardWidgetPayload {

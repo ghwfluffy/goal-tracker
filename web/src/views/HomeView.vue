@@ -714,6 +714,10 @@ function formatDateTime(value: string): string {
   return formatTimestampInBrowserTimezone(value);
 }
 
+function isDateGoal(goal: (typeof goalsStore.goals)[number]): boolean {
+  return goal.metric.metric_type === "date";
+}
+
 watch(
   () => authStore.currentUser,
   async () => {
@@ -1233,14 +1237,46 @@ onMounted(() => {
                         <strong>Success threshold</strong>
                         <span>{{ goal.success_threshold_percent }}%</span>
                       </div>
-                      <div class="history-row" v-if="goal.current_progress_percent !== null">
+                      <div
+                        class="history-row"
+                        v-if="isDateGoal(goal) && goal.time_progress_percent !== null"
+                      >
                         <strong>Current progress</strong>
+                        <span>{{ goal.time_progress_percent }}%</span>
+                      </div>
+                      <div class="history-row" v-if="isDateGoal(goal) && goal.current_progress_percent !== null">
+                        <strong>Success percent</strong>
                         <span>
                           {{ goal.current_progress_percent }}%
                           <span v-if="goal.target_met !== null">
                             ({{ goal.target_met ? "on target" : "below target" }})
                           </span>
                         </span>
+                      </div>
+                      <div class="history-row" v-if="isDateGoal(goal) && goal.failure_risk_percent !== null">
+                        <strong>Failure risk</strong>
+                        <span>{{ goal.failure_risk_percent }}%</span>
+                      </div>
+                      <div
+                        class="history-row"
+                        v-if="!isDateGoal(goal) && goal.current_progress_percent !== null"
+                      >
+                        <strong>Current progress</strong>
+                        <span>{{ goal.current_progress_percent }}%</span>
+                      </div>
+                      <div
+                        class="history-row"
+                        v-if="!isDateGoal(goal) && goal.time_progress_percent !== null"
+                      >
+                        <strong>Time progress</strong>
+                        <span>{{ goal.time_progress_percent }}%</span>
+                      </div>
+                      <div
+                        class="history-row"
+                        v-if="!isDateGoal(goal) && goal.failure_risk_percent !== null"
+                      >
+                        <strong>Failure risk</strong>
+                        <span>{{ goal.failure_risk_percent }}%</span>
                       </div>
                       <div class="history-row" v-if="goal.exception_dates.length > 0">
                         <strong>Exception dates</strong>

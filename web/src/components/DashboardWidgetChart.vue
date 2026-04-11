@@ -14,6 +14,11 @@ interface EChartsModule {
   init(element: HTMLElement): EChartsInstance;
 }
 
+interface ChartPoint {
+  timestamp: number;
+  value: number;
+}
+
 declare global {
   interface Window {
     echarts?: EChartsModule;
@@ -28,54 +33,163 @@ const chartElement = ref<HTMLElement | null>(null);
 let chart: EChartsInstance | null = null;
 let resizeObserver: ResizeObserver | null = null;
 
-const chartData = computed(() => {
+const valueWidgetTypes = new Set([
+  "metric_summary",
+  "goal_summary",
+  "goal_completion_percent",
+  "goal_success_percent",
+  "goal_failure_risk",
+]);
+
+const isValueWidget = computed(() => valueWidgetTypes.has(props.widget.widget_type));
+
+const metricChartPoints = computed<ChartPoint[]>(() => {
   return props.widget.series.map((point) => {
-    const timestamp = new Date(point.recorded_at);
-    const label = timestamp.toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-    });
-
-    if (props.widget.widget_type === "goal_progress" || props.widget.widget_type === "goal_summary") {
+    if (props.widget.metric?.metric_type === "date") {
       return {
-        label,
-        value: point.progress_percent ?? 0,
-      };
-    }
-
-    if (props.widget.metric?.metric_type === "number") {
-      return {
-        label,
-        value: point.number_value ?? 0,
+        timestamp: new Date(point.recorded_at).getTime(),
+        value: point.date_value === null ? 0 : new Date(`${point.date_value}T00:00:00`).getTime(),
       };
     }
 
     return {
-      label,
-      value: point.date_value === null ? 0 : new Date(`${point.date_value}T00:00:00Z`).getTime(),
+      timestamp: new Date(point.recorded_at).getTime(),
+      value: point.number_value ?? 0,
     };
   });
 });
 
-const hasChartData = computed(() => {
-  if (props.widget.widget_type === "goal_summary") {
-    return props.widget.current_progress_percent !== null;
+const goalMetricChartPoints = computed<ChartPoint[]>(() => {
+  const goalMetric = props.widget.goal?.metric;
+  if (goalMetric === undefined) {
+    return [];
   }
 
-  return chartData.value.length > 0;
+  return props.widget.series.flatMap((point) => {
+    if (goalMetric.metric_type === "date") {
+      if (point.date_value === null) {
+        return [];
+      }
+
+      return [
+        {
+          timestamp: new Date(point.recorded_at).getTime(),
+          value: new Date(`${point.date_value}T00:00:00Z`).getTime(),
+        },
+      ];
+    }
+
+    if (point.number_value === null) {
+      return [];
+    }
+
+    return [
+      {
+        timestamp: new Date(point.recorded_at).getTime(),
+        value: point.number_value,
+      },
+    ];
+  });
 });
 
-function createMetricHistoryOption(): object {
-  const isDateMetric = props.widget.metric?.metric_type === "date";
-  const decimalPlaces = props.widget.metric?.decimal_places ?? 0;
+const goalPercentChartPoints = computed<ChartPoint[]>(() => {
+  return props.widget.series.map((point) => ({
+    timestamp: new Date(point.recorded_at).getTime(),
+    value: point.progress_percent ?? 0,
+  }));
+});
 
+const goalTargetEndTimestamp = computed(() => {
+  if (props.widget.goal?.target_date === null || props.widget.goal?.target_date === undefined) {
+    return null;
+  }
+  return new Date(`${props.widget.goal.target_date}T23:59:59`).getTime();
+});
+
+const goalTargetValue = computed(() => {
+  const goal = props.widget.goal;
+  if (goal === null || goal === undefined) {
+    return null;
+  }
+
+  if (goal.metric.metric_type === "date") {
+    return goal.target_value_date === null
+      ? null
+      : new Date(`${goal.target_value_date}T00:00:00Z`).getTime();
+  }
+
+  return goal.target_value_number;
+});
+
+const goalProgressUsesMetricSeries = computed(() => goalMetricChartPoints.value.length > 0);
+
+const displayValueText = computed(() => {
+  if (props.widget.widget_type === "metric_summary") {
+    const metric = props.widget.metric;
+    const latestEntry = metric?.latest_entry;
+    if (metric === null || metric === undefined || latestEntry === null || latestEntry === undefined) {
+      return "No value";
+    }
+    if (metric.metric_type === "number") {
+      const numberValue = latestEntry.number_value;
+      if (numberValue === null) {
+        return "No value";
+      }
+      const formatted = numberValue.toFixed(metric.decimal_places ?? 0);
+      return metric.unit_label ? `${formatted} ${metric.unit_label}` : formatted;
+    }
+    if (latestEntry.date_value === null) {
+      return "No value";
+    }
+    return formatDateOnly(latestEntry.date_value);
+  }
+
+  const percentValue =
+    props.widget.widget_type === "goal_completion_percent"
+      ? props.widget.time_completion_percent
+      : props.widget.widget_type === "goal_failure_risk"
+        ? props.widget.failure_risk_percent
+        : props.widget.current_progress_percent;
+
+  if (percentValue === null) {
+    return "No value";
+  }
+  return `${Math.round(percentValue)}%`;
+});
+
+const hasRenderableContent = computed(() => {
+  if (isValueWidget.value) {
+    return displayValueText.value !== "No value";
+  }
+  if (props.widget.widget_type === "goal_progress") {
+    return goalProgressUsesMetricSeries.value
+      ? goalMetricChartPoints.value.length > 0
+      : goalPercentChartPoints.value.length > 0;
+  }
+  return metricChartPoints.value.length > 0;
+});
+
+function formatMetricAxisValue(value: number): string {
+  if (props.widget.metric?.metric_type !== "date") {
+    return value.toFixed(props.widget.metric?.decimal_places ?? 0);
+  }
+  return formatDateOnly(new Date(value).toISOString().slice(0, 10));
+}
+
+function formatGoalMetricAxisValue(value: number): string {
+  if (props.widget.goal?.metric.metric_type !== "date") {
+    return value.toFixed(props.widget.goal?.metric.decimal_places ?? 0);
+  }
+  return formatDateOnly(new Date(value).toISOString().slice(0, 10));
+}
+
+function createMetricHistoryOption(): object {
   return {
     animation: false,
-    grid: { left: 12, right: 12, top: 18, bottom: 18, containLabel: true },
+    grid: { left: 14, right: 10, top: 12, bottom: 20, containLabel: true },
     tooltip: { trigger: "axis" },
     xAxis: {
-      type: "category",
-      data: chartData.value.map((point) => point.label),
+      type: "time",
       axisLine: { lineStyle: { color: "#cbd5e1" } },
       axisLabel: { color: "#64748b", fontSize: 11 },
     },
@@ -85,40 +199,187 @@ function createMetricHistoryOption(): object {
       splitLine: { lineStyle: { color: "#e2e8f0" } },
       axisLabel: {
         color: "#64748b",
-        formatter: (value: number) => {
-          if (!isDateMetric) {
-            return value.toFixed(decimalPlaces);
-          }
-
-          return formatDateOnly(new Date(value).toISOString().slice(0, 10));
-        },
+        formatter: (value: number) => formatMetricAxisValue(value),
       },
     },
     series: [
       {
         type: "line",
         smooth: true,
+        symbol: "circle",
         symbolSize: 7,
-        data: chartData.value.map((point) => point.value),
+        data: metricChartPoints.value.map((point) => [point.timestamp, point.value]),
         lineStyle: { color: "#2563eb", width: 3 },
-        itemStyle: { color: "#0f172a" },
-        areaStyle:
-          props.widget.widget_type === "metric_summary"
-            ? { color: "rgba(37, 99, 235, 0.12)" }
-            : undefined,
+        itemStyle: { color: "#2563eb" },
       },
     ],
   };
 }
 
-function createGoalProgressOption(): object {
+function forecastValueAtTimestamp(
+  timestamp: number,
+  {
+    lastActualTimestamp,
+    lastActualValue,
+    targetEndTimestamp,
+    targetValue,
+  }: {
+    lastActualTimestamp: number;
+    lastActualValue: number;
+    targetEndTimestamp: number;
+    targetValue: number;
+  },
+): number {
+  if (targetEndTimestamp <= lastActualTimestamp) {
+    return targetValue;
+  }
+
+  const progressRatio =
+    (timestamp - lastActualTimestamp) / (targetEndTimestamp - lastActualTimestamp);
+  const projectedValue = lastActualValue + (targetValue - lastActualValue) * progressRatio;
+  const lowerBound = Math.min(lastActualValue, targetValue);
+  const upperBound = Math.max(lastActualValue, targetValue);
+  return Math.max(lowerBound, Math.min(projectedValue, upperBound));
+}
+
+function createGoalMetricProgressOption(): object {
+  const actualPoints = goalMetricChartPoints.value.map((point) => [point.timestamp, point.value]);
+  const lastActualPoint = goalMetricChartPoints.value.at(-1) ?? null;
+  const targetEndTimestamp = goalTargetEndTimestamp.value;
+  const targetValue = goalTargetValue.value;
+  const nowTimestamp = Date.now();
+
+  const bridgeSeries: Array<[number, number]> = [];
+  const futureSeries: Array<[number, number]> = [];
+
+  if (
+    lastActualPoint !== null &&
+    targetEndTimestamp !== null &&
+    targetValue !== null &&
+    targetEndTimestamp > lastActualPoint.timestamp
+  ) {
+    const bridgeEndTimestamp = Math.min(nowTimestamp, targetEndTimestamp);
+    if (bridgeEndTimestamp > lastActualPoint.timestamp) {
+      bridgeSeries.push([lastActualPoint.timestamp, lastActualPoint.value]);
+      bridgeSeries.push([
+        bridgeEndTimestamp,
+        forecastValueAtTimestamp(bridgeEndTimestamp, {
+          lastActualTimestamp: lastActualPoint.timestamp,
+          lastActualValue: lastActualPoint.value,
+          targetEndTimestamp,
+          targetValue,
+        }),
+      ]);
+    }
+
+    if (targetEndTimestamp > nowTimestamp) {
+      const futureStartTimestamp = Math.max(nowTimestamp, lastActualPoint.timestamp);
+      futureSeries.push([
+        futureStartTimestamp,
+        forecastValueAtTimestamp(futureStartTimestamp, {
+          lastActualTimestamp: lastActualPoint.timestamp,
+          lastActualValue: lastActualPoint.value,
+          targetEndTimestamp,
+          targetValue,
+        }),
+      ]);
+      futureSeries.push([targetEndTimestamp, targetValue]);
+    }
+  }
+
   return {
     animation: false,
-    grid: { left: 12, right: 12, top: 18, bottom: 18, containLabel: true },
+    grid: { left: 14, right: 10, top: 12, bottom: 20, containLabel: true },
     tooltip: { trigger: "axis" },
     xAxis: {
-      type: "category",
-      data: chartData.value.map((point) => point.label),
+      type: "time",
+      axisLine: { lineStyle: { color: "#cbd5e1" } },
+      axisLabel: { color: "#64748b", fontSize: 11 },
+    },
+    yAxis: {
+      type: "value",
+      axisLine: { show: false },
+      axisLabel: {
+        color: "#64748b",
+        formatter: (value: number) => formatGoalMetricAxisValue(value),
+      },
+      splitLine: { lineStyle: { color: "#e2e8f0" } },
+    },
+    series: [
+      {
+        type: "line",
+        smooth: true,
+        symbol: "circle",
+        symbolSize: 7,
+        data: actualPoints,
+        lineStyle: { color: "#16a34a", width: 3 },
+        itemStyle: { color: "#16a34a" },
+      },
+      {
+        type: "line",
+        smooth: true,
+        symbol: "none",
+        data: bridgeSeries,
+        tooltip: { show: false },
+        lineStyle: { color: "#2563eb", width: 3 },
+      },
+      {
+        type: "line",
+        smooth: true,
+        symbol: "none",
+        data: futureSeries,
+        tooltip: { show: false },
+        lineStyle: { color: "#dc2626", width: 3 },
+      },
+    ],
+  };
+}
+
+function createGoalPercentProgressOption(): object {
+  const actualPoints = goalPercentChartPoints.value.map((point) => [point.timestamp, point.value]);
+  const lastActualPoint = goalPercentChartPoints.value.at(-1) ?? null;
+  const targetEndTimestamp = goalTargetEndTimestamp.value;
+  const nowTimestamp = Date.now();
+
+  const bridgeSeries: Array<[number, number]> = [];
+  const futureSeries: Array<[number, number]> = [];
+
+  if (lastActualPoint !== null && targetEndTimestamp !== null && targetEndTimestamp > lastActualPoint.timestamp) {
+    const bridgeEndTimestamp = Math.min(nowTimestamp, targetEndTimestamp);
+    if (bridgeEndTimestamp > lastActualPoint.timestamp) {
+      bridgeSeries.push([lastActualPoint.timestamp, lastActualPoint.value]);
+      bridgeSeries.push([
+        bridgeEndTimestamp,
+        forecastValueAtTimestamp(bridgeEndTimestamp, {
+          lastActualTimestamp: lastActualPoint.timestamp,
+          lastActualValue: lastActualPoint.value,
+          targetEndTimestamp,
+          targetValue: 100,
+        }),
+      ]);
+    }
+
+    if (targetEndTimestamp > nowTimestamp) {
+      const futureStartTimestamp = Math.max(nowTimestamp, lastActualPoint.timestamp);
+      futureSeries.push([
+        futureStartTimestamp,
+        forecastValueAtTimestamp(futureStartTimestamp, {
+          lastActualTimestamp: lastActualPoint.timestamp,
+          lastActualValue: lastActualPoint.value,
+          targetEndTimestamp,
+          targetValue: 100,
+        }),
+      ]);
+      futureSeries.push([targetEndTimestamp, 100]);
+    }
+  }
+
+  return {
+    animation: false,
+    grid: { left: 14, right: 10, top: 12, bottom: 20, containLabel: true },
+    tooltip: { trigger: "axis" },
+    xAxis: {
+      type: "time",
       axisLine: { lineStyle: { color: "#cbd5e1" } },
       axisLabel: { color: "#64748b", fontSize: 11 },
     },
@@ -133,60 +394,42 @@ function createGoalProgressOption(): object {
       {
         type: "line",
         smooth: true,
+        symbol: "circle",
         symbolSize: 7,
-        data: chartData.value.map((point) => point.value),
+        data: actualPoints,
         lineStyle: { color: "#16a34a", width: 3 },
-        itemStyle: { color: "#14532d" },
-        areaStyle:
-          props.widget.widget_type === "goal_progress"
-            ? { color: "rgba(22, 163, 74, 0.12)" }
-            : undefined,
+        itemStyle: { color: "#16a34a" },
+      },
+      {
+        type: "line",
+        smooth: true,
+        symbol: "none",
+        data: bridgeSeries,
+        tooltip: { show: false },
+        lineStyle: { color: "#2563eb", width: 3 },
+      },
+      {
+        type: "line",
+        smooth: true,
+        symbol: "none",
+        data: futureSeries,
+        tooltip: { show: false },
+        lineStyle: { color: "#dc2626", width: 3 },
       },
     ],
   };
 }
 
-function createGoalSummaryOption(): object {
-  return {
-    animation: false,
-    series: [
-      {
-        type: "gauge",
-        min: 0,
-        max: 100,
-        progress: { show: true, width: 14, itemStyle: { color: "#16a34a" } },
-        axisLine: { lineStyle: { width: 14, color: [[1, "#dbeafe"]] } },
-        splitLine: { show: false },
-        axisTick: { show: false },
-        axisLabel: { show: false },
-        anchor: { show: false },
-        pointer: { show: false },
-        detail: {
-          valueAnimation: false,
-          formatter: `${Math.round(props.widget.current_progress_percent ?? 0)}%`,
-          color: "#0f172a",
-          fontSize: 22,
-          offsetCenter: [0, "10%"],
-        },
-        title: {
-          offsetCenter: [0, "-30%"],
-          color: "#64748b",
-          fontSize: 12,
-        },
-        data: [
-          {
-            value: props.widget.current_progress_percent ?? 0,
-            name: props.widget.target_met ? "Target met" : "In progress",
-          },
-        ],
-      },
-    ],
-  };
+function createGoalProgressOption(): object {
+  if (goalProgressUsesMetricSeries.value) {
+    return createGoalMetricProgressOption();
+  }
+  return createGoalPercentProgressOption();
 }
 
 function renderChart(): void {
   const echarts = window.echarts;
-  if (echarts === undefined || chartElement.value === null || !hasChartData.value) {
+  if (echarts === undefined || chartElement.value === null || !hasRenderableContent.value || isValueWidget.value) {
     return;
   }
 
@@ -195,11 +438,9 @@ function renderChart(): void {
   }
 
   const option =
-    props.widget.widget_type === "goal_summary"
-      ? createGoalSummaryOption()
-      : props.widget.widget_type === "goal_progress"
-        ? createGoalProgressOption()
-        : createMetricHistoryOption();
+    props.widget.widget_type === "goal_progress"
+      ? createGoalProgressOption()
+      : createMetricHistoryOption();
 
   chart.setOption(option, true);
   chart.resize();
@@ -219,7 +460,7 @@ function handleResize(): void {
 watch(
   () => props.widget,
   () => {
-    if (!hasChartData.value) {
+    if (!hasRenderableContent.value || isValueWidget.value) {
       disposeChart();
       return;
     }
@@ -247,20 +488,36 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div v-if="hasChartData" ref="chartElement" class="widget-chart"></div>
-  <div v-else class="chart-empty-state">Not enough time-series data yet.</div>
+  <div v-if="isValueWidget && hasRenderableContent" class="widget-value-shell">
+    <div class="widget-value">{{ displayValueText }}</div>
+  </div>
+  <div v-else-if="hasRenderableContent" ref="chartElement" class="widget-chart"></div>
+  <div v-else class="chart-empty-state">Not enough data yet.</div>
 </template>
 
 <style scoped>
-.widget-chart {
+.widget-chart,
+.widget-value-shell,
+.chart-empty-state {
   width: 100%;
   min-height: 13rem;
 }
 
+.widget-value-shell,
 .chart-empty-state {
-  min-height: 13rem;
   display: grid;
   place-items: center;
+}
+
+.widget-value {
+  font-size: clamp(2rem, 4vw, 3.15rem);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  color: #0f172a;
+  text-align: center;
+}
+
+.chart-empty-state {
   border: 1px dashed rgba(100, 116, 139, 0.45);
   border-radius: 1rem;
   color: #64748b;
