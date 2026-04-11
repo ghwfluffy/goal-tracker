@@ -2,6 +2,7 @@ import { defineConfig } from "vitest/config";
 import vue from "@vitejs/plugin-vue";
 
 export default defineConfig({
+  cacheDir: ".vite",
   plugins: [vue()],
   server: {
     host: "0.0.0.0",

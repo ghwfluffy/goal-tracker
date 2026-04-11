@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "vue-tsc --noEmit && vite build",
-    "dev": "vite",
-    "test": "vitest",
+    "build": "vue-tsc --noEmit && vite build --configLoader runner",
+    "dev": "vite --configLoader runner",
+    "test": "vitest --configLoader runner",
     "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {

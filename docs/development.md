@@ -28,6 +28,18 @@ The initial end-to-end smoke path is:
 
 This is the baseline connectivity check that future feature work should preserve while auth, persistence, and goal flows are added.
 
+## Auth Foundation
+
+Phase 0 now includes backend auth/session foundation endpoints:
+
+1. `GET /api/v1/auth/bootstrap-status`
+2. `POST /api/v1/auth/bootstrap`
+3. `POST /api/v1/auth/login`
+4. `GET /api/v1/auth/me`
+5. `POST /api/v1/auth/logout`
+
+The first account bootstrap path creates the initial administrator and starts a server-side session using an HTTP-only cookie.
+
 ## Local Run Commands
 
 Backend:
@@ -50,6 +62,8 @@ npm run dev -- --host 0.0.0.0 --port 8081
 ```
 
 The Vite dev server proxies `/api/*` requests to the backend by default.
+
+If `web/node_modules` was created by Docker and is root-owned, the frontend test/build scripts will reuse the existing dependency tree instead of trying to reinstall into that directory. If dependency versions actually change, rebuild that directory from a writable environment.
 
 ## PostgreSQL 18 Note
 

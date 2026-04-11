@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
+from secrets import token_urlsafe
+from typing import Literal
 
 from pydantic import computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -28,7 +30,10 @@ class Settings(BaseSettings):
     postgres_db: str = "goals"
     postgres_host: str = "localhost"
     postgres_port: int = 5432
-    session_key: str = "changeme"
+    session_key: str | None = None
+    session_key_source: Literal["env", "default", "generated"] = "env"
+    session_cookie_name: str = "goal_tracker_session"
+    session_duration_minutes: int = 60
     cors_origins: list[str] = [
         "http://127.0.0.1:8080",
         "http://127.0.0.1:8081",
@@ -47,7 +52,22 @@ class Settings(BaseSettings):
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
 
+    @computed_field
+    @property
+    def session_cookie_secure(self) -> bool:
+        return self.app_env not in {"development", "test"}
+
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    settings = Settings()
+
+    if settings.session_key is None or settings.session_key == "":
+        settings.session_key = token_urlsafe(32)
+        settings.session_key_source = "generated"
+    elif settings.session_key == "changeme":
+        settings.session_key_source = "default"
+    else:
+        settings.session_key_source = "env"
+
+    return settings
