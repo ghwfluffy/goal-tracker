@@ -57,7 +57,7 @@ def test_admin_can_crud_invitation_codes_and_registration_tracks_created_users(
     assert len(dashboards_payload["dashboards"]) == 1
     assert dashboards_payload["dashboards"][0]["name"] == "Example Dashboard"
     assert dashboards_payload["dashboards"][0]["is_default"] is True
-    assert len(dashboards_payload["dashboards"][0]["widgets"]) == 3
+    assert len(dashboards_payload["dashboards"][0]["widgets"]) == 6
 
     list_response = client.get("/api/v1/invitation-codes")
     assert list_response.status_code == 200

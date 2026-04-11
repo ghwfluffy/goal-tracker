@@ -7,19 +7,34 @@ from uuid import uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import Dashboard, DashboardWidget, ExampleSeedApplication, Goal, Metric, User
+from app.db.models import (
+    Dashboard,
+    DashboardWidget,
+    ExampleSeedApplication,
+    Goal,
+    Metric,
+    MetricEntry,
+    User,
+)
 from app.services.dashboards import (
     WIDGET_TYPE_GOAL_PROGRESS,
+    WIDGET_TYPE_GOAL_SUMMARY,
     WIDGET_TYPE_METRIC_HISTORY,
     WIDGET_TYPE_METRIC_SUMMARY,
     create_dashboard,
     create_dashboard_widget,
 )
 from app.services.goals import create_goal
-from app.services.metrics import METRIC_TYPE_DATE, METRIC_TYPE_NUMBER, create_metric
+from app.services.metrics import (
+    METRIC_TYPE_DATE,
+    METRIC_TYPE_NUMBER,
+    create_metric,
+    create_metric_entry,
+)
 
 EXAMPLE_SEED_REVISION_INITIAL_GOALS = "2026-04-11-initial-example-metrics-goals"
 EXAMPLE_SEED_REVISION_INITIAL_DASHBOARD = "2026-04-11-initial-example-dashboard"
+EXAMPLE_SEED_REVISION_EXPANDED_HISTORY = "2026-04-11-expanded-example-history-and-widgets"
 
 EXAMPLE_WEIGHT_METRIC_NAME = "Example Weight"
 EXAMPLE_LAST_DRINK_METRIC_NAME = "Example Last Drink"
@@ -30,6 +45,9 @@ EXAMPLE_DASHBOARD_DESCRIPTION = "Starter dashboard seeded for example-data accou
 EXAMPLE_WEIGHT_TREND_WIDGET_TITLE = "Weight Trend"
 EXAMPLE_WEIGHT_GOAL_WIDGET_TITLE = "Weight Goal Progress"
 EXAMPLE_LAST_DRINK_WIDGET_TITLE = "Last Drink Snapshot"
+EXAMPLE_WEIGHT_SUMMARY_WIDGET_TITLE = "Weight Snapshot"
+EXAMPLE_WEIGHT_GOAL_SUMMARY_WIDGET_TITLE = "Weight Goal Summary"
+EXAMPLE_LAST_DRINK_HISTORY_WIDGET_TITLE = "Last Drink History"
 
 
 def utcnow() -> datetime:
@@ -42,6 +60,15 @@ def example_goal_target_date(today: date) -> date:
 
 def end_of_month(value: date) -> date:
     return date(value.year, value.month, monthrange(value.year, value.month)[1])
+
+
+def utc_datetime(
+    value: date,
+    *,
+    hour: int = 12,
+    minute: int = 0,
+) -> datetime:
+    return datetime(value.year, value.month, value.day, hour, minute, tzinfo=UTC)
 
 
 def get_metric_by_name_for_user(db: Session, *, user: User, name: str) -> Metric | None:
@@ -73,6 +100,19 @@ def dashboard_widget_exists(
     statement = select(DashboardWidget.id).where(
         DashboardWidget.dashboard_id == dashboard.id,
         DashboardWidget.title == title,
+    )
+    return db.scalar(statement) is not None
+
+
+def metric_entry_exists_at(
+    db: Session,
+    *,
+    metric: Metric,
+    recorded_at: datetime,
+) -> bool:
+    statement = select(MetricEntry.id).where(
+        MetricEntry.metric_id == metric.id,
+        MetricEntry.recorded_at == recorded_at,
     )
     return db.scalar(statement) is not None
 
@@ -228,6 +268,111 @@ def apply_initial_example_dashboard(db: Session, *, user: User) -> None:
         )
 
 
+def apply_expanded_example_history_and_widgets(db: Session, *, user: User) -> None:
+    apply_initial_example_dashboard(db, user=user)
+
+    today = utcnow().date()
+    weight_metric = get_metric_by_name_for_user(db, user=user, name=EXAMPLE_WEIGHT_METRIC_NAME)
+    weight_goal = get_goal_by_title_for_user(db, user=user, title=EXAMPLE_WEIGHT_GOAL_TITLE)
+    last_drink_metric = get_metric_by_name_for_user(
+        db,
+        user=user,
+        name=EXAMPLE_LAST_DRINK_METRIC_NAME,
+    )
+    dashboard = get_dashboard_by_name_for_user(db, user=user, name=EXAMPLE_DASHBOARD_NAME)
+    if (
+        weight_metric is None
+        or weight_goal is None
+        or last_drink_metric is None
+        or dashboard is None
+    ):
+        return
+
+    weight_history = [
+        (today - timedelta(days=35), 248.4),
+        (today - timedelta(days=28), 246.9),
+        (today - timedelta(days=21), 244.8),
+        (today - timedelta(days=14), 242.2),
+        (today - timedelta(days=7), 239.6),
+        (today - timedelta(days=3), 237.8),
+    ]
+    for recorded_date, number_value in weight_history:
+        recorded_at = utc_datetime(recorded_date, hour=7, minute=30)
+        if metric_entry_exists_at(db, metric=weight_metric, recorded_at=recorded_at):
+            continue
+        create_metric_entry(
+            db,
+            metric=weight_metric,
+            number_value=number_value,
+            date_value=None,
+            recorded_at=recorded_at,
+        )
+
+    last_drink_history = [
+        (today - timedelta(days=26), today - timedelta(days=27)),
+        (today - timedelta(days=17), today - timedelta(days=18)),
+        (today - timedelta(days=11), today - timedelta(days=12)),
+        (today - timedelta(days=6), today - timedelta(days=7)),
+        (today - timedelta(days=1), today - timedelta(days=2)),
+    ]
+    for recorded_date, date_value in last_drink_history:
+        recorded_at = utc_datetime(recorded_date, hour=21, minute=0)
+        if metric_entry_exists_at(db, metric=last_drink_metric, recorded_at=recorded_at):
+            continue
+        create_metric_entry(
+            db,
+            metric=last_drink_metric,
+            number_value=None,
+            date_value=date_value,
+            recorded_at=recorded_at,
+        )
+
+    if not dashboard_widget_exists(
+        db,
+        dashboard=dashboard,
+        title=EXAMPLE_WEIGHT_SUMMARY_WIDGET_TITLE,
+    ):
+        create_dashboard_widget(
+            db,
+            dashboard=dashboard,
+            user=user,
+            title=EXAMPLE_WEIGHT_SUMMARY_WIDGET_TITLE,
+            widget_type=WIDGET_TYPE_METRIC_SUMMARY,
+            metric=weight_metric,
+            rolling_window_days=90,
+        )
+
+    if not dashboard_widget_exists(
+        db,
+        dashboard=dashboard,
+        title=EXAMPLE_WEIGHT_GOAL_SUMMARY_WIDGET_TITLE,
+    ):
+        create_dashboard_widget(
+            db,
+            dashboard=dashboard,
+            user=user,
+            title=EXAMPLE_WEIGHT_GOAL_SUMMARY_WIDGET_TITLE,
+            widget_type=WIDGET_TYPE_GOAL_SUMMARY,
+            goal=weight_goal,
+            rolling_window_days=365,
+        )
+
+    if not dashboard_widget_exists(
+        db,
+        dashboard=dashboard,
+        title=EXAMPLE_LAST_DRINK_HISTORY_WIDGET_TITLE,
+    ):
+        create_dashboard_widget(
+            db,
+            dashboard=dashboard,
+            user=user,
+            title=EXAMPLE_LAST_DRINK_HISTORY_WIDGET_TITLE,
+            widget_type=WIDGET_TYPE_METRIC_HISTORY,
+            metric=last_drink_metric,
+            rolling_window_days=90,
+        )
+
+
 def upgrade_example_data_for_user(db: Session, *, user: User) -> None:
     if not user.is_example_data:
         return
@@ -254,6 +399,18 @@ def upgrade_example_data_for_user(db: Session, *, user: User) -> None:
             db,
             user=user,
             revision=EXAMPLE_SEED_REVISION_INITIAL_DASHBOARD,
+        )
+
+    if not is_example_seed_revision_applied(
+        db,
+        user=user,
+        revision=EXAMPLE_SEED_REVISION_EXPANDED_HISTORY,
+    ):
+        apply_expanded_example_history_and_widgets(db, user=user)
+        mark_example_seed_revision_applied(
+            db,
+            user=user,
+            revision=EXAMPLE_SEED_REVISION_EXPANDED_HISTORY,
         )
 
 

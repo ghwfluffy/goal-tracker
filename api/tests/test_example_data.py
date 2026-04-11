@@ -10,8 +10,12 @@ from app.main import create_app
 from app.services.auth import create_user
 from app.services.example_data import (
     EXAMPLE_DASHBOARD_NAME,
+    EXAMPLE_LAST_DRINK_HISTORY_WIDGET_TITLE,
+    EXAMPLE_SEED_REVISION_EXPANDED_HISTORY,
     EXAMPLE_SEED_REVISION_INITIAL_DASHBOARD,
     EXAMPLE_SEED_REVISION_INITIAL_GOALS,
+    EXAMPLE_WEIGHT_GOAL_SUMMARY_WIDGET_TITLE,
+    EXAMPLE_WEIGHT_SUMMARY_WIDGET_TITLE,
     apply_initial_example_metrics_and_goals,
     mark_example_seed_revision_applied,
     upgrade_all_example_data_users,
@@ -76,17 +80,49 @@ def test_example_data_upgrader_backfills_existing_accounts_without_duplicates() 
                 ExampleSeedApplication.revision == EXAMPLE_SEED_REVISION_INITIAL_DASHBOARD,
             )
         )
+        applied_history_revision_count = db.scalar(
+            select(func.count())
+            .select_from(ExampleSeedApplication)
+            .where(
+                ExampleSeedApplication.user_id == user.id,
+                ExampleSeedApplication.revision == EXAMPLE_SEED_REVISION_EXPANDED_HISTORY,
+            )
+        )
         dashboard = db.scalar(select(Dashboard).where(Dashboard.user_id == user.id))
+        weight_metric = db.scalar(
+            select(Metric).where(Metric.user_id == user.id, Metric.name == "Example Weight")
+        )
+        last_drink_metric = db.scalar(
+            select(Metric).where(Metric.user_id == user.id, Metric.name == "Example Last Drink")
+        )
+        widget_titles = set(
+            db.scalars(
+                select(DashboardWidget.title).join(Dashboard).where(Dashboard.user_id == user.id)
+            )
+        )
 
         assert metric_count == 2
         assert goal_count == 2
         assert dashboard_count == 1
-        assert widget_count == 3
+        assert widget_count == 6
         assert applied_revision_count == 1
         assert applied_dashboard_revision_count == 1
+        assert applied_history_revision_count == 1
         assert dashboard is not None
         assert dashboard.name == EXAMPLE_DASHBOARD_NAME
         assert user.default_dashboard_id == dashboard.id
+        assert weight_metric is not None
+        assert len(weight_metric.entries) == 7
+        assert last_drink_metric is not None
+        assert len(last_drink_metric.entries) == 6
+        assert widget_titles == {
+            "Weight Trend",
+            "Weight Goal Progress",
+            "Last Drink Snapshot",
+            EXAMPLE_WEIGHT_SUMMARY_WIDGET_TITLE,
+            EXAMPLE_WEIGHT_GOAL_SUMMARY_WIDGET_TITLE,
+            EXAMPLE_LAST_DRINK_HISTORY_WIDGET_TITLE,
+        }
 
         upgrade_all_example_data_users(db)
         db.commit()
@@ -122,13 +158,22 @@ def test_example_data_upgrader_backfills_existing_accounts_without_duplicates() 
                 ExampleSeedApplication.revision == EXAMPLE_SEED_REVISION_INITIAL_DASHBOARD,
             )
         )
+        applied_history_revision_count_after_second_run = db.scalar(
+            select(func.count())
+            .select_from(ExampleSeedApplication)
+            .where(
+                ExampleSeedApplication.user_id == user.id,
+                ExampleSeedApplication.revision == EXAMPLE_SEED_REVISION_EXPANDED_HISTORY,
+            )
+        )
 
         assert metric_count_after_second_run == 2
         assert goal_count_after_second_run == 2
         assert dashboard_count_after_second_run == 1
-        assert widget_count_after_second_run == 3
+        assert widget_count_after_second_run == 6
         assert applied_revision_count_after_second_run == 1
         assert applied_dashboard_revision_count_after_second_run == 1
+        assert applied_history_revision_count_after_second_run == 1
 
     Base.metadata.drop_all(engine)
 
@@ -177,9 +222,18 @@ def test_startup_upgrades_existing_example_accounts() -> None:
                 ExampleSeedApplication.revision == EXAMPLE_SEED_REVISION_INITIAL_DASHBOARD,
             )
         )
+        applied_history_revision_count = db.scalar(
+            select(func.count())
+            .select_from(ExampleSeedApplication)
+            .where(
+                ExampleSeedApplication.user_id == user.id,
+                ExampleSeedApplication.revision == EXAMPLE_SEED_REVISION_EXPANDED_HISTORY,
+            )
+        )
 
         assert dashboard is not None
         assert dashboard.name == EXAMPLE_DASHBOARD_NAME
         assert applied_dashboard_revision_count == 1
+        assert applied_history_revision_count == 1
 
     Base.metadata.drop_all(engine)

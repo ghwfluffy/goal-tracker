@@ -25,6 +25,44 @@ interface DashboardsStoreState {
   viewState: DashboardsViewState;
 }
 
+function upsertWidget(
+  dashboards: DashboardSummary[],
+  dashboardId: string,
+  widget: DashboardSummary["widgets"][number],
+): DashboardSummary[] {
+  return dashboards.map((dashboard) => {
+    if (dashboard.id !== dashboardId) {
+      return dashboard;
+    }
+
+    const nextWidgets = dashboard.widgets.some((candidate) => candidate.id === widget.id)
+      ? dashboard.widgets.map((candidate) => (candidate.id === widget.id ? widget : candidate))
+      : [...dashboard.widgets, widget];
+
+    return {
+      ...dashboard,
+      widgets: [...nextWidgets].sort((left, right) => left.display_order - right.display_order),
+    };
+  });
+}
+
+function removeWidgetFromDashboard(
+  dashboards: DashboardSummary[],
+  dashboardId: string,
+  widgetId: string,
+): DashboardSummary[] {
+  return dashboards.map((dashboard) => {
+    if (dashboard.id !== dashboardId) {
+      return dashboard;
+    }
+
+    return {
+      ...dashboard,
+      widgets: dashboard.widgets.filter((widget) => widget.id !== widgetId),
+    };
+  });
+}
+
 export const useDashboardsStore = defineStore("dashboards", {
   state: (): DashboardsStoreState => ({
     dashboards: [],
@@ -108,8 +146,8 @@ export const useDashboardsStore = defineStore("dashboards", {
       this.errorMessage = "";
 
       try {
-        await createDashboardWidget(dashboardId, payload);
-        await this.loadDashboards();
+        const createdWidget = await createDashboardWidget(dashboardId, payload);
+        this.dashboards = upsertWidget(this.dashboards, dashboardId, createdWidget);
         return true;
       } catch (error: unknown) {
         this.errorMessage =
@@ -128,8 +166,8 @@ export const useDashboardsStore = defineStore("dashboards", {
       this.errorMessage = "";
 
       try {
-        await updateDashboardWidget(dashboardId, widgetId, payload);
-        await this.loadDashboards();
+        const updatedWidget = await updateDashboardWidget(dashboardId, widgetId, payload);
+        this.dashboards = upsertWidget(this.dashboards, dashboardId, updatedWidget);
         return true;
       } catch (error: unknown) {
         this.errorMessage =
@@ -145,7 +183,7 @@ export const useDashboardsStore = defineStore("dashboards", {
 
       try {
         await deleteDashboardWidget(dashboardId, widgetId);
-        await this.loadDashboards();
+        this.dashboards = removeWidgetFromDashboard(this.dashboards, dashboardId, widgetId);
         return true;
       } catch (error: unknown) {
         this.errorMessage =

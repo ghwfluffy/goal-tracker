@@ -17,6 +17,7 @@ import TabView from "primevue/tabview";
 import Tag from "primevue/tag";
 
 import DashboardWorkspace from "../components/DashboardWorkspace.vue";
+import MetricHistoryChart from "../components/MetricHistoryChart.vue";
 import { DEFAULT_PROFILE_TIMEZONE, formatDateOnly, formatTimestampInBrowserTimezone } from "../lib/time";
 import { useAuthStore } from "../stores/auth";
 import { useDashboardsStore } from "../stores/dashboards";
@@ -71,6 +72,9 @@ const metricInitialNumberValueInput = ref("");
 const metricInitialDateValueInput = ref("");
 const metricEntryNumberInputs = ref<Record<string, string>>({});
 const metricEntryDateInputs = ref<Record<string, string>>({});
+const metricHistoryDialogVisible = ref(false);
+const metricHistoryTabIndex = ref(0);
+const metricHistoryMetricId = ref("");
 
 const goalTitleInput = ref("");
 const goalDescriptionInput = ref("");
@@ -138,6 +142,10 @@ const selectedGoalMetric = computed(() => {
 
 const activeMetrics = computed(() => {
   return metricsStore.metrics.filter((metric) => !metric.is_archived);
+});
+
+const selectedMetricHistory = computed(() => {
+  return metricsStore.metrics.find((metric) => metric.id === metricHistoryMetricId.value) ?? null;
 });
 
 const goalMetricType = computed(() => {
@@ -674,6 +682,12 @@ async function deleteMetricEntry(metricId: string): Promise<void> {
   }
 }
 
+function openMetricHistory(metricId: string): void {
+  metricHistoryMetricId.value = metricId;
+  metricHistoryTabIndex.value = 0;
+  metricHistoryDialogVisible.value = true;
+}
+
 function formatDateTime(value: string): string {
   return formatTimestampInBrowserTimezone(value);
 }
@@ -713,6 +727,14 @@ watch(
   () => {
     if (!goalUseNewMetric.value && selectedGoalMetric.value === null) {
       goalMetricIdInput.value = activeMetrics.value[0]?.id ?? "";
+    }
+
+    if (
+      metricHistoryMetricId.value !== "" &&
+      metricsStore.metrics.every((metric) => metric.id !== metricHistoryMetricId.value)
+    ) {
+      metricHistoryDialogVisible.value = false;
+      metricHistoryMetricId.value = "";
     }
   },
   { deep: true },
@@ -842,7 +864,7 @@ onMounted(() => {
               <div class="panel-card">
                 <p class="panel-eyebrow">Metric history</p>
                 <h2>Update tracked values</h2>
-                <p>Quick-add the latest value for each metric and review the most recent history.</p>
+                <p>Quick-add the latest value for each metric and open history only when you need it.</p>
 
                 <label class="checkbox-row">
                   <Checkbox
@@ -896,6 +918,13 @@ onMounted(() => {
                     </div>
 
                     <div class="metric-card-actions">
+                      <Button
+                        label="History"
+                        icon="pi pi-chart-line"
+                        severity="secondary"
+                        text
+                        @click="openMetricHistory(metric.id)"
+                      />
                       <Button
                         v-if="!metric.is_archived"
                         label="Archive"
@@ -956,26 +985,6 @@ onMounted(() => {
                     <Message v-else severity="warn" :closable="false">
                       Archived metrics are hidden by default and cannot receive new updates.
                     </Message>
-
-                    <div class="history-list">
-                      <div
-                        v-for="entry in metric.entries.slice(0, 3)"
-                        :key="entry.id"
-                        class="history-row"
-                      >
-                        <strong>
-                          {{
-                            formatMetricValue(
-                              metric.metric_type,
-                              entry.number_value,
-                              entry.date_value,
-                              metric.decimal_places,
-                            )
-                          }}
-                        </strong>
-                        <span>{{ formatDateTime(entry.recorded_at) }}</span>
-                      </div>
-                    </div>
                   </article>
                 </div>
               </div>
@@ -1189,6 +1198,77 @@ onMounted(() => {
           </TabPanel>
         </TabView>
       </section>
+
+      <Dialog
+        v-model:visible="metricHistoryDialogVisible"
+        modal
+        header="Metric history"
+        class="profile-dialog"
+        :style="{ width: 'min(56rem, 96vw)' }"
+      >
+        <div v-if="selectedMetricHistory !== null" class="dialog-stack">
+          <section class="dialog-section">
+            <div class="section-heading-text">
+              <h3>{{ selectedMetricHistory.name }}</h3>
+              <p>
+                Current value:
+                <strong>
+                  {{
+                    formatMetricValue(
+                      selectedMetricHistory.metric_type,
+                      selectedMetricHistory.latest_entry?.number_value ?? null,
+                      selectedMetricHistory.latest_entry?.date_value ?? null,
+                      selectedMetricHistory.decimal_places,
+                    )
+                  }}
+                </strong>
+                <span v-if="selectedMetricHistory.unit_label !== null">
+                  {{ selectedMetricHistory.unit_label }}
+                </span>
+              </p>
+            </div>
+
+            <TabView v-model:activeIndex="metricHistoryTabIndex">
+              <TabPanel header="Graph">
+                <MetricHistoryChart :metric="selectedMetricHistory" />
+              </TabPanel>
+              <TabPanel header="Values">
+                <div v-if="selectedMetricHistory.entries.length === 0" class="empty-state">
+                  No history recorded yet.
+                </div>
+                <div v-else class="metric-history-table-wrap">
+                  <table class="metric-history-table">
+                    <thead>
+                      <tr>
+                        <th>Value</th>
+                        <th>Recorded</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="entry in selectedMetricHistory.entries" :key="entry.id">
+                        <td>
+                          {{
+                            formatMetricValue(
+                              selectedMetricHistory.metric_type,
+                              entry.number_value,
+                              entry.date_value,
+                              selectedMetricHistory.decimal_places,
+                            )
+                          }}
+                          <span v-if="selectedMetricHistory.unit_label !== null">
+                            {{ selectedMetricHistory.unit_label }}
+                          </span>
+                        </td>
+                        <td>{{ formatDateTime(entry.recorded_at) }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </TabPanel>
+            </TabView>
+          </section>
+        </div>
+      </Dialog>
 
       <Dialog
         v-model:visible="profileDialogVisible"
@@ -1800,8 +1880,7 @@ h1 {
 .list-stack,
 .goal-meta-grid,
 .quick-entry-grid,
-.date-grid,
-.history-list {
+.date-grid {
   display: grid;
   gap: 1rem;
 }
@@ -1836,6 +1915,10 @@ h1 {
   padding-top: 0.25rem;
 }
 
+.profile-dialog :deep(.p-tabview-panels) {
+  padding-inline: 0;
+}
+
 .section-heading {
   display: flex;
   align-items: center;
@@ -1855,6 +1938,38 @@ h1 {
 
 .empty-state {
   color: #64748b;
+}
+
+.metric-history-table-wrap {
+  overflow-x: auto;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.metric-history-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.metric-history-table th,
+.metric-history-table td {
+  padding: 0.9rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.75);
+}
+
+.metric-history-table th {
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #64748b;
+  background: rgba(248, 250, 252, 0.95);
+}
+
+.metric-history-table tbody tr:last-child td {
+  border-bottom: 0;
 }
 
 .checkbox-row {
