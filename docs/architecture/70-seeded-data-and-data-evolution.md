@@ -35,6 +35,7 @@ The current design direction is:
 - maintain a seed revision history at the application level
 - mark example/demo accounts in the database
 - track which seed revisions have been applied to which flagged accounts
+- run an upgrader that applies newly introduced seed revisions to all existing flagged example/demo accounts
 
 ## Upgrade Flow
 

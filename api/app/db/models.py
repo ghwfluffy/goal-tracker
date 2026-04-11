@@ -2,7 +2,18 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, LargeBinary, String, Text, func
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    ForeignKey,
+    Integer,
+    LargeBinary,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -69,6 +80,10 @@ class User(Base):
         cascade="all, delete-orphan",
     )
     goals: Mapped[list[Goal]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    example_seed_applications: Mapped[list[ExampleSeedApplication]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
     )
@@ -194,6 +209,28 @@ class Goal(Base):
 
     user: Mapped[User] = relationship(back_populates="goals")
     metric: Mapped[Metric] = relationship(back_populates="goals")
+
+
+class ExampleSeedApplication(Base):
+    __tablename__ = "example_seed_applications"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "revision",
+            name="uq_example_seed_applications_user_revision",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    revision: Mapped[str] = mapped_column(String(100), nullable=False)
+    applied_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    user: Mapped[User] = relationship(back_populates="example_seed_applications")
 
 
 class AuthSession(Base):

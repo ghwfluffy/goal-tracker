@@ -46,7 +46,7 @@ What already exists:
 - first-account bootstrap, invited sign-up, and sign-in flow
 - a signed-in app shell with session restoration
 - admin-managed invitation codes for creating additional accounts
-- optional example-data account signup for feature testing
+- optional example-data account signup seeded with starter metrics and goals, with revision-based upgrades for existing example accounts
 - reusable metrics with quick integer/date updates
 - goal creation backed by existing or newly created metrics
 - a backend API foundation

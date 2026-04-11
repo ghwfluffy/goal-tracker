@@ -17,6 +17,7 @@ from app.core.security import (
     verify_password,
 )
 from app.db.models import AuthSession, InvitationCode, User
+from app.services.example_data import upgrade_example_data_for_user
 
 
 class BootstrapError(Exception):
@@ -136,7 +137,7 @@ def register_user(
         raise RegistrationError("Username is already taken.")
 
     invitation_code = ensure_active_invitation_code(db, code=invitation_code_value)
-    return create_user(
+    user = create_user(
         db,
         username=username,
         password=password,
@@ -144,6 +145,9 @@ def register_user(
         is_example_data=is_example_data,
         invitation_code=invitation_code,
     )
+    if is_example_data:
+        upgrade_example_data_for_user(db, user=user)
+    return user
 
 
 def verify_user_credentials(db: Session, *, username: str, password: str) -> User:

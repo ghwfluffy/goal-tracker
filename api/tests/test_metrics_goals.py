@@ -148,3 +148,40 @@ def test_goals_and_metrics_are_scoped_to_current_user(client: TestClient) -> Non
     assert metrics_response.json() == {"metrics": []}
     assert goals_response.status_code == 200
     assert goals_response.json() == {"goals": []}
+
+
+def test_example_data_user_is_seeded_with_metrics_and_goals(client: TestClient) -> None:
+    bootstrap_admin(client)
+
+    create_code_response = client.post(
+        "/api/v1/invitation-codes",
+        json={"expires_at": "2026-05-01T00:00:00Z"},
+    )
+    assert create_code_response.status_code == 201
+
+    client.post("/api/v1/auth/logout")
+
+    register_response = client.post(
+        "/api/v1/auth/register",
+        json={
+            "username": "demo-user",
+            "password": "supersafepassword",
+            "invitation_code": create_code_response.json()["code"],
+            "is_example_data": True,
+        },
+    )
+    assert register_response.status_code == 201
+
+    metrics_response = client.get("/api/v1/metrics")
+    goals_response = client.get("/api/v1/goals")
+
+    assert metrics_response.status_code == 200
+    assert sorted(metric["name"] for metric in metrics_response.json()["metrics"]) == [
+        "Example Last Drink",
+        "Example Weight",
+    ]
+    assert goals_response.status_code == 200
+    assert sorted(goal["title"] for goal in goals_response.json()["goals"]) == [
+        "Reach 220 lbs",
+        "Stay dry this month",
+    ]

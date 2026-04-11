@@ -20,6 +20,7 @@ from app.services.auth import (
     revoke_session,
     verify_user_credentials,
 )
+from app.services.example_data import upgrade_all_example_data_users
 
 router = APIRouter(prefix="/auth")
 
@@ -142,6 +143,8 @@ def get_current_admin_user(
 def get_bootstrap_status(
     db: Annotated[Session, Depends(get_db)],
 ) -> BootstrapStatusResponse:
+    upgrade_all_example_data_users(db)
+    db.commit()
     return BootstrapStatusResponse(bootstrap_required=is_bootstrap_required(db))
 
 
@@ -184,6 +187,7 @@ def login(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> SessionResponse:
     try:
+        upgrade_all_example_data_users(db)
         user = verify_user_credentials(
             db,
             username=normalized_username(payload.username),
@@ -214,6 +218,7 @@ def register(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> SessionResponse:
     try:
+        upgrade_all_example_data_users(db)
         user = register_user(
             db,
             username=normalized_username(payload.username),
