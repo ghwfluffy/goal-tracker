@@ -72,6 +72,78 @@ export interface InvitationCodePayload {
   expires_at: string;
 }
 
+export interface MetricEntrySummary {
+  date_value: string | null;
+  id: string;
+  integer_value: number | null;
+  recorded_at: string;
+}
+
+export interface MetricSummary {
+  entries: MetricEntrySummary[];
+  id: string;
+  latest_entry: MetricEntrySummary | null;
+  metric_type: "integer" | "date";
+  name: string;
+  unit_label: string | null;
+}
+
+export interface MetricListResponse {
+  metrics: MetricSummary[];
+}
+
+export interface CreateMetricPayload {
+  initial_date_value: string | null;
+  initial_integer_value: number | null;
+  metric_type: "integer" | "date";
+  name: string;
+  recorded_at?: string | null;
+  unit_label: string | null;
+}
+
+export interface CreateMetricEntryPayload {
+  date_value: string | null;
+  integer_value: number | null;
+  recorded_at?: string | null;
+}
+
+export interface GoalMetricSummary {
+  id: string;
+  latest_entry: MetricEntrySummary | null;
+  metric_type: "integer" | "date";
+  name: string;
+  unit_label: string | null;
+}
+
+export interface GoalSummary {
+  description: string | null;
+  id: string;
+  metric: GoalMetricSummary;
+  start_date: string;
+  status: string;
+  target_date: string | null;
+  target_value_date: string | null;
+  target_value_integer: number | null;
+  title: string;
+}
+
+export interface GoalListResponse {
+  goals: GoalSummary[];
+}
+
+export interface InlineMetricPayload extends CreateMetricPayload {}
+
+export interface CreateGoalPayload {
+  description: string | null;
+  metric_id: string | null;
+  new_metric: InlineMetricPayload | null;
+  start_date: string;
+  target_date: string | null;
+  target_value_date: string | null;
+  target_value_integer: number | null;
+  title: string;
+}
+
 type Fetcher = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
 const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? "/api/v1").replace(/\/$/, "");
@@ -326,6 +398,57 @@ export function deleteInvitationCode(
     `/invitation-codes/${invitationCodeId}`,
     {
       method: "DELETE",
+    },
+    fetcher,
+  );
+}
+
+export function fetchMetrics(fetcher: Fetcher = fetch): Promise<MetricListResponse> {
+  return requestJson<MetricListResponse>("/metrics", undefined, fetcher);
+}
+
+export function createMetric(
+  payload: CreateMetricPayload,
+  fetcher: Fetcher = fetch,
+): Promise<MetricSummary> {
+  return requestJson<MetricSummary>(
+    "/metrics",
+    {
+      body: JSON.stringify(payload),
+      method: "POST",
+    },
+    fetcher,
+  );
+}
+
+export function addMetricEntry(
+  metricId: string,
+  payload: CreateMetricEntryPayload,
+  fetcher: Fetcher = fetch,
+): Promise<MetricSummary> {
+  return requestJson<MetricSummary>(
+    `/metrics/${metricId}/entries`,
+    {
+      body: JSON.stringify(payload),
+      method: "POST",
+    },
+    fetcher,
+  );
+}
+
+export function fetchGoals(fetcher: Fetcher = fetch): Promise<GoalListResponse> {
+  return requestJson<GoalListResponse>("/goals", undefined, fetcher);
+}
+
+export function createGoal(
+  payload: CreateGoalPayload,
+  fetcher: Fetcher = fetch,
+): Promise<GoalSummary> {
+  return requestJson<GoalSummary>(
+    "/goals",
+    {
+      body: JSON.stringify(payload),
+      method: "POST",
     },
     fetcher,
   );

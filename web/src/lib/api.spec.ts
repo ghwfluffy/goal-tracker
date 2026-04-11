@@ -2,11 +2,16 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   ApiError,
+  addMetricEntry,
+  createGoal,
   createInvitationCode,
+  createMetric,
   deleteInvitationCode,
   fetchBootstrapStatus,
   fetchCurrentSession,
+  fetchGoals,
   fetchInvitationCodes,
+  fetchMetrics,
   fetchStatus,
   loginWithPassword,
   registerWithInvitationCode,
@@ -325,5 +330,173 @@ describe("auth api helpers", () => {
     });
 
     await expect(deleteInvitationCode("code-1", fetcher)).resolves.toBeUndefined();
+  });
+
+  it("supports metric and goal helpers", async () => {
+    const fetcher = vi.fn(async (input, init) => {
+      const path = String(input);
+
+      if (path.endsWith("/metrics") && init?.method === undefined) {
+        return new Response(
+          JSON.stringify({
+            metrics: [
+              {
+                entries: [],
+                id: "metric-1",
+                latest_entry: null,
+                metric_type: "integer",
+                name: "Weight",
+                unit_label: "lbs",
+              },
+            ],
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      if (path.endsWith("/metrics") && init?.method === "POST") {
+        return new Response(
+          JSON.stringify({
+            entries: [],
+            id: "metric-2",
+            latest_entry: null,
+            metric_type: "date",
+            name: "Last drink",
+            unit_label: null,
+          }),
+          {
+            status: 201,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      if (path.endsWith("/metrics/metric-1/entries") && init?.method === "POST") {
+        return new Response(
+          JSON.stringify({
+            entries: [
+              {
+                date_value: null,
+                id: "entry-1",
+                integer_value: 242,
+                recorded_at: "2026-04-11T20:30:00Z",
+              },
+            ],
+            id: "metric-1",
+            latest_entry: {
+              date_value: null,
+              id: "entry-1",
+              integer_value: 242,
+              recorded_at: "2026-04-11T20:30:00Z",
+            },
+            metric_type: "integer",
+            name: "Weight",
+            unit_label: "lbs",
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      if (path.endsWith("/goals") && init?.method === undefined) {
+        return new Response(
+          JSON.stringify({
+            goals: [],
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      return new Response(
+        JSON.stringify({
+          description: "Cut steadily.",
+          id: "goal-1",
+          metric: {
+            id: "metric-1",
+            latest_entry: null,
+            metric_type: "integer",
+            name: "Weight",
+            unit_label: "lbs",
+          },
+          start_date: "2026-04-11",
+          status: "active",
+          target_date: "2026-06-30",
+          target_value_date: null,
+          target_value_integer: 220,
+          title: "Reach 220",
+        }),
+        {
+          status: 201,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    });
+
+    await expect(fetchMetrics(fetcher)).resolves.toEqual({
+      metrics: [
+        {
+          entries: [],
+          id: "metric-1",
+          latest_entry: null,
+          metric_type: "integer",
+          name: "Weight",
+          unit_label: "lbs",
+        },
+      ],
+    });
+
+    await expect(
+      createMetric(
+        {
+          initial_date_value: null,
+          initial_integer_value: 245,
+          metric_type: "integer",
+          name: "Weight",
+          unit_label: "lbs",
+        },
+        fetcher,
+      ),
+    ).resolves.toMatchObject({
+      id: "metric-2",
+    });
+
+    await expect(
+      addMetricEntry(
+        "metric-1",
+        { date_value: null, integer_value: 242 },
+        fetcher,
+      ),
+    ).resolves.toMatchObject({
+      latest_entry: { integer_value: 242 },
+    });
+
+    await expect(fetchGoals(fetcher)).resolves.toEqual({ goals: [] });
+
+    await expect(
+      createGoal(
+        {
+          description: "Cut steadily.",
+          metric_id: "metric-1",
+          new_metric: null,
+          start_date: "2026-04-11",
+          target_date: "2026-06-30",
+          target_value_date: null,
+          target_value_integer: 220,
+          title: "Reach 220",
+        },
+        fetcher,
+      ),
+    ).resolves.toMatchObject({
+      id: "goal-1",
+      title: "Reach 220",
+    });
   });
 });

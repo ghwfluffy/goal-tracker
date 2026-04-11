@@ -47,13 +47,14 @@ What already exists:
 - a signed-in app shell with session restoration
 - admin-managed invitation codes for creating additional accounts
 - optional example-data account signup for feature testing
+- reusable metrics with quick integer/date updates
+- goal creation backed by existing or newly created metrics
 - a backend API foundation
 - a landing page that successfully calls the API and renders application status
 - architecture documents covering the long-term product design
 
 What comes next:
 
-- persistent goal and metric storage
 - manual update flows
 - dashboard and widget building
 - reminders, forecasts, and richer progress views

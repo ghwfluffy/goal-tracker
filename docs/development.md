@@ -42,6 +42,11 @@ Phase 0 now includes backend auth/session foundation endpoints:
 8. `POST /api/v1/invitation-codes`
 9. `PATCH /api/v1/invitation-codes/{invitation_code_id}`
 10. `DELETE /api/v1/invitation-codes/{invitation_code_id}`
+11. `GET /api/v1/metrics`
+12. `POST /api/v1/metrics`
+13. `POST /api/v1/metrics/{metric_id}/entries`
+14. `GET /api/v1/goals`
+15. `POST /api/v1/goals`
 
 The first account bootstrap path creates the initial administrator and starts a server-side session using an HTTP-only cookie. After that, new users register through admin-managed invitation codes and can opt into example-data seeding at signup. Passwords are stored with bcrypt-backed hashes.
 
@@ -54,6 +59,8 @@ The frontend home page now consumes that auth foundation and can:
 5. restore the current session
 6. sign out
 7. let administrators create, update, review, and revoke invitation codes
+8. create reusable integer/date metrics and add quick updates
+9. create goals tied to an existing metric or a new inline metric
 
 ## Local Run Commands
 

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, LargeBinary, String, Text, func
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, LargeBinary, String, Text, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -64,6 +64,14 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+    metrics: Mapped[list[Metric]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    goals: Mapped[list[Goal]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
     used_invitation_code: Mapped[InvitationCode | None] = relationship(
         back_populates="created_users",
         foreign_keys=[invitation_code_id],
@@ -104,6 +112,88 @@ class InvitationCode(Base):
         back_populates="used_invitation_code",
         foreign_keys=[User.invitation_code_id],
     )
+
+
+class Metric(Base):
+    __tablename__ = "metrics"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    metric_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    unit_label: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    user: Mapped[User] = relationship(back_populates="metrics")
+    entries: Mapped[list[MetricEntry]] = relationship(
+        back_populates="metric",
+        cascade="all, delete-orphan",
+        order_by="desc(MetricEntry.recorded_at)",
+    )
+    goals: Mapped[list[Goal]] = relationship(back_populates="metric")
+
+
+class MetricEntry(Base):
+    __tablename__ = "metric_entries"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    metric_id: Mapped[str] = mapped_column(
+        ForeignKey("metrics.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    integer_value: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    date_value: Mapped[date | None] = mapped_column(Date, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    metric: Mapped[Metric] = relationship(back_populates="entries")
+
+
+class Goal(Base):
+    __tablename__ = "goals"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    metric_id: Mapped[str] = mapped_column(
+        ForeignKey("metrics.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    title: Mapped[str] = mapped_column(String(120), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
+    start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    target_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    target_value_integer: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    target_value_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    user: Mapped[User] = relationship(back_populates="goals")
+    metric: Mapped[Metric] = relationship(back_populates="goals")
 
 
 class AuthSession(Base):

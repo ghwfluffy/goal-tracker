@@ -16,11 +16,15 @@ import TabView from "primevue/tabview";
 import Tag from "primevue/tag";
 
 import { useAuthStore } from "../stores/auth";
+import { useGoalsStore } from "../stores/goals";
 import { useInvitationCodesStore } from "../stores/invitationCodes";
+import { useMetricsStore } from "../stores/metrics";
 import { useStatusStore } from "../stores/status";
 
 const authStore = useAuthStore();
+const goalsStore = useGoalsStore();
 const invitationCodesStore = useInvitationCodesStore();
+const metricsStore = useMetricsStore();
 const statusStore = useStatusStore();
 
 const loginUsername = ref("");
@@ -50,6 +54,30 @@ const passwordSuccessMessage = ref("");
 const passwordErrorMessage = ref("");
 const deleteAccountErrorMessage = ref("");
 const invitationCodesSuccessMessage = ref("");
+const metricSuccessMessage = ref("");
+const goalSuccessMessage = ref("");
+
+const metricNameInput = ref("");
+const metricTypeInput = ref<"integer" | "date">("integer");
+const metricUnitLabelInput = ref("");
+const metricInitialIntegerValueInput = ref("");
+const metricInitialDateValueInput = ref("");
+const metricEntryIntegerInputs = ref<Record<string, string>>({});
+const metricEntryDateInputs = ref<Record<string, string>>({});
+
+const goalTitleInput = ref("");
+const goalDescriptionInput = ref("");
+const goalStartDateInput = ref(new Date().toISOString().slice(0, 10));
+const goalTargetDateInput = ref("");
+const goalTargetIntegerValueInput = ref("");
+const goalTargetDateValueInput = ref("");
+const goalUseNewMetric = ref(false);
+const goalMetricIdInput = ref("");
+const goalNewMetricNameInput = ref("");
+const goalNewMetricTypeInput = ref<"integer" | "date">("integer");
+const goalNewMetricUnitLabelInput = ref("");
+const goalNewMetricInitialIntegerValueInput = ref("");
+const goalNewMetricInitialDateValueInput = ref("");
 
 const lastCheckedLabel = computed(() => {
   if (statusStore.data === null) {
@@ -77,6 +105,18 @@ const authSummary = computed(() => {
 
 const isBusy = computed(() => {
   return authStore.viewState === "loading" || authStore.submissionState === "submitting";
+});
+
+const selectedGoalMetric = computed(() => {
+  return metricsStore.metrics.find((metric) => metric.id === goalMetricIdInput.value) ?? null;
+});
+
+const goalMetricType = computed(() => {
+  if (goalUseNewMetric.value) {
+    return goalNewMetricTypeInput.value;
+  }
+
+  return selectedGoalMetric.value?.metric_type ?? "integer";
 });
 
 const currentDisplayName = computed(() => {
@@ -176,6 +216,16 @@ function resetInvitationCodeMessages(): void {
   invitationCodesStore.errorMessage = "";
 }
 
+function resetMetricMessages(): void {
+  metricSuccessMessage.value = "";
+  metricsStore.errorMessage = "";
+}
+
+function resetGoalMessages(): void {
+  goalSuccessMessage.value = "";
+  goalsStore.errorMessage = "";
+}
+
 function syncProfileInputs(): void {
   displayNameInput.value = authStore.currentUser?.display_name ?? "";
 }
@@ -223,6 +273,60 @@ function syncInvitationCodeInputs(): void {
       toDateTimeLocalValue(invitationCode.expires_at),
     ]),
   );
+}
+
+function resetMetricForm(): void {
+  metricNameInput.value = "";
+  metricTypeInput.value = "integer";
+  metricUnitLabelInput.value = "";
+  metricInitialIntegerValueInput.value = "";
+  metricInitialDateValueInput.value = "";
+}
+
+function resetGoalForm(): void {
+  goalTitleInput.value = "";
+  goalDescriptionInput.value = "";
+  goalStartDateInput.value = new Date().toISOString().slice(0, 10);
+  goalTargetDateInput.value = "";
+  goalTargetIntegerValueInput.value = "";
+  goalTargetDateValueInput.value = "";
+  goalUseNewMetric.value = false;
+  goalMetricIdInput.value = metricsStore.metrics[0]?.id ?? "";
+  goalNewMetricNameInput.value = "";
+  goalNewMetricTypeInput.value = "integer";
+  goalNewMetricUnitLabelInput.value = "";
+  goalNewMetricInitialIntegerValueInput.value = "";
+  goalNewMetricInitialDateValueInput.value = "";
+}
+
+function parseOptionalInteger(value: string): number | null {
+  if (value.trim() === "") {
+    return null;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+function formatMetricValue(metricType: "integer" | "date", integerValue: number | null, dateValue: string | null): string {
+  if (metricType === "integer") {
+    return integerValue === null ? "No value yet" : String(integerValue);
+  }
+
+  return dateValue ?? "No value yet";
+}
+
+function syncMetricEntryInputs(): void {
+  metricEntryIntegerInputs.value = Object.fromEntries(metricsStore.metrics.map((metric) => [metric.id, ""]));
+  metricEntryDateInputs.value = Object.fromEntries(metricsStore.metrics.map((metric) => [metric.id, ""]));
+}
+
+async function loadTrackingData(): Promise<void> {
+  await Promise.all([metricsStore.loadMetrics(), goalsStore.loadGoals()]);
+  if (goalMetricIdInput.value === "" && metricsStore.metrics.length > 0) {
+    goalMetricIdInput.value = metricsStore.metrics[0].id;
+  }
+  syncMetricEntryInputs();
 }
 
 function openProfileDialog(): void {
@@ -359,6 +463,75 @@ async function createNewInvitationCode(): Promise<void> {
   }
 }
 
+async function submitMetricForm(): Promise<void> {
+  resetMetricMessages();
+  const created = await metricsStore.createMetric({
+    initial_date_value: metricTypeInput.value === "date" ? metricInitialDateValueInput.value || null : null,
+    initial_integer_value: metricTypeInput.value === "integer" ? parseOptionalInteger(metricInitialIntegerValueInput.value) : null,
+    metric_type: metricTypeInput.value,
+    name: metricNameInput.value,
+    unit_label: metricUnitLabelInput.value.trim() === "" ? null : metricUnitLabelInput.value,
+  });
+
+  if (created) {
+    metricSuccessMessage.value = "Metric created.";
+    resetMetricForm();
+    if (goalMetricIdInput.value === "" && metricsStore.metrics.length > 0) {
+      goalMetricIdInput.value = metricsStore.metrics[0].id;
+    }
+    syncMetricEntryInputs();
+  }
+}
+
+async function submitMetricEntry(metricId: string, metricType: "integer" | "date"): Promise<void> {
+  resetMetricMessages();
+  const updated = await metricsStore.addMetricEntry(metricId, {
+    date_value: metricType === "date" ? metricEntryDateInputs.value[metricId] || null : null,
+    integer_value: metricType === "integer" ? parseOptionalInteger(metricEntryIntegerInputs.value[metricId] ?? "") : null,
+  });
+
+  if (updated) {
+    metricSuccessMessage.value = "Metric updated.";
+    await goalsStore.loadGoals();
+    syncMetricEntryInputs();
+  }
+}
+
+async function submitGoalForm(): Promise<void> {
+  resetGoalMessages();
+  const created = await goalsStore.createGoal({
+    description: goalDescriptionInput.value.trim() === "" ? null : goalDescriptionInput.value,
+    metric_id: goalUseNewMetric.value ? null : goalMetricIdInput.value || null,
+    new_metric: goalUseNewMetric.value
+      ? {
+          initial_date_value:
+            goalNewMetricTypeInput.value === "date" ? goalNewMetricInitialDateValueInput.value || null : null,
+          initial_integer_value:
+            goalNewMetricTypeInput.value === "integer"
+              ? parseOptionalInteger(goalNewMetricInitialIntegerValueInput.value)
+              : null,
+          metric_type: goalNewMetricTypeInput.value,
+          name: goalNewMetricNameInput.value,
+          unit_label:
+            goalNewMetricUnitLabelInput.value.trim() === "" ? null : goalNewMetricUnitLabelInput.value,
+        }
+      : null,
+    start_date: goalStartDateInput.value,
+    target_date: goalTargetDateInput.value || null,
+    target_value_date: goalMetricType.value === "date" ? goalTargetDateValueInput.value || null : null,
+    target_value_integer:
+      goalMetricType.value === "integer" ? parseOptionalInteger(goalTargetIntegerValueInput.value) : null,
+    title: goalTitleInput.value,
+  });
+
+  if (created) {
+    goalSuccessMessage.value = "Goal created.";
+    resetGoalForm();
+    await metricsStore.loadMetrics();
+    syncMetricEntryInputs();
+  }
+}
+
 async function saveInvitationCode(invitationCodeId: string): Promise<void> {
   resetInvitationCodeMessages();
   const expiresAt = toIsoDateTime(invitationCodeExpiresAtInputs.value[invitationCodeId] ?? "");
@@ -393,10 +566,17 @@ function formatDateTime(value: string): string {
 
 watch(
   () => authStore.currentUser,
-  () => {
+  async () => {
     syncProfileInputs();
     resetPasswordInputs();
     resetDeleteAccountInputs();
+    if (authStore.currentUser !== null) {
+      await loadTrackingData();
+      return;
+    }
+
+    metricsStore.reset();
+    goalsStore.reset();
   },
   { immediate: true },
 );
@@ -412,6 +592,16 @@ watch(
 watch(authTabIndex, () => {
   authStore.errorMessage = "";
 });
+
+watch(
+  () => metricsStore.metrics,
+  () => {
+    if (!goalUseNewMetric.value && selectedGoalMetric.value === null) {
+      goalMetricIdInput.value = metricsStore.metrics[0]?.id ?? "";
+    }
+  },
+  { deep: true },
+);
 
 onMounted(() => {
   void statusStore.loadStatus();
@@ -457,23 +647,13 @@ onMounted(() => {
       <section class="tabs-shell">
         <TabView v-model:activeIndex="dashboardTabIndex">
           <TabPanel header="Dashboards">
-            <div class="panel-card blank-panel">
-              <p class="panel-eyebrow">Dashboards</p>
-              <h2>Blank for now</h2>
-              <p>
-                This tab is intentionally empty for this slice. The shell and navigation are in
-                place so saved dashboard widgets can be added next.
-              </p>
-            </div>
-          </TabPanel>
-          <TabPanel header="Goals">
             <div class="goals-grid">
-              <div class="panel-card">
-                <p class="panel-eyebrow">Goals</p>
-                <h2>Core tracking is next</h2>
+              <div class="panel-card blank-panel">
+                <p class="panel-eyebrow">Dashboards</p>
+                <h2>Blank for now</h2>
                 <p>
-                  Goal CRUD, metric history, entries, and per-goal status views will land on top
-                  of this signed-in shell.
+                  This tab is intentionally empty for this slice. The shell and navigation are in
+                  place so saved dashboard widgets can be added next.
                 </p>
               </div>
 
@@ -518,6 +698,353 @@ onMounted(() => {
                   >
                     {{ statusStore.errorMessage }}
                   </Message>
+                </div>
+              </div>
+            </div>
+          </TabPanel>
+          <TabPanel header="Metrics">
+            <div class="tracking-grid">
+              <div class="panel-card">
+                <p class="panel-eyebrow">Metrics</p>
+                <h2>Create a reusable metric</h2>
+                <p>
+                  Metrics hold the values you update over time. Goals can reference them instead of
+                  owning isolated history.
+                </p>
+
+                <div class="form-stack">
+                  <Message v-if="metricSuccessMessage !== ''" severity="success" :closable="false">
+                    {{ metricSuccessMessage }}
+                  </Message>
+                  <Message v-if="metricsStore.errorMessage !== ''" severity="error" :closable="false">
+                    {{ metricsStore.errorMessage }}
+                  </Message>
+
+                  <label class="field">
+                    <span class="label">Metric name</span>
+                    <InputText v-model="metricNameInput" />
+                  </label>
+
+                  <label class="field">
+                    <span class="label">Metric type</span>
+                    <select v-model="metricTypeInput" class="native-file-input">
+                      <option value="integer">Integer</option>
+                      <option value="date">Date</option>
+                    </select>
+                  </label>
+
+                  <label class="field">
+                    <span class="label">Unit label</span>
+                    <InputText v-model="metricUnitLabelInput" placeholder="Optional, like lbs" />
+                  </label>
+
+                  <label v-if="metricTypeInput === 'integer'" class="field">
+                    <span class="label">Initial value</span>
+                    <input
+                      v-model="metricInitialIntegerValueInput"
+                      class="native-file-input"
+                      type="number"
+                      step="1"
+                    />
+                  </label>
+
+                  <label v-else class="field">
+                    <span class="label">Initial value</span>
+                    <input
+                      v-model="metricInitialDateValueInput"
+                      class="native-file-input"
+                      type="date"
+                    />
+                  </label>
+
+                  <Button
+                    label="Create metric"
+                    icon="pi pi-plus"
+                    :loading="metricsStore.submissionState === 'submitting'"
+                    @click="submitMetricForm"
+                  />
+                </div>
+              </div>
+
+              <div class="panel-card">
+                <p class="panel-eyebrow">Metric history</p>
+                <h2>Update tracked values</h2>
+                <p>Quick-add the latest value for each metric and review the most recent history.</p>
+
+                <div v-if="metricsStore.viewState === 'loading'" class="loading">
+                  <ProgressSpinner
+                    strokeWidth="5"
+                    style="width: 2rem; height: 2rem"
+                    animationDuration=".8s"
+                  />
+                  <span>Loading metrics.</span>
+                </div>
+
+                <div v-else-if="metricsStore.metrics.length === 0" class="empty-state">
+                  No metrics yet.
+                </div>
+
+                <div v-else class="list-stack">
+                  <article
+                    v-for="metric in metricsStore.metrics"
+                    :key="metric.id"
+                    class="tracking-card"
+                  >
+                    <div class="tracking-card-header">
+                      <div>
+                        <h3>{{ metric.name }}</h3>
+                        <p>
+                          Latest:
+                          {{
+                            formatMetricValue(
+                              metric.metric_type,
+                              metric.latest_entry?.integer_value ?? null,
+                              metric.latest_entry?.date_value ?? null,
+                            )
+                          }}
+                          <span v-if="metric.unit_label !== null"> {{ metric.unit_label }}</span>
+                        </p>
+                      </div>
+                      <Tag :value="metric.metric_type" severity="info" />
+                    </div>
+
+                    <div class="quick-entry-grid">
+                      <label v-if="metric.metric_type === 'integer'" class="field">
+                        <span class="label">New value</span>
+                        <input
+                          v-model="metricEntryIntegerInputs[metric.id]"
+                          class="native-file-input"
+                          type="number"
+                          step="1"
+                        />
+                      </label>
+
+                      <label v-else class="field">
+                        <span class="label">New value</span>
+                        <input
+                          v-model="metricEntryDateInputs[metric.id]"
+                          class="native-file-input"
+                          type="date"
+                        />
+                      </label>
+
+                      <Button
+                        label="Add update"
+                        icon="pi pi-save"
+                        severity="secondary"
+                        :loading="metricsStore.submissionState === 'submitting'"
+                        @click="submitMetricEntry(metric.id, metric.metric_type)"
+                      />
+                    </div>
+
+                    <div class="history-list">
+                      <div
+                        v-for="entry in metric.entries.slice(0, 3)"
+                        :key="entry.id"
+                        class="history-row"
+                      >
+                        <strong>
+                          {{
+                            formatMetricValue(
+                              metric.metric_type,
+                              entry.integer_value,
+                              entry.date_value,
+                            )
+                          }}
+                        </strong>
+                        <span>{{ formatDateTime(entry.recorded_at) }}</span>
+                      </div>
+                    </div>
+                  </article>
+                </div>
+              </div>
+            </div>
+          </TabPanel>
+          <TabPanel header="Goals">
+            <div class="goals-grid">
+              <div class="panel-card">
+                <p class="panel-eyebrow">Goals</p>
+                <h2>Create a goal</h2>
+                <p>Goals reference a metric and define the time window or target you care about.</p>
+
+                <div class="form-stack">
+                  <Message v-if="goalSuccessMessage !== ''" severity="success" :closable="false">
+                    {{ goalSuccessMessage }}
+                  </Message>
+                  <Message v-if="goalsStore.errorMessage !== ''" severity="error" :closable="false">
+                    {{ goalsStore.errorMessage }}
+                  </Message>
+
+                  <label class="field">
+                    <span class="label">Goal title</span>
+                    <InputText v-model="goalTitleInput" />
+                  </label>
+
+                  <label class="field">
+                    <span class="label">Description</span>
+                    <textarea v-model="goalDescriptionInput" class="native-textarea" rows="3" />
+                  </label>
+
+                  <label class="checkbox-row">
+                    <Checkbox v-model="goalUseNewMetric" binary input-id="goal-use-new-metric" />
+                    <span>Create a new metric as part of this goal</span>
+                  </label>
+
+                  <template v-if="goalUseNewMetric">
+                    <label class="field">
+                      <span class="label">New metric name</span>
+                      <InputText v-model="goalNewMetricNameInput" />
+                    </label>
+
+                    <label class="field">
+                      <span class="label">New metric type</span>
+                      <select v-model="goalNewMetricTypeInput" class="native-file-input">
+                        <option value="integer">Integer</option>
+                        <option value="date">Date</option>
+                      </select>
+                    </label>
+
+                    <label class="field">
+                      <span class="label">Unit label</span>
+                      <InputText
+                        v-model="goalNewMetricUnitLabelInput"
+                        placeholder="Optional, like lbs"
+                      />
+                    </label>
+
+                    <label v-if="goalNewMetricTypeInput === 'integer'" class="field">
+                      <span class="label">Initial metric value</span>
+                      <input
+                        v-model="goalNewMetricInitialIntegerValueInput"
+                        class="native-file-input"
+                        type="number"
+                        step="1"
+                      />
+                    </label>
+
+                    <label v-else class="field">
+                      <span class="label">Initial metric value</span>
+                      <input
+                        v-model="goalNewMetricInitialDateValueInput"
+                        class="native-file-input"
+                        type="date"
+                      />
+                    </label>
+                  </template>
+
+                  <label v-else class="field">
+                    <span class="label">Metric</span>
+                    <select v-model="goalMetricIdInput" class="native-file-input">
+                      <option
+                        v-for="metric in metricsStore.metrics"
+                        :key="metric.id"
+                        :value="metric.id"
+                      >
+                        {{ metric.name }} ({{ metric.metric_type }})
+                      </option>
+                    </select>
+                  </label>
+
+                  <div class="date-grid">
+                    <label class="field">
+                      <span class="label">Start date</span>
+                      <input v-model="goalStartDateInput" class="native-file-input" type="date" />
+                    </label>
+
+                    <label class="field">
+                      <span class="label">Target date</span>
+                      <input v-model="goalTargetDateInput" class="native-file-input" type="date" />
+                    </label>
+                  </div>
+
+                  <label v-if="goalMetricType === 'integer'" class="field">
+                    <span class="label">Target metric value</span>
+                    <input
+                      v-model="goalTargetIntegerValueInput"
+                      class="native-file-input"
+                      type="number"
+                      step="1"
+                    />
+                  </label>
+
+                  <label v-else class="field">
+                    <span class="label">Target metric date</span>
+                    <input
+                      v-model="goalTargetDateValueInput"
+                      class="native-file-input"
+                      type="date"
+                    />
+                  </label>
+
+                  <Button
+                    label="Create goal"
+                    icon="pi pi-flag"
+                    :loading="goalsStore.submissionState === 'submitting'"
+                    @click="submitGoalForm"
+                  />
+                </div>
+              </div>
+
+              <div class="panel-card">
+                <p class="panel-eyebrow">Goal list</p>
+                <h2>Current goals</h2>
+                <div v-if="goalsStore.viewState === 'loading'" class="loading">
+                  <ProgressSpinner
+                    strokeWidth="5"
+                    style="width: 2rem; height: 2rem"
+                    animationDuration=".8s"
+                  />
+                  <span>Loading goals.</span>
+                </div>
+
+                <div v-else-if="goalsStore.goals.length === 0" class="empty-state">
+                  No goals yet.
+                </div>
+
+                <div v-else class="list-stack">
+                  <article v-for="goal in goalsStore.goals" :key="goal.id" class="tracking-card">
+                    <div class="tracking-card-header">
+                      <div>
+                        <h3>{{ goal.title }}</h3>
+                        <p v-if="goal.description !== null">{{ goal.description }}</p>
+                      </div>
+                      <Tag :value="goal.status" severity="success" />
+                    </div>
+
+                    <div class="goal-meta-grid">
+                      <div class="history-row">
+                        <strong>Metric</strong>
+                        <span>{{ goal.metric.name }} ({{ goal.metric.metric_type }})</span>
+                      </div>
+                      <div class="history-row">
+                        <strong>Start</strong>
+                        <span>{{ goal.start_date }}</span>
+                      </div>
+                      <div class="history-row" v-if="goal.target_date !== null">
+                        <strong>Target date</strong>
+                        <span>{{ goal.target_date }}</span>
+                      </div>
+                      <div
+                        class="history-row"
+                        v-if="goal.target_value_integer !== null || goal.target_value_date !== null"
+                      >
+                        <strong>Target value</strong>
+                        <span>{{ goal.target_value_integer ?? goal.target_value_date }}</span>
+                      </div>
+                      <div class="history-row" v-if="goal.metric.latest_entry !== null">
+                        <strong>Latest metric</strong>
+                        <span>
+                          {{
+                            formatMetricValue(
+                              goal.metric.metric_type,
+                              goal.metric.latest_entry.integer_value,
+                              goal.metric.latest_entry.date_value,
+                            )
+                          }}
+                        </span>
+                      </div>
+                    </div>
+                  </article>
                 </div>
               </div>
             </div>
@@ -1099,6 +1626,11 @@ h1 {
   gap: 1rem;
 }
 
+.tracking-grid {
+  display: grid;
+  gap: 1rem;
+}
+
 .panel-card,
 .status-card {
   border-radius: 1.35rem;
@@ -1116,7 +1648,13 @@ h1 {
 .auth-form,
 .dialog-stack,
 .dialog-section,
-.field {
+.field,
+.form-stack,
+.list-stack,
+.goal-meta-grid,
+.quick-entry-grid,
+.date-grid,
+.history-list {
   display: grid;
   gap: 1rem;
 }
@@ -1168,6 +1706,10 @@ h1 {
   background: rgba(185, 28, 28, 0.04);
 }
 
+.empty-state {
+  color: #64748b;
+}
+
 .checkbox-row {
   display: inline-flex;
   align-items: center;
@@ -1180,6 +1722,32 @@ h1 {
   border: 1px solid #cbd5e1;
   border-radius: 0.85rem;
   background: #fff;
+}
+
+.native-textarea {
+  padding: 0.8rem 0.9rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.85rem;
+  background: #fff;
+  font: inherit;
+  resize: vertical;
+}
+
+.tracking-card {
+  display: grid;
+  gap: 1rem;
+  padding: 1.1rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(248, 250, 252, 0.84);
+}
+
+.tracking-card-header,
+.history-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
 }
 
 .empty-invitation-state {
@@ -1280,6 +1848,7 @@ h1 {
     grid-template-columns: 1.15fr 1fr 0.95fr;
   }
 
+  .tracking-grid,
   .goals-grid {
     grid-template-columns: 1.1fr 0.9fr;
   }
@@ -1299,6 +1868,8 @@ h1 {
     justify-content: space-between;
   }
 
+  .tracking-card-header,
+  .history-row,
   .invitation-code-header,
   .invitation-code-buttons,
   .invitation-code-user {
