@@ -56,6 +56,7 @@ The database should persist:
 - application data
 - server-side sessions
 - audit events
+- notifications and reminder state
 - seed application state
 
 ## Ingress And TLS
@@ -106,6 +107,8 @@ Operational design priorities are:
 - local reproducibility
 - safe restarts during development and testing
 - simple observability when something breaks
+
+This applies to reminder processing too. Scheduled reminder evaluation should be simple to reason about, easy to run locally, and visible enough to debug when reminders do or do not fire as expected.
 
 ## Future Documentation To Add
 

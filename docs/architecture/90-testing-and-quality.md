@@ -24,6 +24,7 @@ Coverage priorities:
 - auth flows
 - goal creation and editing
 - entry submission and validation
+- reminder generation logic
 - share-link management
 - seed-data application logic
 - audit-event generation for important writes
@@ -49,6 +50,7 @@ Coverage priorities:
 
 - goal creation/editing forms
 - entry flows
+- notification display and reminder preference flows
 - dashboard and widget management
 - share-link management UI
 - auth/session-aware navigation behavior
@@ -64,6 +66,7 @@ Early smoke coverage should validate:
 - login
 - create goal
 - submit entry
+- receive or observe a due reminder in a deterministic test case
 - view dashboard
 - create or revoke share link
 
@@ -85,6 +88,7 @@ Recommended fixture categories:
 - minimal auth fixture
 - single-user goal fixture
 - multi-user ownership boundary fixture
+- reminder-due fixture
 - example/demo seeded user fixture
 - migration fixture for historical revisions
 

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The project is a web application for tracking personal goals through manual updates, progress evaluation, dashboards, and future forecasting. It is intended to support multiple users from the beginning, including real accounts and example/demo accounts.
+The project is a web application for tracking personal goals through manual updates, progress evaluation, dashboards, notifications/reminders, and future forecasting. It is intended to support multiple users from the beginning, including real accounts and example/demo accounts.
 
 The system should feel flexible enough to support very different goal types without turning into a separate product for each one.
 
@@ -13,6 +13,7 @@ The product centers on a few ideas:
 - users define goals
 - users submit entries against those goals
 - the system derives progress, status, and summaries from those entries
+- the system reminds users when expected actions have not been completed
 - dashboards and widgets present the current state
 - selected widgets can be shared through revocable public links
 
@@ -31,7 +32,7 @@ The design does not currently prioritize:
 - mobile apps
 - third-party data imports
 - advanced collaborative/team workflows
-- push notification systems
+- mobile push notification systems
 - highly advanced forecasting in the first delivery phases
 
 ## High-Level Technical Architecture
@@ -76,6 +77,7 @@ The API owns:
 - auth and session handling
 - goal definitions
 - entries and progress logic
+- notification and reminder logic
 - widget and dashboard persistence
 - share link management
 - audit logging
@@ -85,6 +87,7 @@ The frontend owns:
 
 - interactive creation and editing flows
 - data presentation
+- notification display and reminder-management UX
 - dashboard composition UX
 - share-link management UI
 
@@ -93,6 +96,7 @@ The database owns:
 - durable source-of-truth state
 - server-side session persistence
 - audit/event history
+- notification state and reminder configuration
 - seed version state for flagged example-data accounts
 
 ## Architectural Principles

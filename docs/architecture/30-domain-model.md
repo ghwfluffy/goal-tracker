@@ -26,13 +26,23 @@ Expected attributes:
 - description
 - category or tag assignments
 - status such as active, paused, archived, completed
-- start date and optional target/end date
+- required start date and optional target/end date
 - timezone
 - goal pattern
+- optional link to one or more user-owned metrics used by the goal
+- optional reminder configuration
 
 ### Metric
 
-A metric describes what kind of value the goal records.
+A metric describes a user-owned stream of tracked values or states that may be reused across time and across multiple goals.
+
+Examples:
+
+- `weight`
+- `cardio_minutes`
+- `tv_watch_flag`
+- `sleep_hours`
+- `daily_steps`
 
 Likely metric types:
 
@@ -43,7 +53,11 @@ Likely metric types:
 - percent
 - checklist progress
 
-One goal may eventually support more than one metric, but the initial design should avoid unnecessary complexity unless a clear use case requires it.
+Important design direction:
+
+- a metric may exist even when no goal is active
+- a goal may reference an existing metric rather than owning the entire history itself
+- one goal may eventually support more than one metric, but the initial design should avoid unnecessary complexity unless a clear use case requires it
 
 ### Rule
 
@@ -68,6 +82,35 @@ Expected characteristics:
 - may contain note text
 - may contain attached file or image references later
 - should support edit history or replacement tracking
+- should be attributable to one or more metric streams and optionally to a goal context
+
+### Reminder Configuration
+
+Reminder configuration describes when the system should remind a user to take an expected action.
+
+Possible attachment points:
+
+- goal-level reminder settings
+- metric-level reminder settings
+- user-level notification defaults
+
+Examples:
+
+- remind me at 8:00 PM if I have not marked cardio complete
+- remind me every morning to enter my weight
+- remind me if a weekly task has not been updated by Sunday evening
+
+### Notification
+
+A notification is a user-visible reminder or system message generated from reminder rules or other important application events.
+
+Expected characteristics:
+
+- owned by a user
+- tied to a source such as a goal, metric, or system event
+- has a generated time
+- has a state such as pending, delivered, read, dismissed, expired, or failed
+- may record delivery channel and delivery attempts
 
 ### Derived State
 
@@ -90,7 +133,7 @@ A dashboard is a saved layout that organizes widgets for a user.
 
 ### Widget
 
-A widget is a saved visualization or summary configuration over one or more goals.
+A widget is a saved visualization or summary configuration over one or more goals, one or more metrics, or both.
 
 ### Share Link
 
@@ -105,11 +148,17 @@ An audit event records a meaningful action performed by a user or the system.
 At a conceptual level:
 
 - one user owns many goals
+- one user owns many metrics
 - one user owns many dashboards
 - one user owns many widgets
+- one user owns many notifications
+- one metric has many entries
 - one goal has one or more rules
-- one goal has one or more entries
-- one widget references one or more goals
+- one goal may have reminder configuration
+- one metric may have reminder configuration
+- one goal may reference one or more metrics
+- one goal may have one or more entries or derived occurrences in goal-specific cases
+- one widget references one or more goals, metrics, or both
 - one share link targets one widget or one dashboard
 - one user has many sessions
 - one user or system process emits many audit events
@@ -129,8 +178,11 @@ The default ownership rule is simple:
 - users
 - sessions
 - goals
+- metrics
 - rules
 - entries
+- reminder configuration
+- notifications
 - dashboards
 - widgets
 - share links
@@ -150,6 +202,14 @@ The default ownership rule is simple:
 ### Avoid table-per-goal-type if possible
 
 The current direction is to support multiple goal patterns from common primitives. The schema should only split into specialized tables where the common model becomes unnatural or unreadable.
+
+### Keep metric history independent from goal lifecycle
+
+A long-lived metric like `weight` should survive before, during, and after any specific goal that references it. Goal completion or archival should not imply loss of the underlying metric history.
+
+### Keep reminder semantics separate from progress semantics
+
+Reminder rules should influence when the user is notified, not what the system considers completed or compliant. A missed reminder is not automatically a failed goal occurrence.
 
 ### Keep auditability visible
 

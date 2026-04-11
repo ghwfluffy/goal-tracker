@@ -31,7 +31,9 @@ Current intended scope:
 
 - account creation and login
 - user profile basics
+- user-owned metric creation and history tracking
 - goal CRUD
+- goal start-date semantics
 - tags or basic categorization
 - manual entry creation and editing
 - goal history and status views
@@ -46,6 +48,8 @@ Current intended scope:
 
 - dashboards
 - saved widgets
+- metric-history widgets
+- in-app notifications and reminder generation
 - share-link CRUD
 - share-link expiration support
 - profile/settings management for share links
@@ -77,7 +81,7 @@ These are intentionally not part of the near-term phased plan:
 - third-party integrations
 - mobile clients
 - collaborative cross-user goals
-- push notifications
+- mobile push notifications
 - arbitrary formula builders
 
 ## Next Planning Step

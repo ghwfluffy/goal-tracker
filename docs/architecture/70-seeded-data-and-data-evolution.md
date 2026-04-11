@@ -61,6 +61,7 @@ That means:
 The seed system should eventually be able to create:
 
 - users flagged for example/demo use
+- standalone metric histories
 - goals
 - entries
 - widgets

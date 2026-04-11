@@ -16,6 +16,7 @@ Examples of actions that should generate audit records:
 - entry creation and correction
 - share-link creation and revocation
 - seed-data application and seed upgrades
+- notification generation, delivery, dismissal, and expiration where meaningful
 - background calculations that persist derived state
 
 Not every read action needs auditing. The goal is meaningful traceability, not noise.
@@ -48,6 +49,8 @@ Likely future jobs:
 
 - forecast recalculation
 - derived summary refresh
+- reminder evaluation and notification generation
+- notification expiration or cleanup
 - share-link expiration cleanup
 - backup or maintenance reporting hooks
 - seed-data upgrade runner

@@ -42,6 +42,39 @@ Implications:
 - background jobs should record what they changed
 - important write flows should be designed with auditability in mind
 
+### User-level shared metrics
+
+The system should support user-owned metrics that can exist independently of any currently active goal.
+
+Implications:
+
+- a metric such as `weight` should be tracked continuously over time
+- multiple goals may reference the same underlying metric history
+- widgets should be able to render metric history directly, without requiring a goal wrapper
+- goals should consume metric history rather than forcing each goal to own a separate isolated series
+
+### Goals have explicit start dates
+
+Goals should have explicit start dates, not just optional end dates.
+
+Implications:
+
+- schedule generation begins at the goal start date
+- occurrences before the start date should not count toward compliance
+- reminders for a goal should not begin before the start date
+- metric history may predate the goal, but goal evaluation windows begin at the goal start date unless the goal pattern explicitly says otherwise
+
+### Notifications and reminders are part of the product
+
+The system should remind users about expected actions such as marking a daily goal complete or entering a metric value.
+
+Implications:
+
+- reminders must work for both goal-driven tasks and standalone metric-entry expectations
+- reminder generation needs user timezone awareness
+- notification state and delivery attempts should be modeled explicitly
+- background jobs will need to evaluate what reminders are due
+
 ### Formal seeded example/demo data
 
 Example data is a first-class system, not one-off bootstrap content.
@@ -84,6 +117,22 @@ Planned direction:
 - track which seed revisions have been applied to each flagged example-data account
 - apply new feature seed content idempotently on upgrade
 
+### Metric architecture
+
+Planned direction:
+
+- separate long-lived user metric history from goal-specific evaluation rules
+- allow goals to reference an existing metric stream such as `weight`
+- allow widgets to visualize the metric stream even when no goal is currently active
+
+### Notification delivery
+
+Planned direction:
+
+- support in-app notifications/reminders as a first-class feature
+- design the notification model so additional channels such as email can be added later
+- keep reminder scheduling deterministic and auditable
+
 ## Open Questions
 
 These items should be proposed explicitly in the next approval round:
@@ -93,3 +142,4 @@ These items should be proposed explicitly in the next approval round:
 3. the first detailed phase plan beyond high-level sequencing
 4. the first approved set of forecast algorithms
 5. the final public-sharing permissions for widgets versus full dashboards
+6. the exact notification/reminder schema and delivery model

@@ -17,12 +17,17 @@ Widgets should be stored as configuration records rather than temporary UI state
 Expected widget dimensions:
 
 - widget type
-- target goal or target goals
+- target goal, target goals, target metric, target metrics, or a mixed configuration
 - date range or rolling window
 - display options
 - render mode such as app card or shareable PNG
 
 This makes widgets reusable across dashboards and easier to render consistently.
+
+Important design direction:
+
+- widgets must support metric-history views that are not tied to an active goal
+- a user should be able to keep a long-running metric widget, such as `weight` history, across multiple goal phases
 
 ## Organization Model
 
@@ -32,7 +37,20 @@ Current direction:
 
 - tags organize goals flexibly
 - dashboards arrange widgets visually
-- widgets can filter by explicit goal selection and later by tags when useful
+- widgets can filter by explicit goal selection, metric selection, and later by tags when useful
+
+## Metric-History Widgets
+
+The system should support widgets whose primary subject is a metric rather than a goal.
+
+Examples:
+
+- raw `weight` history graph
+- rolling average of `weight`
+- `cardio_minutes` history over the last 90 days
+- summary card for latest metric value and trend
+
+This is useful because metrics can persist longer than any one goal and may remain valuable to view between goal cycles.
 
 ## Public Sharing
 

@@ -15,6 +15,7 @@ These documents are intended to answer two questions:
 - [Goal Engine](./40-goal-engine.md)
 - [Auth, Accounts, And Access](./50-auth-accounts-and-access.md)
 - [Dashboards, Widgets, And Sharing](./60-dashboards-widgets-and-sharing.md)
+- [Notifications And Reminders](./65-notifications-and-reminders.md)
 - [Seeded Data And Data Evolution](./70-seeded-data-and-data-evolution.md)
 - [Audit, Events, And Jobs](./80-audit-events-and-jobs.md)
 - [Testing And Quality](./90-testing-and-quality.md)
@@ -29,6 +30,9 @@ Approved direction so far:
 - no separate custom schema version tracker
 - no fully stateless signed session cookie design
 - audit logging is part of the system design
+- user-level metrics can exist independently of any active goal
+- goals have explicit start dates
+- a notifications/reminders system is part of the planned product
 - seeded example/demo data is a formal system, not ad hoc scripts
 - test strategy should include backend, migrations, frontend, and end-to-end layers
 
