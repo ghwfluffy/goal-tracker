@@ -1,0 +1,10 @@
+cryptography
+fastapi
+flake8
+mypy
+psycopg2-binary
+pydantic
+python-multipart
+ruff
+sqlalchemy
+uvicorn
