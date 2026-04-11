@@ -1,0 +1,58 @@
+Me:
+› i have setup this repo for a new project. see `./docs/INITIAL-THOUGHTS.md` -- first i want you to make additional suggestions for
+  refinements of the design and write them to `./docs/AGENT-THOUGHTS.md`. ask questions for approval
+
+
+Agent:
+• I added the design refinements to docs/AGENT-THOUGHTS.md. The memo pushes toward a flexible goal model, clearer scheduling/
+  progress semantics, pluggable forecasting, better widget/share architecture, and a tighter MVP boundary.
+
+  Approval questions to answer next:
+
+  1. Should v1 be optimized for a single-user personal app, or built as a true multi-user product from the start?
+  2. Do you want the schema built around generic primitives like goal, metric, entry, rule, and widget?
+  3. Should auth use server-side sessions instead of a purely stateless signed cookie?
+  4. Should Alembic be the only schema-version authority?
+  5. Is it acceptable to keep rolling-window goals, advanced forecasts, and PNG sharing in phase 2 rather than MVP?
+  6. Should dashboards/widgets be private by default, with explicit share links only when intended?
+  7. Should example data become a formal seed/fixture system?
+
+
+Me:
+› 1: allow multi user from the start, as a demo account and a real account will be important early on. 2: the schema will be more
+  obvious once we flesh out the design. the schema/design should require approval in an upcoming step. 3: i dont expect there to be
+  much state in a session, and i think a stateless cookie would give the most HA, but the only real need i want is to be able to
+  restart the containers between tests and maintain my auth state, this will likely never be a HA prod deployment, so whatever is
+  the most maintainable choice. 4: alembric should be used for upgrading schema, but we need to be able to add new test data to
+  existing test data flagged accounts on upgrade so we need some way to also manage data not just schema. 5: i want to create a
+  plan for a phased approach that contains multiple phases, not just one big MVP phase. we will plan out the phases once the design
+  is more fleshed out. 6: maybe the dashboard/widget share links should have a UUID and an expiration chosen when created (and
+  could be never expires). we would want a way to CRUD the links on the user profile then. 7: yes the example data should be a
+  formal system that seeds the example data users on user add and on feature additions
+
+
+Agent:
+• I updated docs/AGENT-THOUGHTS.md to record your approval outcomes and separate them from the still-open design questions.
+
+  It now captures:
+
+  - multi-user support from the start
+  - schema approval deferred until the design is more concrete
+  - session design should optimize for maintainability and survive normal container restarts
+  - Alembic handles schema, but seeded/example data needs its own upgrade path
+  - delivery should be planned in multiple phases, not one MVP bucket
+  - share links should use UUIDs, optional expiration, and be user-manageable
+  - example/demo data should be a formal seeding system for new and upgraded feature sets
+
+  Next logical step is to draft the concrete architecture/design proposal for approval: schema/entities, auth/session approach,
+  seeded-data migration model, phased roadmap, and share-link lifecycle. No tests were run since this was a documentation-only
+  change.
+
+
+Me:
+<reviewed AGENT-THOUGHTS.md>
+
+› i will take your suggestions and remove separate schema version tracking and fully stateless signed cookies. i like your audit
+  log idea that would be good to keep an audit trail of events including user inputs and if we have scheduled events/calculations
+  in the future the ability to see the system changed db state. i will take your suggestions for the test fixture to use. write out
+  everything we need to know about the current planned design to different markdown files in ./docs/architecture

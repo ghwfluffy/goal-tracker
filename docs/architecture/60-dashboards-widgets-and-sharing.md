@@ -1,0 +1,80 @@
+# Dashboards, Widgets, And Sharing
+
+## Dashboards
+
+Dashboards are user-owned layouts composed of saved widgets.
+
+Expected uses:
+
+- category-specific views such as health, work, finances, or personal development
+- daily summary screens
+- focused progress pages for one area of life
+
+## Widgets
+
+Widgets should be stored as configuration records rather than temporary UI state.
+
+Expected widget dimensions:
+
+- widget type
+- target goal or target goals
+- date range or rolling window
+- display options
+- render mode such as app card or shareable PNG
+
+This makes widgets reusable across dashboards and easier to render consistently.
+
+## Organization Model
+
+The system should use both dashboards and tags.
+
+Current direction:
+
+- tags organize goals flexibly
+- dashboards arrange widgets visually
+- widgets can filter by explicit goal selection and later by tags when useful
+
+## Public Sharing
+
+Sharing is an explicit, user-managed feature.
+
+Current planned design:
+
+- share links use UUID-style public identifiers
+- each link targets a widget or dashboard
+- each link may expire at a chosen time or never expire
+- links can be revoked independently without deleting the widget or dashboard
+
+## Share-Link Management
+
+Users should be able to manage share links from profile/settings UI.
+
+Expected capabilities:
+
+- create a link
+- choose expiration
+- view active links
+- revoke a link
+- inspect target and creation details
+
+## Rendering Direction
+
+The product should eventually support image-style sharing for widgets.
+
+Current direction:
+
+- render widgets in-app first
+- support server-side PNG rendering in a later phase
+- avoid exposing internal database identifiers in public URLs
+
+## Privacy Model
+
+Defaults:
+
+- dashboards and widgets are private by default
+- public access exists only through explicit share links
+- share-link access should be auditable where practical
+
+## Open Design Item
+
+The detailed rules for whether full dashboards should be shareable in the same way as individual widgets still need final approval when the schema and permissions model are proposed.
