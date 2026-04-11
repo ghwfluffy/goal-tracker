@@ -17,7 +17,9 @@ def create_app() -> FastAPI:
     if settings.session_key_source == "default":
         logger.warning("SESSION_KEY is using the insecure default 'changeme'.")
     elif settings.session_key_source == "generated":
-        logger.warning("SESSION_KEY was not set. A temporary in-memory key was generated at startup.")
+        logger.warning(
+            "SESSION_KEY was not set. A temporary in-memory key was generated at startup."
+        )
 
     app = FastAPI(
         title=settings.app_name,

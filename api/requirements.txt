@@ -4,6 +4,7 @@ fastapi
 flake8
 httpx
 mypy
+pillow
 psycopg2-binary
 pydantic
 pydantic-settings

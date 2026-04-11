@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
@@ -27,12 +27,12 @@ class BootstrapStatusResponse(BaseModel):
 
 
 class UserSummary(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
     id: str
     username: str
+    display_name: str | None
     is_admin: bool
     is_example_data: bool
+    avatar_version: str | None
 
 
 class SessionResponse(BaseModel):
@@ -53,10 +53,24 @@ def normalized_username(username: str) -> str:
     candidate = username.strip()
     if len(candidate) < 3:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Username must contain at least 3 non-space characters.",
         )
     return candidate
+
+
+def serialize_user_summary(user: User) -> UserSummary:
+    avatar_version = (
+        user.avatar_updated_at.isoformat() if user.avatar_updated_at is not None else None
+    )
+    return UserSummary(
+        id=user.id,
+        username=user.username,
+        display_name=user.display_name,
+        is_admin=user.is_admin,
+        is_example_data=user.is_example_data,
+        avatar_version=avatar_version,
+    )
 
 
 def set_session_cookie(response: Response, *, settings: Settings, cookie_value: str) -> None:
@@ -138,7 +152,7 @@ def bootstrap_first_admin(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
     set_session_cookie(response, settings=settings, cookie_value=cookie_value)
-    return SessionResponse(user=UserSummary.model_validate(user))
+    return SessionResponse(user=serialize_user_summary(user))
 
 
 @router.post("/login", response_model=SessionResponse)
@@ -168,20 +182,19 @@ def login(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
 
     set_session_cookie(response, settings=settings, cookie_value=cookie_value)
-    return SessionResponse(user=UserSummary.model_validate(user))
+    return SessionResponse(user=serialize_user_summary(user))
 
 
 @router.get("/me", response_model=SessionResponse)
 def read_current_user(
     user: Annotated[User, Depends(get_current_user)],
 ) -> SessionResponse:
-    return SessionResponse(user=UserSummary.model_validate(user))
+    return SessionResponse(user=serialize_user_summary(user))
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 def logout(
     request: Request,
-    response: Response,
     db: Annotated[Session, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> Response:
@@ -192,5 +205,6 @@ def logout(
             revoke_session(db, auth_session)
             db.commit()
 
+    response = Response(status_code=status.HTTP_204_NO_CONTENT)
     clear_session_cookie(response, settings=settings)
     return response

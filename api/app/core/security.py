@@ -25,7 +25,9 @@ def hash_password(password: str) -> str:
 
 def verify_password(password: str, stored_password_hash: str) -> bool:
     try:
-        algorithm, iterations, encoded_salt, encoded_hash = stored_password_hash.split("$", maxsplit=3)
+        algorithm, iterations, encoded_salt, encoded_hash = stored_password_hash.split(
+            "$", maxsplit=3
+        )
     except ValueError:
         return False
 

@@ -11,6 +11,8 @@ export interface BootstrapStatusResponse {
 }
 
 export interface UserSummary {
+  avatar_version: string | null;
+  display_name: string | null;
   id: string;
   is_admin: boolean;
   is_example_data: boolean;
@@ -24,6 +26,19 @@ export interface SessionResponse {
 export interface CredentialsPayload {
   password: string;
   username: string;
+}
+
+export interface UpdateProfilePayload {
+  display_name: string | null;
+}
+
+export interface ChangePasswordPayload {
+  current_password: string;
+  new_password: string;
+}
+
+export interface DeleteAccountPayload {
+  password: string;
 }
 
 type Fetcher = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -162,6 +177,62 @@ export function logoutCurrentSession(fetcher: Fetcher = fetch): Promise<void> {
     "/auth/logout",
     {
       method: "POST",
+    },
+    fetcher,
+  );
+}
+
+export function updateCurrentProfile(
+  payload: UpdateProfilePayload,
+  fetcher: Fetcher = fetch,
+): Promise<UserSummary> {
+  return requestJson<UserSummary>(
+    "/users/me",
+    {
+      body: JSON.stringify(payload),
+      method: "PATCH",
+    },
+    fetcher,
+  );
+}
+
+export function uploadCurrentAvatar(file: File, fetcher: Fetcher = fetch): Promise<UserSummary> {
+  const formData = new FormData();
+  formData.append("avatar", file);
+
+  return requestJson<UserSummary>(
+    "/users/me/avatar",
+    {
+      body: formData,
+      method: "POST",
+    },
+    fetcher,
+  );
+}
+
+export function changeCurrentPassword(
+  payload: ChangePasswordPayload,
+  fetcher: Fetcher = fetch,
+): Promise<UserSummary> {
+  return requestJson<UserSummary>(
+    "/users/me/change-password",
+    {
+      body: JSON.stringify(payload),
+      method: "POST",
+    },
+    fetcher,
+  );
+}
+
+export function deleteCurrentAccount(
+  payload: DeleteAccountPayload,
+  fetcher: Fetcher = fetch,
+): Promise<void> {
+  return requestNoContent(
+    "/users/me",
+    {
+      body: JSON.stringify(payload),
+      method: "DELETE",
     },
     fetcher,
   );

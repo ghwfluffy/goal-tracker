@@ -79,6 +79,8 @@ describe("auth api helpers", () => {
       return new Response(
         JSON.stringify({
           user: {
+            avatar_version: null,
+            display_name: null,
             id: "user-1",
             is_admin: true,
             is_example_data: false,
@@ -98,6 +100,8 @@ describe("auth api helpers", () => {
       loginWithPassword({ username: "admin", password: "supersafepassword" }, fetcher),
     ).resolves.toEqual({
       user: {
+        avatar_version: null,
+        display_name: null,
         id: "user-1",
         is_admin: true,
         is_example_data: false,

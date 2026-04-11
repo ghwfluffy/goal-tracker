@@ -26,7 +26,9 @@ def client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
         future=True,
         poolclass=StaticPool,
     )
-    testing_session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+    testing_session_factory = sessionmaker(
+        bind=engine, autoflush=False, autocommit=False, future=True
+    )
     Base.metadata.create_all(engine)
 
     app = create_app()

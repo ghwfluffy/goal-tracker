@@ -30,6 +30,12 @@ def utcnow() -> datetime:
     return datetime.now(UTC)
 
 
+def normalize_utc_datetime(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
 def is_bootstrap_required(db: Session) -> bool:
     user_count = db.scalar(select(func.count()).select_from(User))
     return user_count == 0
@@ -137,7 +143,8 @@ def find_active_session(
     if session is None:
         return None
 
-    if session.revoked_at is not None or session.expires_at <= now:
+    expires_at = normalize_utc_datetime(session.expires_at)
+    if session.revoked_at is not None or expires_at <= now:
         return None
 
     session.last_seen_at = now

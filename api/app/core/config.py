@@ -5,7 +5,6 @@ from pathlib import Path
 from secrets import token_urlsafe
 from typing import Literal
 
-from pydantic import computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app import __version__
@@ -43,7 +42,6 @@ class Settings(BaseSettings):
         "http://localhost:5173",
     ]
 
-    @computed_field
     @property
     def database_url(self) -> str:
         return (
@@ -52,7 +50,6 @@ class Settings(BaseSettings):
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
 
-    @computed_field
     @property
     def session_cookie_secure(self) -> bool:
         return self.app_env not in {"development", "test"}
