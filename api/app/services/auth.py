@@ -13,9 +13,10 @@ from app.core.security import (
     generate_session_token,
     hash_password,
     hash_session_token,
+    password_hash_needs_upgrade,
     verify_password,
 )
-from app.db.models import AuthSession, User
+from app.db.models import AuthSession, InvitationCode, User
 
 
 class BootstrapError(Exception):
@@ -23,6 +24,10 @@ class BootstrapError(Exception):
 
 
 class AuthenticationError(Exception):
+    pass
+
+
+class RegistrationError(Exception):
     pass
 
 
@@ -46,6 +51,10 @@ def find_user_by_username(db: Session, username: str) -> User | None:
     return db.scalar(statement)
 
 
+def normalize_invitation_code_value(code: str) -> str:
+    return code.strip()
+
+
 def create_user(
     db: Session,
     *,
@@ -53,6 +62,7 @@ def create_user(
     password: str,
     is_admin: bool,
     is_example_data: bool = False,
+    invitation_code: InvitationCode | None = None,
 ) -> User:
     user = User(
         id=str(uuid4()),
@@ -60,6 +70,7 @@ def create_user(
         password_hash=hash_password(password),
         is_admin=is_admin,
         is_example_data=is_example_data,
+        invitation_code_id=invitation_code.id if invitation_code is not None else None,
     )
     db.add(user)
     db.flush()
@@ -74,6 +85,8 @@ def create_bootstrap_admin(
 ) -> User:
     if not is_bootstrap_required(db):
         raise BootstrapError("Bootstrap is only allowed before the first account exists.")
+    if find_user_by_username(db, username) is not None:
+        raise BootstrapError("Username is already taken.")
 
     return create_user(
         db,
@@ -83,10 +96,63 @@ def create_bootstrap_admin(
     )
 
 
+def find_invitation_code_by_value(db: Session, code: str) -> InvitationCode | None:
+    statement = (
+        select(InvitationCode)
+        .options(joinedload(InvitationCode.created_users))
+        .where(InvitationCode.code == normalize_invitation_code_value(code))
+    )
+    return db.scalar(statement)
+
+
+def ensure_active_invitation_code(
+    db: Session,
+    *,
+    code: str,
+) -> InvitationCode:
+    invitation_code = find_invitation_code_by_value(db, code)
+    if invitation_code is None:
+        raise RegistrationError("Invitation code is invalid.")
+
+    now = utcnow()
+    expires_at = normalize_utc_datetime(invitation_code.expires_at)
+    if invitation_code.revoked_at is not None or expires_at <= now:
+        raise RegistrationError("Invitation code is no longer active.")
+
+    return invitation_code
+
+
+def register_user(
+    db: Session,
+    *,
+    username: str,
+    password: str,
+    invitation_code_value: str,
+    is_example_data: bool,
+) -> User:
+    if is_bootstrap_required(db):
+        raise RegistrationError("Create the first administrator account before registering users.")
+    if find_user_by_username(db, username) is not None:
+        raise RegistrationError("Username is already taken.")
+
+    invitation_code = ensure_active_invitation_code(db, code=invitation_code_value)
+    return create_user(
+        db,
+        username=username,
+        password=password,
+        is_admin=False,
+        is_example_data=is_example_data,
+        invitation_code=invitation_code,
+    )
+
+
 def verify_user_credentials(db: Session, *, username: str, password: str) -> User:
     user = find_user_by_username(db, username)
     if user is None or not verify_password(password, user.password_hash):
         raise AuthenticationError("Invalid username or password.")
+    if password_hash_needs_upgrade(user.password_hash):
+        user.password_hash = hash_password(password)
+        db.flush()
 
     return user
 

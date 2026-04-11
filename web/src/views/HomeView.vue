@@ -4,8 +4,8 @@ import type { MenuItem } from "primevue/menuitem";
 import Avatar from "primevue/avatar";
 import Button from "primevue/button";
 import Card from "primevue/card";
+import Checkbox from "primevue/checkbox";
 import Dialog from "primevue/dialog";
-import Divider from "primevue/divider";
 import InputText from "primevue/inputtext";
 import Menu from "primevue/menu";
 import Message from "primevue/message";
@@ -16,29 +16,40 @@ import TabView from "primevue/tabview";
 import Tag from "primevue/tag";
 
 import { useAuthStore } from "../stores/auth";
+import { useInvitationCodesStore } from "../stores/invitationCodes";
 import { useStatusStore } from "../stores/status";
 
 const authStore = useAuthStore();
+const invitationCodesStore = useInvitationCodesStore();
 const statusStore = useStatusStore();
 
-const username = ref("");
-const password = ref("");
+const loginUsername = ref("");
+const loginPassword = ref("");
+const signupUsername = ref("");
+const signupPassword = ref("");
+const signupInvitationCode = ref("");
+const signupExampleData = ref(false);
 
-const activeTabIndex = ref(0);
+const dashboardTabIndex = ref(0);
+const authTabIndex = ref(0);
 const profileDialogVisible = ref(false);
 const passwordDialogVisible = ref(false);
 const deleteAccountDialogVisible = ref(false);
+const invitationCodesDialogVisible = ref(false);
 const profileMenu = ref<InstanceType<typeof Menu> | null>(null);
 
 const displayNameInput = ref("");
 const currentPasswordInput = ref("");
 const newPasswordInput = ref("");
 const deletePasswordInput = ref("");
+const createInvitationCodeExpiresAt = ref("");
+const invitationCodeExpiresAtInputs = ref<Record<string, string>>({});
 const profileSuccessMessage = ref("");
 const profileErrorMessage = ref("");
 const passwordSuccessMessage = ref("");
 const passwordErrorMessage = ref("");
 const deleteAccountErrorMessage = ref("");
+const invitationCodesSuccessMessage = ref("");
 
 const lastCheckedLabel = computed(() => {
   if (statusStore.data === null) {
@@ -53,15 +64,15 @@ const authTitle = computed(() => {
     return "Create the first account";
   }
 
-  return "Sign in";
+  return "Access your account";
 });
 
 const authSummary = computed(() => {
   if (authStore.bootstrapRequired) {
-    return "The first account becomes the administrator and unlocks the rest of the app.";
+    return "The first account becomes the administrator and unlocks invited signups.";
   }
 
-  return "Use the session-backed login flow to move into the Phase 1 app shell.";
+  return "Sign in with an existing account or use an invitation code to register.";
 });
 
 const isBusy = computed(() => {
@@ -98,36 +109,53 @@ const avatarUrl = computed(() => {
   return `/api/v1/users/me/avatar?v=${encodeURIComponent(version)}`;
 });
 
-const profileMenuItems = computed<MenuItem[]>(() => [
-  {
-    icon: "pi pi-user-edit",
-    label: "Edit profile",
-    command: () => {
-      openProfileDialog();
+const profileMenuItems = computed<MenuItem[]>(() => {
+  const items: MenuItem[] = [
+    {
+      icon: "pi pi-user-edit",
+      label: "Edit profile",
+      command: () => {
+        openProfileDialog();
+      },
     },
-  },
-  {
-    icon: "pi pi-key",
-    label: "Change password",
-    command: () => {
-      openPasswordDialog();
+    {
+      icon: "pi pi-key",
+      label: "Change password",
+      command: () => {
+        openPasswordDialog();
+      },
     },
-  },
-  {
-    icon: "pi pi-trash",
-    label: "Delete account",
-    command: () => {
-      openDeleteAccountDialog();
+  ];
+
+  if (authStore.currentUser?.is_admin) {
+    items.push({
+      icon: "pi pi-ticket",
+      label: "Invitation codes",
+      command: () => {
+        void openInvitationCodesDialog();
+      },
+    });
+  }
+
+  items.push(
+    {
+      icon: "pi pi-trash",
+      label: "Delete account",
+      command: () => {
+        openDeleteAccountDialog();
+      },
     },
-  },
-  {
-    icon: "pi pi-sign-out",
-    label: "Sign out",
-    command: () => {
-      void authStore.logout();
+    {
+      icon: "pi pi-sign-out",
+      label: "Sign out",
+      command: () => {
+        void authStore.logout();
+      },
     },
-  },
-]);
+  );
+
+  return items;
+});
 
 function resetProfileMessages(): void {
   profileSuccessMessage.value = "";
@@ -143,6 +171,11 @@ function resetDeleteAccountMessages(): void {
   deleteAccountErrorMessage.value = "";
 }
 
+function resetInvitationCodeMessages(): void {
+  invitationCodesSuccessMessage.value = "";
+  invitationCodesStore.errorMessage = "";
+}
+
 function syncProfileInputs(): void {
   displayNameInput.value = authStore.currentUser?.display_name ?? "";
 }
@@ -154,6 +187,42 @@ function resetPasswordInputs(): void {
 
 function resetDeleteAccountInputs(): void {
   deletePasswordInput.value = "";
+}
+
+function toDateTimeLocalValue(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const timezoneOffset = date.getTimezoneOffset();
+  return new Date(date.getTime() - timezoneOffset * 60_000).toISOString().slice(0, 16);
+}
+
+function defaultInvitationCodeExpiration(): string {
+  return toDateTimeLocalValue(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString());
+}
+
+function toIsoDateTime(value: string): string | null {
+  if (value.trim() === "") {
+    return null;
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return date.toISOString();
+}
+
+function syncInvitationCodeInputs(): void {
+  invitationCodeExpiresAtInputs.value = Object.fromEntries(
+    invitationCodesStore.invitationCodes.map((invitationCode) => [
+      invitationCode.id,
+      toDateTimeLocalValue(invitationCode.expires_at),
+    ]),
+  );
 }
 
 function openProfileDialog(): void {
@@ -174,21 +243,39 @@ function openDeleteAccountDialog(): void {
   deleteAccountDialogVisible.value = true;
 }
 
+async function openInvitationCodesDialog(): Promise<void> {
+  resetInvitationCodeMessages();
+  createInvitationCodeExpiresAt.value = defaultInvitationCodeExpiration();
+  invitationCodesDialogVisible.value = true;
+  await invitationCodesStore.loadInvitationCodes();
+  syncInvitationCodeInputs();
+}
+
 function toggleProfileMenu(event: Event): void {
   profileMenu.value?.toggle(event);
 }
 
-async function submitAuthForm(): Promise<void> {
-  const credentials = {
-    password: password.value,
-    username: username.value,
-  };
+async function submitBootstrapForm(): Promise<void> {
+  await authStore.bootstrap({
+    password: loginPassword.value,
+    username: loginUsername.value,
+  });
+}
 
-  if (authStore.bootstrapRequired) {
-    await authStore.bootstrap(credentials);
-  } else {
-    await authStore.login(credentials);
-  }
+async function submitLoginForm(): Promise<void> {
+  await authStore.login({
+    password: loginPassword.value,
+    username: loginUsername.value,
+  });
+}
+
+async function submitSignupForm(): Promise<void> {
+  await authStore.register({
+    invitation_code: signupInvitationCode.value,
+    is_example_data: signupExampleData.value,
+    password: signupPassword.value,
+    username: signupUsername.value,
+  });
 }
 
 async function saveProfile(): Promise<void> {
@@ -255,6 +342,55 @@ async function deleteAccount(): Promise<void> {
   deleteAccountErrorMessage.value = authStore.errorMessage;
 }
 
+async function createNewInvitationCode(): Promise<void> {
+  resetInvitationCodeMessages();
+  const expiresAt = toIsoDateTime(createInvitationCodeExpiresAt.value);
+  if (expiresAt === null) {
+    invitationCodesStore.errorMessage = "Choose a valid expiration date.";
+    return;
+  }
+
+  const created = await invitationCodesStore.createInvitationCode({ expires_at: expiresAt });
+  syncInvitationCodeInputs();
+
+  if (created) {
+    invitationCodesSuccessMessage.value = "Invitation code created.";
+    createInvitationCodeExpiresAt.value = defaultInvitationCodeExpiration();
+  }
+}
+
+async function saveInvitationCode(invitationCodeId: string): Promise<void> {
+  resetInvitationCodeMessages();
+  const expiresAt = toIsoDateTime(invitationCodeExpiresAtInputs.value[invitationCodeId] ?? "");
+  if (expiresAt === null) {
+    invitationCodesStore.errorMessage = "Choose a valid expiration date.";
+    return;
+  }
+
+  const updated = await invitationCodesStore.updateInvitationCode(invitationCodeId, {
+    expires_at: expiresAt,
+  });
+  syncInvitationCodeInputs();
+
+  if (updated) {
+    invitationCodesSuccessMessage.value = "Invitation code updated.";
+  }
+}
+
+async function deleteInvitationCodeEntry(invitationCodeId: string): Promise<void> {
+  resetInvitationCodeMessages();
+  const deleted = await invitationCodesStore.deleteInvitationCode(invitationCodeId);
+  syncInvitationCodeInputs();
+
+  if (deleted) {
+    invitationCodesSuccessMessage.value = "Invitation code deleted.";
+  }
+}
+
+function formatDateTime(value: string): string {
+  return new Date(value).toLocaleString();
+}
+
 watch(
   () => authStore.currentUser,
   () => {
@@ -264,6 +400,18 @@ watch(
   },
   { immediate: true },
 );
+
+watch(
+  () => invitationCodesStore.invitationCodes,
+  () => {
+    syncInvitationCodeInputs();
+  },
+  { deep: true },
+);
+
+watch(authTabIndex, () => {
+  authStore.errorMessage = "";
+});
 
 onMounted(() => {
   void statusStore.loadStatus();
@@ -307,7 +455,7 @@ onMounted(() => {
       </header>
 
       <section class="tabs-shell">
-        <TabView v-model:activeIndex="activeTabIndex">
+        <TabView v-model:activeIndex="dashboardTabIndex">
           <TabPanel header="Dashboards">
             <div class="panel-card blank-panel">
               <p class="panel-eyebrow">Dashboards</p>
@@ -516,6 +664,159 @@ onMounted(() => {
           </section>
         </div>
       </Dialog>
+
+      <Dialog
+        v-model:visible="invitationCodesDialogVisible"
+        modal
+        header="Invitation codes"
+        class="profile-dialog"
+        :style="{ width: 'min(56rem, 96vw)' }"
+      >
+        <div class="dialog-stack">
+          <Message
+            v-if="invitationCodesSuccessMessage !== ''"
+            severity="success"
+            :closable="false"
+          >
+            {{ invitationCodesSuccessMessage }}
+          </Message>
+          <Message
+            v-if="invitationCodesStore.errorMessage !== ''"
+            severity="error"
+            :closable="false"
+          >
+            {{ invitationCodesStore.errorMessage }}
+          </Message>
+
+          <div v-if="invitationCodesStore.viewState === 'loading'" class="loading shell-center">
+            <ProgressSpinner
+              strokeWidth="5"
+              style="width: 2.5rem; height: 2.5rem"
+              animationDuration=".8s"
+            />
+            <span>Loading invitation codes.</span>
+          </div>
+
+          <template v-else>
+            <section class="dialog-section">
+              <div class="section-heading-text">
+                <h3>Create invitation code</h3>
+                <p>
+                  New accounts can sign up with any active code until it expires or you delete it.
+                </p>
+              </div>
+
+              <label class="field">
+                <span class="label">Expiration</span>
+                <input
+                  v-model="createInvitationCodeExpiresAt"
+                  class="native-file-input"
+                  type="datetime-local"
+                />
+              </label>
+
+              <Button
+                label="Create code"
+                icon="pi pi-plus"
+                :loading="invitationCodesStore.submissionState === 'submitting'"
+                @click="createNewInvitationCode"
+              />
+            </section>
+
+            <section class="dialog-section">
+              <div class="section-heading-text">
+                <h3>Existing codes</h3>
+                <p>Review expiration, revoke old codes, and see which accounts came from each one.</p>
+              </div>
+
+              <div
+                v-if="invitationCodesStore.invitationCodes.length === 0"
+                class="panel-card empty-invitation-state"
+              >
+                <p>No invitation codes yet.</p>
+              </div>
+
+              <article
+                v-for="invitationCode in invitationCodesStore.invitationCodes"
+                :key="invitationCode.id"
+                class="invitation-code-card"
+              >
+                <div class="invitation-code-header">
+                  <div class="invitation-code-copy">
+                    <p class="code-label">Code</p>
+                    <code>{{ invitationCode.code }}</code>
+                  </div>
+                  <Tag
+                    :value="invitationCode.revoked_at === null ? 'active' : 'deleted'"
+                    :severity="invitationCode.revoked_at === null ? 'success' : 'danger'"
+                  />
+                </div>
+
+                <div class="invitation-code-meta">
+                  <span>Created {{ formatDateTime(invitationCode.created_at) }}</span>
+                  <span>Expires {{ formatDateTime(invitationCode.expires_at) }}</span>
+                  <span v-if="invitationCode.created_by_username !== null">
+                    By {{ invitationCode.created_by_username }}
+                  </span>
+                </div>
+
+                <div class="invitation-code-actions">
+                  <label class="field">
+                    <span class="label">Update expiration</span>
+                    <input
+                      v-model="invitationCodeExpiresAtInputs[invitationCode.id]"
+                      class="native-file-input"
+                      type="datetime-local"
+                      :disabled="invitationCode.revoked_at !== null"
+                    />
+                  </label>
+
+                  <div class="invitation-code-buttons">
+                    <Button
+                      label="Save"
+                      icon="pi pi-save"
+                      severity="secondary"
+                      :disabled="invitationCode.revoked_at !== null"
+                      :loading="invitationCodesStore.submissionState === 'submitting'"
+                      @click="saveInvitationCode(invitationCode.id)"
+                    />
+                    <Button
+                      label="Delete"
+                      icon="pi pi-trash"
+                      severity="danger"
+                      :disabled="invitationCode.revoked_at !== null"
+                      :loading="invitationCodesStore.submissionState === 'submitting'"
+                      @click="deleteInvitationCodeEntry(invitationCode.id)"
+                    />
+                  </div>
+                </div>
+
+                <div class="invitation-code-users">
+                  <p class="label">Users created with this code</p>
+                  <div v-if="invitationCode.users_created.length === 0" class="invitation-code-empty">
+                    None yet.
+                  </div>
+                  <div v-else class="invitation-code-user-list">
+                    <div
+                      v-for="user in invitationCode.users_created"
+                      :key="user.id"
+                      class="invitation-code-user"
+                    >
+                      <strong>{{ user.display_name || user.username }}</strong>
+                      <span>@{{ user.username }}</span>
+                      <Tag
+                        v-if="user.is_example_data"
+                        value="example data"
+                        severity="warning"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </article>
+            </section>
+          </template>
+        </div>
+      </Dialog>
     </section>
 
     <section v-else class="hero">
@@ -523,8 +824,8 @@ onMounted(() => {
         <p class="eyebrow">Phase 1 Started</p>
         <h1>Goal tracking with a real account flow.</h1>
         <p class="summary">
-          The app can now bootstrap its first administrator account, restore sessions, and sign in
-          through the same API stack the rest of Phase 1 will build on.
+          The app can now bootstrap its first administrator, manage invitation-based signup, restore
+          sessions, and distinguish example-data accounts for feature testing.
         </p>
       </div>
 
@@ -545,34 +846,109 @@ onMounted(() => {
             <span>Restoring session state.</span>
           </div>
 
-          <form v-else class="auth-form" @submit.prevent="submitAuthForm">
+          <div v-else class="auth-form">
             <Message v-if="authStore.errorMessage !== ''" severity="error" :closable="false">
               {{ authStore.errorMessage }}
             </Message>
 
-            <label class="field">
-              <span class="label">Username</span>
-              <InputText v-model="username" autocomplete="username" />
-            </label>
+            <form
+              v-if="authStore.bootstrapRequired"
+              class="auth-form"
+              @submit.prevent="submitBootstrapForm"
+            >
+              <label class="field">
+                <span class="label">Username</span>
+                <InputText v-model="loginUsername" autocomplete="username" />
+              </label>
 
-            <label class="field">
-              <span class="label">Password</span>
-              <Password
-                v-model="password"
-                input-class="full-width-input"
-                autocomplete="current-password"
-                :feedback="false"
-                toggle-mask
+              <label class="field">
+                <span class="label">Password</span>
+                <Password
+                  v-model="loginPassword"
+                  input-class="full-width-input"
+                  autocomplete="new-password"
+                  :feedback="false"
+                  toggle-mask
+                />
+              </label>
+
+              <Button
+                type="submit"
+                label="Create admin account"
+                icon="pi pi-arrow-right"
+                :loading="isBusy"
               />
-            </label>
+            </form>
 
-            <Button
-              type="submit"
-              :label="authStore.bootstrapRequired ? 'Create admin account' : 'Sign in'"
-              icon="pi pi-arrow-right"
-              :loading="isBusy"
-            />
-          </form>
+            <TabView v-else v-model:activeIndex="authTabIndex">
+              <TabPanel header="Sign in">
+                <form class="auth-form" @submit.prevent="submitLoginForm">
+                  <label class="field">
+                    <span class="label">Username</span>
+                    <InputText v-model="loginUsername" autocomplete="username" />
+                  </label>
+
+                  <label class="field">
+                    <span class="label">Password</span>
+                    <Password
+                      v-model="loginPassword"
+                      input-class="full-width-input"
+                      autocomplete="current-password"
+                      :feedback="false"
+                      toggle-mask
+                    />
+                  </label>
+
+                  <Button
+                    type="submit"
+                    label="Sign in"
+                    icon="pi pi-arrow-right"
+                    :loading="isBusy"
+                  />
+                </form>
+              </TabPanel>
+
+              <TabPanel header="Sign up">
+                <form class="auth-form" @submit.prevent="submitSignupForm">
+                  <label class="field">
+                    <span class="label">Username</span>
+                    <InputText v-model="signupUsername" autocomplete="username" />
+                  </label>
+
+                  <label class="field">
+                    <span class="label">Password</span>
+                    <Password
+                      v-model="signupPassword"
+                      input-class="full-width-input"
+                      autocomplete="new-password"
+                      :feedback="false"
+                      toggle-mask
+                    />
+                  </label>
+
+                  <label class="field">
+                    <span class="label">Registration code</span>
+                    <InputText
+                      v-model="signupInvitationCode"
+                      autocomplete="one-time-code"
+                    />
+                  </label>
+
+                  <label class="checkbox-row">
+                    <Checkbox v-model="signupExampleData" binary input-id="signup-example-data" />
+                    <span>Add example data</span>
+                  </label>
+
+                  <Button
+                    type="submit"
+                    label="Create account"
+                    icon="pi pi-user-plus"
+                    :loading="isBusy"
+                  />
+                </form>
+              </TabPanel>
+            </TabView>
+          </div>
         </template>
       </Card>
 
@@ -792,11 +1168,97 @@ h1 {
   background: rgba(185, 28, 28, 0.04);
 }
 
+.checkbox-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: #0f172a;
+}
+
 .native-file-input {
   padding: 0.8rem 0.9rem;
   border: 1px solid #cbd5e1;
   border-radius: 0.85rem;
   background: #fff;
+}
+
+.empty-invitation-state {
+  color: #64748b;
+}
+
+.invitation-code-card {
+  display: grid;
+  gap: 1rem;
+  padding: 1.1rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(248, 250, 252, 0.8);
+}
+
+.invitation-code-header,
+.invitation-code-meta,
+.invitation-code-buttons,
+.invitation-code-user {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.invitation-code-header {
+  align-items: flex-start;
+}
+
+.invitation-code-copy {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.code-label {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.invitation-code-copy code {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.95rem;
+  word-break: break-all;
+  color: #0f172a;
+}
+
+.invitation-code-meta {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  color: #475569;
+  font-size: 0.92rem;
+}
+
+.invitation-code-actions,
+.invitation-code-users,
+.invitation-code-user-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.invitation-code-empty {
+  color: #64748b;
+}
+
+.invitation-code-user-list {
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+}
+
+.invitation-code-user {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  padding: 0.85rem 1rem;
+  border-radius: 0.9rem;
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.06);
 }
 
 .auth-card :deep(.full-width-input),
@@ -807,6 +1269,10 @@ h1 {
 .auth-card :deep(.p-password),
 .profile-dialog :deep(.p-password) {
   width: 100%;
+}
+
+.auth-card :deep(.p-tabview-panels) {
+  padding-inline: 0;
 }
 
 @media (min-width: 900px) {
@@ -831,6 +1297,13 @@ h1 {
 
   .header-actions {
     justify-content: space-between;
+  }
+
+  .invitation-code-header,
+  .invitation-code-buttons,
+  .invitation-code-user {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .profile-name {

@@ -11,10 +11,12 @@ from app.db import AuthSession, User, get_db
 from app.services.auth import (
     AuthenticationError,
     BootstrapError,
+    RegistrationError,
     create_bootstrap_admin,
     create_session,
     find_active_session,
     is_bootstrap_required,
+    register_user,
     revoke_session,
     verify_user_credentials,
 )
@@ -47,6 +49,13 @@ class BootstrapRequest(BaseModel):
 class LoginRequest(BaseModel):
     username: str = Field(min_length=3, max_length=100)
     password: str = Field(min_length=8, max_length=128)
+
+
+class RegisterRequest(BaseModel):
+    username: str = Field(min_length=3, max_length=100)
+    password: str = Field(min_length=8, max_length=128)
+    invitation_code: str = Field(min_length=32, max_length=32)
+    is_example_data: bool = False
 
 
 def normalized_username(username: str) -> str:
@@ -118,6 +127,17 @@ def get_current_user(
     return auth_session.user
 
 
+def get_current_admin_user(
+    user: Annotated[User, Depends(get_current_user)],
+) -> User:
+    if not user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Administrator access required.",
+        )
+    return user
+
+
 @router.get("/bootstrap-status", response_model=BootstrapStatusResponse)
 def get_bootstrap_status(
     db: Annotated[Session, Depends(get_db)],
@@ -180,6 +200,41 @@ def login(
     except AuthenticationError as exc:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
+
+    set_session_cookie(response, settings=settings, cookie_value=cookie_value)
+    return SessionResponse(user=serialize_user_summary(user))
+
+
+@router.post("/register", response_model=SessionResponse, status_code=status.HTTP_201_CREATED)
+def register(
+    payload: RegisterRequest,
+    request: Request,
+    response: Response,
+    db: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> SessionResponse:
+    try:
+        user = register_user(
+            db,
+            username=normalized_username(payload.username),
+            password=payload.password,
+            invitation_code_value=payload.invitation_code,
+            is_example_data=payload.is_example_data,
+        )
+        _, cookie_value = create_session(
+            db,
+            user=user,
+            settings=settings,
+            user_agent=request.headers.get("user-agent"),
+            ip_address=request.client.host if request.client is not None else None,
+        )
+        db.commit()
+    except RegistrationError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(exc),
+        ) from exc
 
     set_session_cookie(response, settings=settings, cookie_value=cookie_value)
     return SessionResponse(user=serialize_user_summary(user))

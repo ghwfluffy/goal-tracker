@@ -43,8 +43,10 @@ The project is in the foundation stage right now.
 What already exists:
 
 - a working web app shell
-- first-account bootstrap and sign-in flow
+- first-account bootstrap, invited sign-up, and sign-in flow
 - a signed-in app shell with session restoration
+- admin-managed invitation codes for creating additional accounts
+- optional example-data account signup for feature testing
 - a backend API foundation
 - a landing page that successfully calls the API and renders application status
 - architecture documents covering the long-term product design

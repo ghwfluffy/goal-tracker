@@ -35,18 +35,25 @@ Phase 0 now includes backend auth/session foundation endpoints:
 1. `GET /api/v1/auth/bootstrap-status`
 2. `POST /api/v1/auth/bootstrap`
 3. `POST /api/v1/auth/login`
-4. `GET /api/v1/auth/me`
-5. `POST /api/v1/auth/logout`
+4. `POST /api/v1/auth/register`
+5. `GET /api/v1/auth/me`
+6. `POST /api/v1/auth/logout`
+7. `GET /api/v1/invitation-codes`
+8. `POST /api/v1/invitation-codes`
+9. `PATCH /api/v1/invitation-codes/{invitation_code_id}`
+10. `DELETE /api/v1/invitation-codes/{invitation_code_id}`
 
-The first account bootstrap path creates the initial administrator and starts a server-side session using an HTTP-only cookie.
+The first account bootstrap path creates the initial administrator and starts a server-side session using an HTTP-only cookie. After that, new users register through admin-managed invitation codes and can opt into example-data seeding at signup. Passwords are stored with bcrypt-backed hashes.
 
 The frontend home page now consumes that auth foundation and can:
 
 1. detect whether bootstrap is still required
 2. create the first administrator account
 3. sign in with an existing account
-4. restore the current session
-5. sign out
+4. register a new invited account with an optional example-data flag
+5. restore the current session
+6. sign out
+7. let administrators create, update, review, and revoke invitation codes
 
 ## Local Run Commands
 

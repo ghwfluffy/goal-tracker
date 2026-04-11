@@ -28,6 +28,11 @@ export interface CredentialsPayload {
   username: string;
 }
 
+export interface RegistrationPayload extends CredentialsPayload {
+  invitation_code: string;
+  is_example_data: boolean;
+}
+
 export interface UpdateProfilePayload {
   display_name: string | null;
 }
@@ -39,6 +44,32 @@ export interface ChangePasswordPayload {
 
 export interface DeleteAccountPayload {
   password: string;
+}
+
+export interface InvitationCodeUserSummary {
+  created_at: string;
+  display_name: string | null;
+  id: string;
+  is_example_data: boolean;
+  username: string;
+}
+
+export interface InvitationCodeSummary {
+  code: string;
+  created_at: string;
+  created_by_username: string | null;
+  expires_at: string;
+  id: string;
+  revoked_at: string | null;
+  users_created: InvitationCodeUserSummary[];
+}
+
+export interface InvitationCodeListResponse {
+  invitation_codes: InvitationCodeSummary[];
+}
+
+export interface InvitationCodePayload {
+  expires_at: string;
 }
 
 type Fetcher = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -172,6 +203,20 @@ export function loginWithPassword(
   );
 }
 
+export function registerWithInvitationCode(
+  payload: RegistrationPayload,
+  fetcher: Fetcher = fetch,
+): Promise<SessionResponse> {
+  return requestJson<SessionResponse>(
+    "/auth/register",
+    {
+      body: JSON.stringify(payload),
+      method: "POST",
+    },
+    fetcher,
+  );
+}
+
 export function logoutCurrentSession(fetcher: Fetcher = fetch): Promise<void> {
   return requestNoContent(
     "/auth/logout",
@@ -232,6 +277,54 @@ export function deleteCurrentAccount(
     "/users/me",
     {
       body: JSON.stringify(payload),
+      method: "DELETE",
+    },
+    fetcher,
+  );
+}
+
+export function fetchInvitationCodes(
+  fetcher: Fetcher = fetch,
+): Promise<InvitationCodeListResponse> {
+  return requestJson<InvitationCodeListResponse>("/invitation-codes", undefined, fetcher);
+}
+
+export function createInvitationCode(
+  payload: InvitationCodePayload,
+  fetcher: Fetcher = fetch,
+): Promise<InvitationCodeSummary> {
+  return requestJson<InvitationCodeSummary>(
+    "/invitation-codes",
+    {
+      body: JSON.stringify(payload),
+      method: "POST",
+    },
+    fetcher,
+  );
+}
+
+export function updateInvitationCode(
+  invitationCodeId: string,
+  payload: InvitationCodePayload,
+  fetcher: Fetcher = fetch,
+): Promise<InvitationCodeSummary> {
+  return requestJson<InvitationCodeSummary>(
+    `/invitation-codes/${invitationCodeId}`,
+    {
+      body: JSON.stringify(payload),
+      method: "PATCH",
+    },
+    fetcher,
+  );
+}
+
+export function deleteInvitationCode(
+  invitationCodeId: string,
+  fetcher: Fetcher = fetch,
+): Promise<void> {
+  return requestNoContent(
+    `/invitation-codes/${invitationCodeId}`,
+    {
       method: "DELETE",
     },
     fetcher,

@@ -8,12 +8,14 @@ import {
   fetchBootstrapStatus,
   fetchCurrentSession,
   loginWithPassword,
+  registerWithInvitationCode,
   logoutCurrentSession,
   updateCurrentProfile,
   uploadCurrentAvatar,
   type ChangePasswordPayload,
   type CredentialsPayload,
   type DeleteAccountPayload,
+  type RegistrationPayload,
   type UpdateProfilePayload,
   type UserSummary,
 } from "../lib/api";
@@ -94,6 +96,19 @@ export const useAuthStore = defineStore("auth", {
         this.applyCurrentUser(session.user);
       } catch (error: unknown) {
         this.errorMessage = error instanceof Error ? error.message : "Unable to sign in.";
+      } finally {
+        this.submissionState = "idle";
+      }
+    },
+    async register(payload: RegistrationPayload): Promise<void> {
+      this.submissionState = "submitting";
+      this.errorMessage = "";
+
+      try {
+        const session = await registerWithInvitationCode(payload);
+        this.applyCurrentUser(session.user);
+      } catch (error: unknown) {
+        this.errorMessage = error instanceof Error ? error.message : "Unable to create the account.";
       } finally {
         this.submissionState = "idle";
       }

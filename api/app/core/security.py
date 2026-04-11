@@ -6,24 +6,29 @@ import hmac
 import secrets
 from hmac import compare_digest
 
-PASSWORD_HASH_ITERATIONS = 600_000
-PASSWORD_HASH_NAME = "pbkdf2_sha256"
+import bcrypt
+
+BCRYPT_ROUNDS = 13
+LEGACY_PASSWORD_HASH_ITERATIONS = 600_000
+LEGACY_PASSWORD_HASH_NAME = "pbkdf2_sha256"
 
 
 def hash_password(password: str) -> str:
-    salt = secrets.token_bytes(16)
-    derived_key = hashlib.pbkdf2_hmac(
-        "sha256",
+    return bcrypt.hashpw(
         password.encode("utf-8"),
-        salt,
-        PASSWORD_HASH_ITERATIONS,
-    )
-    encoded_salt = base64.b64encode(salt).decode("ascii")
-    encoded_hash = base64.b64encode(derived_key).decode("ascii")
-    return f"{PASSWORD_HASH_NAME}${PASSWORD_HASH_ITERATIONS}${encoded_salt}${encoded_hash}"
+        bcrypt.gensalt(rounds=BCRYPT_ROUNDS),
+    ).decode("ascii")
 
 
-def verify_password(password: str, stored_password_hash: str) -> bool:
+def is_bcrypt_hash(stored_password_hash: str) -> bool:
+    return stored_password_hash.startswith(("$2a$", "$2b$", "$2y$"))
+
+
+def password_hash_needs_upgrade(stored_password_hash: str) -> bool:
+    return not is_bcrypt_hash(stored_password_hash)
+
+
+def verify_legacy_pbkdf2_password(password: str, stored_password_hash: str) -> bool:
     try:
         algorithm, iterations, encoded_salt, encoded_hash = stored_password_hash.split(
             "$", maxsplit=3
@@ -31,7 +36,7 @@ def verify_password(password: str, stored_password_hash: str) -> bool:
     except ValueError:
         return False
 
-    if algorithm != PASSWORD_HASH_NAME:
+    if algorithm != LEGACY_PASSWORD_HASH_NAME:
         return False
 
     salt = base64.b64decode(encoded_salt.encode("ascii"))
@@ -43,6 +48,19 @@ def verify_password(password: str, stored_password_hash: str) -> bool:
         int(iterations),
     )
     return compare_digest(candidate_hash, expected_hash)
+
+
+def verify_password(password: str, stored_password_hash: str) -> bool:
+    if is_bcrypt_hash(stored_password_hash):
+        try:
+            return bcrypt.checkpw(
+                password.encode("utf-8"),
+                stored_password_hash.encode("ascii"),
+            )
+        except ValueError:
+            return False
+
+    return verify_legacy_pbkdf2_password(password, stored_password_hash)
 
 
 def generate_session_token() -> str:

@@ -20,6 +20,8 @@ Current planned behavior:
 
 - first account can be created without a registration code
 - later registration should require an admin-managed registration code
+- registration codes should carry expiration timestamps and remain traceable to the users created with them
+- invited registration should allow a user to opt into the example/demo account path
 - admins can manage user accounts
 
 This area should remain simple until real usage requires more complexity.
@@ -42,6 +44,7 @@ Why this direction:
 - easier auditability
 - better fit for admin actions
 - durable across container restarts as long as the database persists
+- clean password storage using bcrypt-backed hashes with production-safe work factors
 
 ## Session Lifecycle
 
