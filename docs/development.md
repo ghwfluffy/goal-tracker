@@ -68,7 +68,7 @@ The frontend home page now consumes that auth foundation and can:
 7. let administrators create, update, review, and revoke invitation codes
 8. create reusable number/date metrics with configurable decimal places and add quick updates
 9. archive metrics so they are hidden by default, or permanently delete standalone metrics that are not used by goals or widgets
-10. create goals tied to an existing metric or a new inline metric
+10. create goals tied to an existing metric or a new inline metric, including date-based compliance goals with exception dates and success thresholds
 11. create dashboards, choose a default dashboard, and manage dashboard widgets in a dedicated edit mode
 12. render widget timestamps in the browser timezone while showing the saved profile timezone used for day-boundary logic
 
@@ -84,6 +84,9 @@ python3 -m pip install -r requirements.txt
 alembic upgrade head
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
+
+Keep Alembic `revision` ids at 32 characters or fewer. PostgreSQL stores the active revision in
+`alembic_version.version_num`, and longer ids will fail during `alembic upgrade head`.
 
 Frontend:
 

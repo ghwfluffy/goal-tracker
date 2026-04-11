@@ -81,7 +81,9 @@ const goalDescriptionInput = ref("");
 const goalStartDateInput = ref(new Date().toISOString().slice(0, 10));
 const goalTargetDateInput = ref("");
 const goalTargetNumberValueInput = ref("");
-const goalTargetDateValueInput = ref("");
+const goalSuccessThresholdPercentInput = ref("100");
+const goalExceptionDateInput = ref("");
+const goalExceptionDates = ref<string[]>([]);
 const goalUseNewMetric = ref(false);
 const goalMetricIdInput = ref("");
 const goalNewMetricNameInput = ref("");
@@ -328,7 +330,9 @@ function resetGoalForm(): void {
   goalStartDateInput.value = new Date().toISOString().slice(0, 10);
   goalTargetDateInput.value = "";
   goalTargetNumberValueInput.value = "";
-  goalTargetDateValueInput.value = "";
+  goalSuccessThresholdPercentInput.value = "100";
+  goalExceptionDateInput.value = "";
+  goalExceptionDates.value = [];
   goalUseNewMetric.value = false;
   goalMetricIdInput.value = activeMetrics.value[0]?.id ?? "";
   goalNewMetricNameInput.value = "";
@@ -371,6 +375,21 @@ function parseDecimalPlaces(value: string | number | null | undefined): number |
 
   const parsed = Number.parseInt(value, 10);
   return Number.isNaN(parsed) ? null : parsed;
+}
+
+function addGoalExceptionDate(): void {
+  const candidate = goalExceptionDateInput.value;
+  if (candidate === "") {
+    return;
+  }
+  if (!goalExceptionDates.value.includes(candidate)) {
+    goalExceptionDates.value = [...goalExceptionDates.value, candidate].sort();
+  }
+  goalExceptionDateInput.value = "";
+}
+
+function removeGoalExceptionDate(value: string): void {
+  goalExceptionDates.value = goalExceptionDates.value.filter((candidate) => candidate !== value);
 }
 
 function numberInputStep(decimalPlaces: number | null): string {
@@ -612,9 +631,12 @@ async function submitGoalForm(): Promise<void> {
             goalNewMetricUnitLabelInput.value.trim() === "" ? null : goalNewMetricUnitLabelInput.value,
         }
       : null,
+    exception_dates: goalMetricType.value === "date" ? goalExceptionDates.value : [],
     start_date: goalStartDateInput.value,
+    success_threshold_percent:
+      goalMetricType.value === "date" ? parseOptionalNumber(goalSuccessThresholdPercentInput.value) : null,
     target_date: goalTargetDateInput.value || null,
-    target_value_date: goalMetricType.value === "date" ? goalTargetDateValueInput.value || null : null,
+    target_value_date: null,
     target_value_number:
       goalMetricType.value === "number" ? parseOptionalNumber(goalTargetNumberValueInput.value) : null,
     title: goalTitleInput.value,
@@ -1109,14 +1131,49 @@ onMounted(() => {
                     />
                   </label>
 
-                  <label v-else class="field">
-                    <span class="label">Target metric date</span>
-                    <input
-                      v-model="goalTargetDateValueInput"
-                      class="native-file-input"
-                      type="date"
-                    />
-                  </label>
+                  <template v-else>
+                    <label class="field">
+                      <span class="label">Success threshold percent</span>
+                      <input
+                        v-model="goalSuccessThresholdPercentInput"
+                        class="native-file-input"
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.01"
+                      />
+                    </label>
+
+                    <div class="field">
+                      <span class="label">Exception dates</span>
+                      <div class="exception-date-row">
+                        <input
+                          v-model="goalExceptionDateInput"
+                          class="native-file-input"
+                          type="date"
+                        />
+                        <Button
+                          label="Add"
+                          icon="pi pi-plus"
+                          severity="secondary"
+                          type="button"
+                          @click="addGoalExceptionDate"
+                        />
+                      </div>
+                      <div v-if="goalExceptionDates.length > 0" class="exception-date-list">
+                        <button
+                          v-for="exceptionDate in goalExceptionDates"
+                          :key="exceptionDate"
+                          class="exception-date-chip"
+                          type="button"
+                          @click="removeGoalExceptionDate(exceptionDate)"
+                        >
+                          <span>{{ exceptionDate }}</span>
+                          <i class="pi pi-times" />
+                        </button>
+                      </div>
+                    </div>
+                  </template>
 
                   <Button
                     label="Create goal"
@@ -1166,16 +1223,28 @@ onMounted(() => {
                         <strong>Target date</strong>
                         <span>{{ goal.target_date }}</span>
                       </div>
-                      <div
-                        class="history-row"
-                        v-if="goal.target_value_number !== null || goal.target_value_date !== null"
-                      >
+                      <div class="history-row" v-if="goal.target_value_number !== null">
                         <strong>Target value</strong>
                         <span>{{
-                          goal.target_value_number !== null
-                            ? formatNumberValue(goal.target_value_number, goal.metric.decimal_places)
-                            : goal.target_value_date
+                          formatNumberValue(goal.target_value_number, goal.metric.decimal_places)
                         }}</span>
+                      </div>
+                      <div class="history-row" v-if="goal.success_threshold_percent !== null">
+                        <strong>Success threshold</strong>
+                        <span>{{ goal.success_threshold_percent }}%</span>
+                      </div>
+                      <div class="history-row" v-if="goal.current_progress_percent !== null">
+                        <strong>Current progress</strong>
+                        <span>
+                          {{ goal.current_progress_percent }}%
+                          <span v-if="goal.target_met !== null">
+                            ({{ goal.target_met ? "on target" : "below target" }})
+                          </span>
+                        </span>
+                      </div>
+                      <div class="history-row" v-if="goal.exception_dates.length > 0">
+                        <strong>Exception dates</strong>
+                        <span>{{ goal.exception_dates.join(", ") }}</span>
                       </div>
                       <div class="history-row" v-if="goal.metric.latest_entry !== null">
                         <strong>Latest metric</strong>
@@ -2012,6 +2081,40 @@ h1 {
   gap: 0.75rem;
 }
 
+.exception-date-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.exception-date-row .native-file-input {
+  flex: 1 1 auto;
+}
+
+.exception-date-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+}
+
+.exception-date-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: rgba(248, 250, 252, 0.95);
+  color: #334155;
+  cursor: pointer;
+}
+
+.exception-date-chip:hover {
+  border-color: rgba(239, 68, 68, 0.35);
+  color: #b91c1c;
+}
+
 .empty-invitation-state {
   color: #64748b;
 }
@@ -2139,6 +2242,11 @@ h1 {
   .invitation-code-user {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .exception-date-row {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .profile-name {

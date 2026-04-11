@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from uuid import uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -9,6 +9,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.db.models import Dashboard, DashboardWidget, Goal, Metric, MetricEntry, User
+from app.services.goals import (
+    build_goal_date_progress_points,
+    goal_progress_as_of_date,
+    goal_target_met,
+)
 
 WIDGET_TYPE_METRIC_HISTORY = "metric_history"
 WIDGET_TYPE_METRIC_SUMMARY = "metric_summary"
@@ -246,6 +251,9 @@ def list_dashboards_for_user(db: Session, user: User) -> list[Dashboard]:
             .selectinload(Goal.user),
             selectinload(Dashboard.widgets)
             .selectinload(DashboardWidget.goal)
+            .selectinload(Goal.exception_dates),
+            selectinload(Dashboard.widgets)
+            .selectinload(DashboardWidget.goal)
             .selectinload(Goal.metric)
             .selectinload(Metric.entries),
         )
@@ -267,6 +275,9 @@ def get_dashboard_for_user(db: Session, *, user: User, dashboard_id: str) -> Das
             .selectinload(Goal.user),
             selectinload(Dashboard.widgets)
             .selectinload(DashboardWidget.goal)
+            .selectinload(Goal.exception_dates),
+            selectinload(Dashboard.widgets)
+            .selectinload(DashboardWidget.goal)
             .selectinload(Goal.metric)
             .selectinload(Metric.entries),
         )
@@ -286,6 +297,7 @@ def get_dashboard_widget_for_user(
         .options(
             selectinload(DashboardWidget.metric).selectinload(Metric.entries),
             selectinload(DashboardWidget.goal).selectinload(Goal.user),
+            selectinload(DashboardWidget.goal).selectinload(Goal.exception_dates),
             selectinload(DashboardWidget.goal)
             .selectinload(Goal.metric)
             .selectinload(Metric.entries),
@@ -591,13 +603,34 @@ def is_target_met(
 
 @dataclass
 class GoalProgressPoint:
-    entry: MetricEntry
+    recorded_at: datetime
+    number_value: float | int | None
+    date_value: date | None
     progress_percent: float
 
 
 def build_goal_progress_points(
     goal: Goal, *, rolling_window_days: int | None
 ) -> list[GoalProgressPoint]:
+    if goal.metric.metric_type == "date":
+        date_points = build_goal_date_progress_points(goal)
+        if rolling_window_days is not None:
+            window_threshold = utcnow() - timedelta(days=rolling_window_days)
+            date_points = [
+                point
+                for point in date_points
+                if normalize_recorded_at(point.recorded_at) >= window_threshold
+            ]
+        return [
+            GoalProgressPoint(
+                recorded_at=point.recorded_at,
+                number_value=None,
+                date_value=None,
+                progress_percent=point.progress_percent,
+            )
+            for point in date_points
+        ]
+
     target_value = goal_target_numeric_value(goal)
     if target_value is None:
         return []
@@ -616,7 +649,7 @@ def build_goal_progress_points(
 
     user_timezone = get_user_timezone(goal.user)
     start_cutoff = datetime.combine(goal.start_date, time.min, tzinfo=user_timezone).astimezone(UTC)
-    window_threshold = (
+    numeric_window_threshold: datetime | None = (
         utcnow() - timedelta(days=rolling_window_days) if rolling_window_days is not None else None
     )
 
@@ -625,7 +658,7 @@ def build_goal_progress_points(
         recorded_at = normalize_recorded_at(entry.recorded_at)
         if recorded_at < start_cutoff:
             continue
-        if window_threshold is not None and recorded_at < window_threshold:
+        if numeric_window_threshold is not None and recorded_at < numeric_window_threshold:
             continue
 
         current_value = metric_entry_numeric_value(goal.metric, entry)
@@ -634,7 +667,9 @@ def build_goal_progress_points(
 
         points.append(
             GoalProgressPoint(
-                entry=entry,
+                recorded_at=entry.recorded_at,
+                number_value=entry.number_value,
+                date_value=entry.date_value,
                 progress_percent=calculate_progress_percent(
                     baseline_value=baseline_value,
                     target_value=target_value,
@@ -649,6 +684,8 @@ def build_goal_progress_points(
 def get_widget_current_progress_percent(widget: DashboardWidget) -> float | None:
     if widget.goal is None:
         return None
+    if widget.goal.metric.metric_type == "date":
+        return goal_progress_as_of_date(widget.goal)
     points = build_goal_progress_points(
         widget.goal,
         rolling_window_days=widget.rolling_window_days,
@@ -661,6 +698,8 @@ def get_widget_current_progress_percent(widget: DashboardWidget) -> float | None
 def get_widget_target_met(widget: DashboardWidget) -> bool | None:
     if widget.goal is None:
         return None
+    if widget.goal.metric.metric_type == "date":
+        return goal_target_met(widget.goal)
 
     target_value = goal_target_numeric_value(widget.goal)
     if target_value is None:

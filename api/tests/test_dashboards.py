@@ -163,3 +163,64 @@ def test_dashboard_widgets_include_metric_and_goal_series(client: TestClient) ->
     payload = dashboards_response.json()
     assert len(payload["dashboards"]) == 1
     assert len(payload["dashboards"][0]["widgets"]) == 2
+
+
+def test_date_goal_progress_widget_uses_compliance_percent(client: TestClient) -> None:
+    bootstrap_admin(client)
+
+    metric_response = client.post(
+        "/api/v1/metrics",
+        json={
+            "name": "Last drink",
+            "metric_type": "date",
+            "initial_date_value": "2026-04-02",
+            "recorded_at": "2026-04-02T20:00:00Z",
+        },
+    )
+    assert metric_response.status_code == 201
+    metric_id = metric_response.json()["id"]
+
+    second_entry_response = client.post(
+        f"/api/v1/metrics/{metric_id}/entries",
+        json={
+            "date_value": "2026-04-05",
+            "recorded_at": "2026-04-05T20:00:00Z",
+        },
+    )
+    assert second_entry_response.status_code == 200
+
+    goal_response = client.post(
+        "/api/v1/goals",
+        json={
+            "title": "No drinking window",
+            "start_date": "2026-04-01",
+            "target_date": "2026-04-10",
+            "success_threshold_percent": 80,
+            "exception_dates": ["2026-04-03"],
+            "metric_id": metric_id,
+        },
+    )
+    assert goal_response.status_code == 201
+    goal_id = goal_response.json()["id"]
+
+    dashboard_response = client.post("/api/v1/dashboards", json={"name": "Recovery"})
+    assert dashboard_response.status_code == 201
+    dashboard_id = dashboard_response.json()["id"]
+
+    goal_widget_response = client.post(
+        f"/api/v1/dashboards/{dashboard_id}/widgets",
+        json={
+            "title": "Sobriety Progress",
+            "widget_type": "goal_progress",
+            "goal_id": goal_id,
+            "rolling_window_days": 365,
+        },
+    )
+    assert goal_widget_response.status_code == 201
+    goal_widget = goal_widget_response.json()
+    assert goal_widget["current_progress_percent"] == 77.78
+    assert goal_widget["target_met"] is False
+    assert goal_widget["goal"]["success_threshold_percent"] == 80.0
+    assert goal_widget["goal"]["exception_dates"] == ["2026-04-03"]
+    assert goal_widget["series"][0]["progress_percent"] == 100.0
+    assert goal_widget["series"][-1]["progress_percent"] == 77.78

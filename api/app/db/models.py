@@ -228,6 +228,7 @@ class Goal(Base):
     target_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     target_value_number: Mapped[float | None] = mapped_column(Numeric(18, 6), nullable=True)
     target_value_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    success_threshold_percent: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -242,6 +243,33 @@ class Goal(Base):
     user: Mapped[User] = relationship(back_populates="goals")
     metric: Mapped[Metric] = relationship(back_populates="goals")
     widgets: Mapped[list[DashboardWidget]] = relationship(back_populates="goal")
+    exception_dates: Mapped[list[GoalExceptionDate]] = relationship(
+        back_populates="goal",
+        cascade="all, delete-orphan",
+        order_by="GoalExceptionDate.exception_date",
+    )
+
+
+class GoalExceptionDate(Base):
+    __tablename__ = "goal_exception_dates"
+    __table_args__ = (
+        UniqueConstraint(
+            "goal_id",
+            "exception_date",
+            name="uq_goal_exception_dates_goal_date",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    goal_id: Mapped[str] = mapped_column(ForeignKey("goals.id", ondelete="CASCADE"), nullable=False)
+    exception_date: Mapped[date] = mapped_column(Date, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    goal: Mapped[Goal] = relationship(back_populates="exception_dates")
 
 
 class Dashboard(Base):

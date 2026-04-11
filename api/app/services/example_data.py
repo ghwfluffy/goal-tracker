@@ -62,6 +62,14 @@ def end_of_month(value: date) -> date:
     return date(value.year, value.month, monthrange(value.year, value.month)[1])
 
 
+def example_last_drink_exception_dates(today: date) -> list[date]:
+    final_day = end_of_month(today)
+    exception_day = final_day - timedelta(days=2)
+    if exception_day < today:
+        return [final_day]
+    return [exception_day]
+
+
 def utc_datetime(
     value: date,
     *,
@@ -194,6 +202,8 @@ def apply_initial_example_metrics_and_goals(db: Session, *, user: User) -> None:
             target_date=end_of_month(today),
             target_value_number=None,
             target_value_date=None,
+            success_threshold_percent=80,
+            exception_dates=example_last_drink_exception_dates(today),
         )
 
 

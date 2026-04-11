@@ -59,6 +59,8 @@ class GoalReferenceSummary(BaseModel):
     target_date: str | None
     target_value_number: float | None
     target_value_date: str | None
+    success_threshold_percent: float | None
+    exception_dates: list[str]
     metric: MetricReferenceSummary
 
 
@@ -177,6 +179,10 @@ def serialize_goal_reference(goal: Goal) -> GoalReferenceSummary:
         target_value_date=(
             goal.target_value_date.isoformat() if goal.target_value_date is not None else None
         ),
+        success_threshold_percent=decimal_to_float(goal.success_threshold_percent),
+        exception_dates=[
+            exception_date.exception_date.isoformat() for exception_date in goal.exception_dates
+        ],
         metric=serialize_metric_reference(goal.metric),
     )
 
@@ -200,13 +206,9 @@ def serialize_widget_series(widget: DashboardWidget) -> list[WidgetSeriesPoint]:
     if widget.goal is not None:
         return [
             WidgetSeriesPoint(
-                recorded_at=point.entry.recorded_at.isoformat(),
-                number_value=decimal_to_float(point.entry.number_value),
-                date_value=(
-                    point.entry.date_value.isoformat()
-                    if point.entry.date_value is not None
-                    else None
-                ),
+                recorded_at=point.recorded_at.isoformat(),
+                number_value=decimal_to_float(point.number_value),
+                date_value=point.date_value.isoformat() if point.date_value is not None else None,
                 progress_percent=round(point.progress_percent, 2),
             )
             for point in build_goal_progress_points(

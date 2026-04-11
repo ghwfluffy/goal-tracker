@@ -126,14 +126,18 @@ export interface GoalMetricSummary {
 }
 
 export interface GoalSummary {
+  current_progress_percent: number | null;
   description: string | null;
+  exception_dates: string[];
   id: string;
   metric: GoalMetricSummary;
   start_date: string;
   status: string;
+  success_threshold_percent: number | null;
   target_date: string | null;
   target_value_date: string | null;
   target_value_number: number | null;
+  target_met: boolean | null;
   title: string;
 }
 
@@ -145,8 +149,10 @@ export interface InlineMetricPayload extends CreateMetricPayload {}
 
 export interface CreateGoalPayload {
   description: string | null;
+  exception_dates: string[];
   metric_id: string | null;
   new_metric: InlineMetricPayload | null;
+  success_threshold_percent: number | null;
   start_date: string;
   target_date: string | null;
   target_value_date: string | null;
@@ -164,8 +170,10 @@ export interface DashboardMetricReference {
 }
 
 export interface DashboardGoalReference {
+  exception_dates: string[];
   id: string;
   metric: DashboardMetricReference;
+  success_threshold_percent: number | null;
   start_date: string;
   target_date: string | null;
   target_value_date: string | null;

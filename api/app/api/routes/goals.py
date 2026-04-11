@@ -10,7 +10,13 @@ from sqlalchemy.orm import Session
 
 from app.api.routes.auth import get_current_user
 from app.db import Goal, Metric, MetricEntry, User, get_db
-from app.services.goals import GoalError, create_goal, list_goals_for_user
+from app.services.goals import (
+    GoalError,
+    create_goal,
+    goal_progress_as_of_date,
+    goal_target_met,
+    list_goals_for_user,
+)
 from app.services.metrics import (
     MetricError,
     MetricNotFoundError,
@@ -48,6 +54,10 @@ class GoalSummary(BaseModel):
     target_date: str | None
     target_value_number: float | None
     target_value_date: str | None
+    success_threshold_percent: float | None
+    exception_dates: list[str]
+    current_progress_percent: float | None
+    target_met: bool | None
     metric: GoalMetricSummary
 
 
@@ -72,6 +82,8 @@ class CreateGoalRequest(BaseModel):
     target_date: date | None = None
     target_value_number: float | None = None
     target_value_date: date | None = None
+    success_threshold_percent: float | None = Field(default=None, ge=0, le=100)
+    exception_dates: list[date] = Field(default_factory=list)
     metric_id: str | None = None
     new_metric: InlineMetricRequest | None = None
 
@@ -123,6 +135,12 @@ def serialize_goal(goal: Goal) -> GoalSummary:
         target_value_date=(
             goal.target_value_date.isoformat() if goal.target_value_date is not None else None
         ),
+        success_threshold_percent=decimal_to_float(goal.success_threshold_percent),
+        exception_dates=[
+            exception_date.exception_date.isoformat() for exception_date in goal.exception_dates
+        ],
+        current_progress_percent=goal_progress_as_of_date(goal),
+        target_met=goal_target_met(goal),
         metric=serialize_goal_metric(goal.metric),
     )
 
@@ -169,6 +187,8 @@ def post_goal(
             target_date=payload.target_date,
             target_value_number=payload.target_value_number,
             target_value_date=payload.target_value_date,
+            success_threshold_percent=payload.success_threshold_percent,
+            exception_dates=payload.exception_dates,
         )
         db.commit()
     except MetricError as exc:

@@ -426,7 +426,9 @@ describe("auth api helpers", () => {
 
       return new Response(
         JSON.stringify({
+          current_progress_percent: null,
           description: "Cut steadily.",
+          exception_dates: [],
           id: "goal-1",
           metric: {
             decimal_places: 1,
@@ -438,9 +440,11 @@ describe("auth api helpers", () => {
           },
           start_date: "2026-04-11",
           status: "active",
+          success_threshold_percent: null,
           target_date: "2026-06-30",
           target_value_date: null,
           target_value_number: 220.5,
+          target_met: null,
           title: "Reach 220",
         }),
         {
@@ -496,8 +500,10 @@ describe("auth api helpers", () => {
       createGoal(
         {
           description: "Cut steadily.",
+          exception_dates: [],
           metric_id: "metric-1",
           new_metric: null,
+          success_threshold_percent: null,
           start_date: "2026-04-11",
           target_date: "2026-06-30",
           target_value_date: null,

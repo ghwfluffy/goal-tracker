@@ -242,6 +242,8 @@ def test_create_goal_with_inline_metric(client: TestClient) -> None:
             "title": "Stay dry this month",
             "start_date": "2026-04-11",
             "target_date": "2026-04-30",
+            "success_threshold_percent": 80,
+            "exception_dates": ["2026-04-28"],
             "metric_id": None,
             "new_metric": {
                 "name": "Last drink",
@@ -255,10 +257,57 @@ def test_create_goal_with_inline_metric(client: TestClient) -> None:
     payload = goal_response.json()
     assert payload["metric"]["name"] == "Last drink"
     assert payload["metric"]["metric_type"] == "date"
+    assert payload["success_threshold_percent"] == 80.0
+    assert payload["exception_dates"] == ["2026-04-28"]
 
     metrics_response = client.get("/api/v1/metrics")
     assert metrics_response.status_code == 200
     assert len(metrics_response.json()["metrics"]) == 1
+
+
+def test_date_metric_goal_uses_exception_dates_and_success_threshold(client: TestClient) -> None:
+    bootstrap_admin(client)
+
+    metric_response = client.post(
+        "/api/v1/metrics",
+        json={
+            "name": "Last drink",
+            "metric_type": "date",
+            "initial_date_value": "2026-04-02",
+            "recorded_at": "2026-04-02T20:00:00Z",
+        },
+    )
+    assert metric_response.status_code == 201
+    metric_id = metric_response.json()["id"]
+
+    second_entry_response = client.post(
+        f"/api/v1/metrics/{metric_id}/entries",
+        json={
+            "date_value": "2026-04-05",
+            "recorded_at": "2026-04-05T20:00:00Z",
+        },
+    )
+    assert second_entry_response.status_code == 200
+
+    goal_response = client.post(
+        "/api/v1/goals",
+        json={
+            "title": "Stay dry except for one event",
+            "start_date": "2026-04-01",
+            "target_date": "2026-04-10",
+            "success_threshold_percent": 80,
+            "exception_dates": ["2026-04-03"],
+            "metric_id": metric_id,
+        },
+    )
+    assert goal_response.status_code == 201
+    payload = goal_response.json()
+    assert payload["target_value_date"] is None
+    assert payload["target_value_number"] is None
+    assert payload["success_threshold_percent"] == 80.0
+    assert payload["exception_dates"] == ["2026-04-03"]
+    assert payload["current_progress_percent"] == 77.78
+    assert payload["target_met"] is False
 
 
 def test_goals_and_metrics_are_scoped_to_current_user(client: TestClient) -> None:
