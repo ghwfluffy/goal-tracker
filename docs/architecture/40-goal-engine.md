@@ -104,6 +104,12 @@ Expected effects:
 - reminders begin only when the goal is active
 - target-date calculations use the start date as the beginning of the planned goal interval unless a goal pattern defines a different baseline
 
+Time semantics:
+
+- timestamps are stored in UTC
+- frontend timestamp display can use the browser timezone
+- day-boundary interpretation for start dates, daily windows, and similar goal logic should use the saved user profile timezone
+
 ## Progress Evaluation
 
 The system should compute progress differently depending on goal pattern:

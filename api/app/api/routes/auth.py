@@ -33,6 +33,7 @@ class UserSummary(BaseModel):
     id: str
     username: str
     display_name: str | None
+    timezone: str
     is_admin: bool
     is_example_data: bool
     avatar_version: str | None
@@ -77,6 +78,7 @@ def serialize_user_summary(user: User) -> UserSummary:
         id=user.id,
         username=user.username,
         display_name=user.display_name,
+        timezone=user.timezone,
         is_admin=user.is_admin,
         is_example_data=user.is_example_data,
         avatar_version=avatar_version,

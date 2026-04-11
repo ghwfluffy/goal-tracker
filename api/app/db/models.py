@@ -44,6 +44,11 @@ class User(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     username: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
     display_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    timezone: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        default="America/Chicago",
+    )
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     is_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_example_data: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -59,6 +64,15 @@ class User(Base):
     avatar_png: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     avatar_updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+    default_dashboard_id: Mapped[str | None] = mapped_column(
+        ForeignKey(
+            "dashboards.id",
+            name="fk_users_default_dashboard_id",
+            ondelete="SET NULL",
+            use_alter=True,
+        ),
+        nullable=True,
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -83,6 +97,16 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+    dashboards: Mapped[list[Dashboard]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        foreign_keys="Dashboard.user_id",
+    )
+    dashboard_widgets: Mapped[list[DashboardWidget]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        foreign_keys="DashboardWidget.user_id",
+    )
     example_seed_applications: Mapped[list[ExampleSeedApplication]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
@@ -94,6 +118,10 @@ class User(Base):
     created_invitation_codes: Mapped[list[InvitationCode]] = relationship(
         back_populates="created_by_user",
         foreign_keys="InvitationCode.created_by_user_id",
+    )
+    default_dashboard: Mapped[Dashboard | None] = relationship(
+        foreign_keys=[default_dashboard_id],
+        post_update=True,
     )
 
 
@@ -209,6 +237,83 @@ class Goal(Base):
 
     user: Mapped[User] = relationship(back_populates="goals")
     metric: Mapped[Metric] = relationship(back_populates="goals")
+    widgets: Mapped[list[DashboardWidget]] = relationship(back_populates="goal")
+
+
+class Dashboard(Base):
+    __tablename__ = "dashboards"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    user: Mapped[User] = relationship(
+        back_populates="dashboards",
+        foreign_keys=[user_id],
+    )
+    widgets: Mapped[list[DashboardWidget]] = relationship(
+        back_populates="dashboard",
+        cascade="all, delete-orphan",
+        order_by="DashboardWidget.display_order",
+    )
+
+
+class DashboardWidget(Base):
+    __tablename__ = "dashboard_widgets"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    dashboard_id: Mapped[str] = mapped_column(
+        ForeignKey("dashboards.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    metric_id: Mapped[str | None] = mapped_column(
+        ForeignKey("metrics.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    goal_id: Mapped[str | None] = mapped_column(
+        ForeignKey("goals.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    title: Mapped[str] = mapped_column(String(120), nullable=False)
+    widget_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    rolling_window_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    display_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    user: Mapped[User] = relationship(
+        back_populates="dashboard_widgets",
+        foreign_keys=[user_id],
+    )
+    dashboard: Mapped[Dashboard] = relationship(back_populates="widgets")
+    metric: Mapped[Metric | None] = relationship()
+    goal: Mapped[Goal | None] = relationship(back_populates="widgets")
 
 
 class ExampleSeedApplication(Base):

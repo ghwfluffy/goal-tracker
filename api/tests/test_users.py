@@ -20,15 +20,29 @@ def bootstrap_admin(client: TestClient) -> None:
 def test_update_profile_changes_display_name(client: TestClient) -> None:
     bootstrap_admin(client)
 
-    response = client.patch("/api/v1/users/me", json={"display_name": "Taylor"})
+    response = client.patch(
+        "/api/v1/users/me",
+        json={"display_name": "Taylor", "timezone": "America/Los_Angeles"},
+    )
 
     assert response.status_code == 200
     payload = response.json()
     assert payload["display_name"] == "Taylor"
+    assert payload["timezone"] == "America/Los_Angeles"
 
     me_response = client.get("/api/v1/auth/me")
     assert me_response.status_code == 200
     assert me_response.json()["user"]["display_name"] == "Taylor"
+    assert me_response.json()["user"]["timezone"] == "America/Los_Angeles"
+
+
+def test_update_profile_rejects_invalid_timezone(client: TestClient) -> None:
+    bootstrap_admin(client)
+
+    response = client.patch("/api/v1/users/me", json={"timezone": "Mars/Phobos"})
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Timezone must be a valid IANA timezone."
 
 
 def test_upload_avatar_stores_png_and_exposes_it(client: TestClient) -> None:

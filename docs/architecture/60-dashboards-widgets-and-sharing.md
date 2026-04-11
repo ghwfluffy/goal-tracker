@@ -25,6 +25,14 @@ Expected widget dimensions:
 
 This makes widgets reusable across dashboards and easier to render consistently.
 
+Current implemented slice:
+
+- user-owned saved dashboards
+- one default dashboard per user
+- separate dashboard edit mode for adding and updating widgets
+- metric-history, metric-summary, goal-progress, and goal-summary widgets
+- goal-progress series derived from metric history rather than stored separately
+
 Important design direction:
 
 - widgets must support metric-history views that are not tied to an active goal
@@ -55,6 +63,12 @@ Examples:
 - performance-attempt chart such as 2km row times across all attempts
 
 This is useful because metrics can persist longer than any one goal and may remain valuable to view between goal cycles.
+
+Current time semantics:
+
+- metric entry timestamps are stored in UTC
+- frontend timestamp display should use the browser timezone
+- goal and day-boundary interpretation should use the saved user profile timezone
 
 ## Public Sharing
 

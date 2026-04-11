@@ -16,6 +16,7 @@ export interface UserSummary {
   id: string;
   is_admin: boolean;
   is_example_data: boolean;
+  timezone: string;
   username: string;
 }
 
@@ -35,6 +36,7 @@ export interface RegistrationPayload extends CredentialsPayload {
 
 export interface UpdateProfilePayload {
   display_name: string | null;
+  timezone: string | null;
 }
 
 export interface ChangePasswordPayload {
@@ -142,6 +144,81 @@ export interface CreateGoalPayload {
   target_value_date: string | null;
   target_value_integer: number | null;
   title: string;
+}
+
+export interface DashboardMetricReference {
+  id: string;
+  latest_entry: MetricEntrySummary | null;
+  metric_type: "integer" | "date";
+  name: string;
+  unit_label: string | null;
+}
+
+export interface DashboardGoalReference {
+  id: string;
+  metric: DashboardMetricReference;
+  start_date: string;
+  target_date: string | null;
+  target_value_date: string | null;
+  target_value_integer: number | null;
+  title: string;
+}
+
+export interface DashboardWidgetSeriesPoint {
+  date_value: string | null;
+  integer_value: number | null;
+  progress_percent: number | null;
+  recorded_at: string;
+}
+
+export interface DashboardWidgetSummary {
+  current_progress_percent: number | null;
+  display_order: number;
+  goal: DashboardGoalReference | null;
+  id: string;
+  metric: DashboardMetricReference | null;
+  rolling_window_days: number | null;
+  series: DashboardWidgetSeriesPoint[];
+  target_met: boolean | null;
+  title: string;
+  widget_type: "metric_history" | "metric_summary" | "goal_progress" | "goal_summary";
+}
+
+export interface DashboardSummary {
+  description: string | null;
+  id: string;
+  is_default: boolean;
+  name: string;
+  widgets: DashboardWidgetSummary[];
+}
+
+export interface DashboardListResponse {
+  dashboards: DashboardSummary[];
+}
+
+export interface CreateDashboardPayload {
+  description: string | null;
+  make_default: boolean;
+  name: string;
+}
+
+export interface UpdateDashboardPayload {
+  description?: string | null;
+  make_default?: boolean | null;
+  name?: string | null;
+}
+
+export interface CreateDashboardWidgetPayload {
+  goal_id: string | null;
+  metric_id: string | null;
+  rolling_window_days: number | null;
+  title: string;
+  widget_type: "metric_history" | "metric_summary" | "goal_progress" | "goal_summary";
+}
+
+export interface UpdateDashboardWidgetPayload {
+  rolling_window_days?: number | null;
+  title?: string | null;
 }
 
 type Fetcher = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -449,6 +526,97 @@ export function createGoal(
     {
       body: JSON.stringify(payload),
       method: "POST",
+    },
+    fetcher,
+  );
+}
+
+export function fetchDashboards(fetcher: Fetcher = fetch): Promise<DashboardListResponse> {
+  return requestJson<DashboardListResponse>("/dashboards", undefined, fetcher);
+}
+
+export function createDashboard(
+  payload: CreateDashboardPayload,
+  fetcher: Fetcher = fetch,
+): Promise<DashboardSummary> {
+  return requestJson<DashboardSummary>(
+    "/dashboards",
+    {
+      body: JSON.stringify(payload),
+      method: "POST",
+    },
+    fetcher,
+  );
+}
+
+export function updateDashboard(
+  dashboardId: string,
+  payload: UpdateDashboardPayload,
+  fetcher: Fetcher = fetch,
+): Promise<DashboardSummary> {
+  return requestJson<DashboardSummary>(
+    `/dashboards/${dashboardId}`,
+    {
+      body: JSON.stringify(payload),
+      method: "PATCH",
+    },
+    fetcher,
+  );
+}
+
+export function deleteDashboard(
+  dashboardId: string,
+  fetcher: Fetcher = fetch,
+): Promise<void> {
+  return requestNoContent(
+    `/dashboards/${dashboardId}`,
+    {
+      method: "DELETE",
+    },
+    fetcher,
+  );
+}
+
+export function createDashboardWidget(
+  dashboardId: string,
+  payload: CreateDashboardWidgetPayload,
+  fetcher: Fetcher = fetch,
+): Promise<DashboardWidgetSummary> {
+  return requestJson<DashboardWidgetSummary>(
+    `/dashboards/${dashboardId}/widgets`,
+    {
+      body: JSON.stringify(payload),
+      method: "POST",
+    },
+    fetcher,
+  );
+}
+
+export function updateDashboardWidget(
+  dashboardId: string,
+  widgetId: string,
+  payload: UpdateDashboardWidgetPayload,
+  fetcher: Fetcher = fetch,
+): Promise<DashboardWidgetSummary> {
+  return requestJson<DashboardWidgetSummary>(
+    `/dashboards/${dashboardId}/widgets/${widgetId}`,
+    {
+      body: JSON.stringify(payload),
+      method: "PATCH",
+    },
+    fetcher,
+  );
+}
+
+export function deleteDashboardWidget(
+  dashboardId: string,
+  widgetId: string,
+  fetcher: Fetcher = fetch,
+): Promise<void> {
+  return requestNoContent(
+    `/dashboards/${dashboardId}/widgets/${widgetId}`,
+    {
+      method: "DELETE",
     },
     fetcher,
   );

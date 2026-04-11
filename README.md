@@ -49,15 +49,17 @@ What already exists:
 - optional example-data account signup seeded with starter metrics and goals, with revision-based upgrades for existing example accounts
 - reusable metrics with quick integer/date updates
 - goal creation backed by existing or newly created metrics
+- saved dashboards with reusable metric and goal widgets
+- a default dashboard per user, plus an edit mode for arranging widgets
+- browser-local timestamp rendering with profile-configured day-boundary timezone semantics
 - a backend API foundation
 - a landing page that successfully calls the API and renders application status
 - architecture documents covering the long-term product design
 
 What comes next:
 
-- manual update flows
-- dashboard and widget building
 - reminders, forecasts, and richer progress views
+- sharing dashboards and widgets outside the app
 
 ## Why This Project Exists
 

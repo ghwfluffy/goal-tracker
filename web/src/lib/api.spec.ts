@@ -3,18 +3,25 @@ import { describe, expect, it, vi } from "vitest";
 import {
   ApiError,
   addMetricEntry,
+  createDashboard,
+  createDashboardWidget,
   createGoal,
   createInvitationCode,
   createMetric,
+  deleteDashboard,
+  deleteDashboardWidget,
   deleteInvitationCode,
   fetchBootstrapStatus,
   fetchCurrentSession,
+  fetchDashboards,
   fetchGoals,
   fetchInvitationCodes,
   fetchMetrics,
   fetchStatus,
   loginWithPassword,
   registerWithInvitationCode,
+  updateDashboard,
+  updateDashboardWidget,
   updateInvitationCode,
 } from "./api";
 
@@ -94,6 +101,7 @@ describe("auth api helpers", () => {
             id: "user-1",
             is_admin: true,
             is_example_data: false,
+            timezone: "America/Chicago",
             username: "admin",
           },
         }),
@@ -115,6 +123,7 @@ describe("auth api helpers", () => {
         id: "user-1",
         is_admin: true,
         is_example_data: false,
+        timezone: "America/Chicago",
         username: "admin",
       },
     });
@@ -140,6 +149,7 @@ describe("auth api helpers", () => {
             id: "user-2",
             is_admin: false,
             is_example_data: true,
+            timezone: "America/Chicago",
             username: "member",
           },
         }),
@@ -169,6 +179,7 @@ describe("auth api helpers", () => {
         id: "user-2",
         is_admin: false,
         is_example_data: true,
+        timezone: "America/Chicago",
         username: "member",
       },
     });
@@ -498,5 +509,188 @@ describe("auth api helpers", () => {
       id: "goal-1",
       title: "Reach 220",
     });
+  });
+
+  it("supports dashboard helpers", async () => {
+    const fetcher = vi.fn(async (input, init) => {
+      const path = String(input);
+
+      if (path.endsWith("/dashboards") && init?.method === undefined) {
+        return new Response(
+          JSON.stringify({
+            dashboards: [
+              {
+                description: "Default dashboard",
+                id: "dashboard-1",
+                is_default: true,
+                name: "Main",
+                widgets: [],
+              },
+            ],
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      if (path.endsWith("/dashboards") && init?.method === "POST") {
+        return new Response(
+          JSON.stringify({
+            description: null,
+            id: "dashboard-2",
+            is_default: false,
+            name: "Health",
+            widgets: [],
+          }),
+          {
+            status: 201,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      if (path.endsWith("/dashboards/dashboard-1") && init?.method === "PATCH") {
+        return new Response(
+          JSON.stringify({
+            description: "Updated",
+            id: "dashboard-1",
+            is_default: true,
+            name: "Main",
+            widgets: [],
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      if (path.endsWith("/dashboards/dashboard-1/widgets") && init?.method === "POST") {
+        return new Response(
+          JSON.stringify({
+            current_progress_percent: null,
+            display_order: 1,
+            goal: null,
+            id: "widget-1",
+            metric: {
+              id: "metric-1",
+              latest_entry: null,
+              metric_type: "integer",
+              name: "Weight",
+              unit_label: "lbs",
+            },
+            rolling_window_days: 30,
+            series: [],
+            target_met: null,
+            title: "Weight trend",
+            widget_type: "metric_history",
+          }),
+          {
+            status: 201,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      if (path.endsWith("/dashboards/dashboard-1/widgets/widget-1") && init?.method === "PATCH") {
+        return new Response(
+          JSON.stringify({
+            current_progress_percent: null,
+            display_order: 1,
+            goal: null,
+            id: "widget-1",
+            metric: {
+              id: "metric-1",
+              latest_entry: null,
+              metric_type: "integer",
+              name: "Weight",
+              unit_label: "lbs",
+            },
+            rolling_window_days: 90,
+            series: [],
+            target_met: null,
+            title: "Weight trend",
+            widget_type: "metric_history",
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      return new Response(null, { status: 204 });
+    });
+
+    await expect(fetchDashboards(fetcher)).resolves.toEqual({
+      dashboards: [
+        {
+          description: "Default dashboard",
+          id: "dashboard-1",
+          is_default: true,
+          name: "Main",
+          widgets: [],
+        },
+      ],
+    });
+
+    await expect(
+      createDashboard(
+        {
+          description: null,
+          make_default: false,
+          name: "Health",
+        },
+        fetcher,
+      ),
+    ).resolves.toMatchObject({
+      id: "dashboard-2",
+    });
+
+    await expect(
+      updateDashboard(
+        "dashboard-1",
+        {
+          description: "Updated",
+        },
+        fetcher,
+      ),
+    ).resolves.toMatchObject({
+      description: "Updated",
+    });
+
+    await expect(
+      createDashboardWidget(
+        "dashboard-1",
+        {
+          goal_id: null,
+          metric_id: "metric-1",
+          rolling_window_days: 30,
+          title: "Weight trend",
+          widget_type: "metric_history",
+        },
+        fetcher,
+      ),
+    ).resolves.toMatchObject({
+      id: "widget-1",
+    });
+
+    await expect(
+      updateDashboardWidget(
+        "dashboard-1",
+        "widget-1",
+        {
+          rolling_window_days: 90,
+        },
+        fetcher,
+      ),
+    ).resolves.toMatchObject({
+      rolling_window_days: 90,
+    });
+
+    await expect(deleteDashboard("dashboard-1", fetcher)).resolves.toBeUndefined();
+    await expect(deleteDashboardWidget("dashboard-1", "widget-1", fetcher)).resolves.toBeUndefined();
   });
 });

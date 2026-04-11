@@ -6,6 +6,7 @@ import Button from "primevue/button";
 import Card from "primevue/card";
 import Checkbox from "primevue/checkbox";
 import Dialog from "primevue/dialog";
+import Dropdown from "primevue/dropdown";
 import InputText from "primevue/inputtext";
 import Menu from "primevue/menu";
 import Message from "primevue/message";
@@ -15,13 +16,17 @@ import TabPanel from "primevue/tabpanel";
 import TabView from "primevue/tabview";
 import Tag from "primevue/tag";
 
+import DashboardWorkspace from "../components/DashboardWorkspace.vue";
+import { DEFAULT_PROFILE_TIMEZONE, formatDateOnly, formatTimestampInBrowserTimezone } from "../lib/time";
 import { useAuthStore } from "../stores/auth";
+import { useDashboardsStore } from "../stores/dashboards";
 import { useGoalsStore } from "../stores/goals";
 import { useInvitationCodesStore } from "../stores/invitationCodes";
 import { useMetricsStore } from "../stores/metrics";
 import { useStatusStore } from "../stores/status";
 
 const authStore = useAuthStore();
+const dashboardsStore = useDashboardsStore();
 const goalsStore = useGoalsStore();
 const invitationCodesStore = useInvitationCodesStore();
 const metricsStore = useMetricsStore();
@@ -43,6 +48,7 @@ const invitationCodesDialogVisible = ref(false);
 const profileMenu = ref<InstanceType<typeof Menu> | null>(null);
 
 const displayNameInput = ref("");
+const timezoneInput = ref(DEFAULT_PROFILE_TIMEZONE);
 const currentPasswordInput = ref("");
 const newPasswordInput = ref("");
 const deletePasswordInput = ref("");
@@ -78,6 +84,23 @@ const goalNewMetricTypeInput = ref<"integer" | "date">("integer");
 const goalNewMetricUnitLabelInput = ref("");
 const goalNewMetricInitialIntegerValueInput = ref("");
 const goalNewMetricInitialDateValueInput = ref("");
+
+const timezoneOptions = computed(() => {
+  const intlWithSupportedValues = Intl as typeof Intl & {
+    supportedValuesOf?: (key: string) => string[];
+  };
+  const supportedTimezones = intlWithSupportedValues.supportedValuesOf?.("timeZone") ?? [
+    "America/Chicago",
+    "America/Los_Angeles",
+    "America/New_York",
+    "America/Denver",
+    "UTC",
+  ];
+  const currentTimezone = authStore.currentUser?.timezone ?? timezoneInput.value;
+  return Array.from(
+    new Set([currentTimezone, DEFAULT_PROFILE_TIMEZONE, ...supportedTimezones].filter(Boolean)),
+  ).sort((left, right) => left.localeCompare(right));
+});
 
 const lastCheckedLabel = computed(() => {
   if (statusStore.data === null) {
@@ -228,6 +251,7 @@ function resetGoalMessages(): void {
 
 function syncProfileInputs(): void {
   displayNameInput.value = authStore.currentUser?.display_name ?? "";
+  timezoneInput.value = authStore.currentUser?.timezone ?? DEFAULT_PROFILE_TIMEZONE;
 }
 
 function resetPasswordInputs(): void {
@@ -313,7 +337,7 @@ function formatMetricValue(metricType: "integer" | "date", integerValue: number 
     return integerValue === null ? "No value yet" : String(integerValue);
   }
 
-  return dateValue ?? "No value yet";
+  return formatDateOnly(dateValue);
 }
 
 function syncMetricEntryInputs(): void {
@@ -322,7 +346,11 @@ function syncMetricEntryInputs(): void {
 }
 
 async function loadTrackingData(): Promise<void> {
-  await Promise.all([metricsStore.loadMetrics(), goalsStore.loadGoals()]);
+  await Promise.all([
+    dashboardsStore.loadDashboards(),
+    metricsStore.loadMetrics(),
+    goalsStore.loadGoals(),
+  ]);
   if (goalMetricIdInput.value === "" && metricsStore.metrics.length > 0) {
     goalMetricIdInput.value = metricsStore.metrics[0].id;
   }
@@ -387,6 +415,7 @@ async function saveProfile(): Promise<void> {
 
   const updated = await authStore.updateProfile({
     display_name: displayNameInput.value.trim() === "" ? null : displayNameInput.value,
+    timezone: timezoneInput.value.trim() === "" ? null : timezoneInput.value,
   });
 
   if (updated) {
@@ -561,7 +590,7 @@ async function deleteInvitationCodeEntry(invitationCodeId: string): Promise<void
 }
 
 function formatDateTime(value: string): string {
-  return new Date(value).toLocaleString();
+  return formatTimestampInBrowserTimezone(value);
 }
 
 watch(
@@ -576,6 +605,7 @@ watch(
     }
 
     metricsStore.reset();
+    dashboardsStore.reset();
     goalsStore.reset();
   },
   { immediate: true },
@@ -647,60 +677,7 @@ onMounted(() => {
       <section class="tabs-shell">
         <TabView v-model:activeIndex="dashboardTabIndex">
           <TabPanel header="Dashboards">
-            <div class="goals-grid">
-              <div class="panel-card blank-panel">
-                <p class="panel-eyebrow">Dashboards</p>
-                <h2>Blank for now</h2>
-                <p>
-                  This tab is intentionally empty for this slice. The shell and navigation are in
-                  place so saved dashboard widgets can be added next.
-                </p>
-              </div>
-
-              <div class="panel-card">
-                <p class="panel-eyebrow">Application Status</p>
-                <h2>Smoke test still live</h2>
-                <div class="status-stack">
-                  <div class="status-row">
-                    <span class="label">State</span>
-                    <Tag
-                      v-if="statusStore.state === 'ready' && statusStore.data !== null"
-                      :value="statusStore.data.status"
-                      severity="success"
-                    />
-                    <Tag v-else-if="statusStore.state === 'error'" value="error" severity="danger" />
-                    <Tag v-else value="loading" severity="warning" />
-                  </div>
-
-                  <div class="status-row">
-                    <span class="label">Version</span>
-                    <strong>{{ statusStore.data?.version ?? "pending" }}</strong>
-                  </div>
-
-                  <div class="status-row">
-                    <span class="label">Checked</span>
-                    <span>{{ lastCheckedLabel }}</span>
-                  </div>
-
-                  <div v-if="statusStore.state === 'loading'" class="loading">
-                    <ProgressSpinner
-                      strokeWidth="5"
-                      style="width: 2rem; height: 2rem"
-                      animationDuration=".8s"
-                    />
-                    <span>Refreshing API status.</span>
-                  </div>
-
-                  <Message
-                    v-if="statusStore.state === 'error'"
-                    severity="error"
-                    :closable="false"
-                  >
-                    {{ statusStore.errorMessage }}
-                  </Message>
-                </div>
-              </div>
-            </div>
+            <DashboardWorkspace />
           </TabPanel>
           <TabPanel header="Metrics">
             <div class="tracking-grid">
@@ -1085,6 +1062,22 @@ onMounted(() => {
               <span class="label">Display name</span>
               <InputText v-model="displayNameInput" />
             </label>
+
+            <label class="field">
+              <span class="label">Day boundary timezone</span>
+              <Dropdown
+                v-model="timezoneInput"
+                :options="timezoneOptions"
+                class="full-width-dropdown"
+                filter
+                placeholder="Select timezone"
+              />
+            </label>
+
+            <p class="dialog-copy">
+              Timestamps render in your browser timezone. This profile timezone controls how the
+              app should interpret day boundaries for tracking logic.
+            </p>
 
             <label class="field">
               <span class="label">Avatar image</span>
@@ -1830,12 +1823,14 @@ h1 {
 }
 
 .auth-card :deep(.full-width-input),
-.profile-dialog :deep(.full-width-input) {
+.profile-dialog :deep(.full-width-input),
+.profile-dialog :deep(.full-width-dropdown) {
   width: 100%;
 }
 
 .auth-card :deep(.p-password),
-.profile-dialog :deep(.p-password) {
+.profile-dialog :deep(.p-password),
+.profile-dialog :deep(.p-dropdown) {
   width: 100%;
 }
 

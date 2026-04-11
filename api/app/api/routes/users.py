@@ -26,6 +26,7 @@ class UserProfileResponse(BaseModel):
     id: str
     username: str
     display_name: str | None
+    timezone: str
     is_admin: bool
     is_example_data: bool
     avatar_version: str | None
@@ -33,6 +34,7 @@ class UserProfileResponse(BaseModel):
 
 class UpdateProfileRequest(BaseModel):
     display_name: str | None = Field(default=None, max_length=100)
+    timezone: str | None = Field(default=None, max_length=100)
 
 
 class ChangePasswordRequest(BaseModel):
@@ -52,6 +54,7 @@ def serialize_user_profile(user: User) -> UserProfileResponse:
         id=user.id,
         username=user.username,
         display_name=user.display_name,
+        timezone=user.timezone,
         is_admin=user.is_admin,
         is_example_data=user.is_example_data,
         avatar_version=avatar_version,
@@ -64,8 +67,20 @@ def patch_current_user_profile(
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> UserProfileResponse:
-    updated_user = update_profile(db, user=user, display_name=payload.display_name)
-    db.commit()
+    try:
+        updated_user = update_profile(
+            db,
+            user=user,
+            display_name=payload.display_name,
+            timezone=payload.timezone,
+        )
+        db.commit()
+    except ProfileError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
+        ) from exc
+
     return serialize_user_profile(updated_user)
 
 

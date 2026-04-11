@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from io import BytesIO
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from PIL import Image, UnidentifiedImageError
 from sqlalchemy.orm import Session
@@ -28,8 +29,32 @@ def normalize_display_name(display_name: str | None) -> str | None:
     return normalized or None
 
 
-def update_profile(db: Session, *, user: User, display_name: str | None) -> User:
+def normalize_timezone(timezone: str | None) -> str:
+    if timezone is None:
+        return "America/Chicago"
+
+    normalized = timezone.strip()
+    if normalized == "":
+        raise ProfileError("Timezone is required.")
+
+    try:
+        ZoneInfo(normalized)
+    except ZoneInfoNotFoundError as exc:
+        raise ProfileError("Timezone must be a valid IANA timezone.") from exc
+
+    return normalized
+
+
+def update_profile(
+    db: Session,
+    *,
+    user: User,
+    display_name: str | None,
+    timezone: str | None,
+) -> User:
     user.display_name = normalize_display_name(display_name)
+    if timezone is not None:
+        user.timezone = normalize_timezone(timezone)
     user.updated_at = utcnow()
     db.flush()
     return user
