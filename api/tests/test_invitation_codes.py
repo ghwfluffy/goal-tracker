@@ -71,7 +71,7 @@ def test_admin_can_crud_invitation_codes_and_registration_tracks_created_users(
     assert delete_response.status_code == 204
 
     with TestClient(client.app) as second_signup_client:
-        revoked_response = second_signup_client.post(
+        deleted_response = second_signup_client.post(
             "/api/v1/auth/register",
             json={
                 "username": "blocked-user",
@@ -81,8 +81,12 @@ def test_admin_can_crud_invitation_codes_and_registration_tracks_created_users(
             },
         )
 
-    assert revoked_response.status_code == 422
-    assert revoked_response.json()["detail"] == "Invitation code is no longer active."
+    assert deleted_response.status_code == 422
+    assert deleted_response.json()["detail"] == "Invitation code is invalid."
+
+    list_after_delete_response = client.get("/api/v1/invitation-codes")
+    assert list_after_delete_response.status_code == 200
+    assert list_after_delete_response.json() == {"invitation_codes": []}
 
 
 def test_non_admin_cannot_manage_invitation_codes(client: TestClient) -> None:

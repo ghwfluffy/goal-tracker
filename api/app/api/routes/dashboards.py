@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Annotated, Literal, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -31,14 +32,14 @@ from app.services.metrics import MetricNotFoundError, get_metric_for_user
 
 router = APIRouter(prefix="/dashboards")
 
-MetricType = Literal["integer", "date"]
+MetricType = Literal["number", "date"]
 WidgetType = Literal["metric_history", "metric_summary", "goal_progress", "goal_summary"]
 
 
 class MetricEntrySummary(BaseModel):
     id: str
     recorded_at: str
-    integer_value: int | None
+    number_value: float | None
     date_value: str | None
 
 
@@ -46,6 +47,7 @@ class MetricReferenceSummary(BaseModel):
     id: str
     name: str
     metric_type: MetricType
+    decimal_places: int | None
     unit_label: str | None
     latest_entry: MetricEntrySummary | None
 
@@ -55,14 +57,14 @@ class GoalReferenceSummary(BaseModel):
     title: str
     start_date: str
     target_date: str | None
-    target_value_integer: int | None
+    target_value_number: float | None
     target_value_date: str | None
     metric: MetricReferenceSummary
 
 
 class WidgetSeriesPoint(BaseModel):
     recorded_at: str
-    integer_value: int | None
+    number_value: float | None
     date_value: str | None
     progress_percent: float | None
 
@@ -126,11 +128,17 @@ class UpdateWidgetRequest(BaseModel):
     rolling_window_days: int | None = Field(default=None, ge=1, le=3650)
 
 
+def decimal_to_float(value: Decimal | float | None) -> float | None:
+    if value is None:
+        return None
+    return float(value)
+
+
 def serialize_metric_entry(entry: MetricEntry) -> MetricEntrySummary:
     return MetricEntrySummary(
         id=entry.id,
         recorded_at=entry.recorded_at.isoformat(),
-        integer_value=entry.integer_value,
+        number_value=decimal_to_float(entry.number_value),
         date_value=entry.date_value.isoformat() if entry.date_value is not None else None,
     )
 
@@ -141,6 +149,7 @@ def serialize_metric_reference(metric: Metric) -> MetricReferenceSummary:
         id=metric.id,
         name=metric.name,
         metric_type=cast(MetricType, metric.metric_type),
+        decimal_places=metric.decimal_places,
         unit_label=metric.unit_label,
         latest_entry=serialize_metric_entry(latest_entry) if latest_entry is not None else None,
     )
@@ -152,7 +161,7 @@ def serialize_goal_reference(goal: Goal) -> GoalReferenceSummary:
         title=goal.title,
         start_date=goal.start_date.isoformat(),
         target_date=goal.target_date.isoformat() if goal.target_date is not None else None,
-        target_value_integer=goal.target_value_integer,
+        target_value_number=decimal_to_float(goal.target_value_number),
         target_value_date=(
             goal.target_value_date.isoformat() if goal.target_value_date is not None else None
         ),
@@ -169,7 +178,7 @@ def serialize_widget_series(widget: DashboardWidget) -> list[WidgetSeriesPoint]:
         return [
             WidgetSeriesPoint(
                 recorded_at=entry.recorded_at.isoformat(),
-                integer_value=entry.integer_value,
+                number_value=decimal_to_float(entry.number_value),
                 date_value=entry.date_value.isoformat() if entry.date_value is not None else None,
                 progress_percent=None,
             )
@@ -180,7 +189,7 @@ def serialize_widget_series(widget: DashboardWidget) -> list[WidgetSeriesPoint]:
         return [
             WidgetSeriesPoint(
                 recorded_at=point.entry.recorded_at.isoformat(),
-                integer_value=point.entry.integer_value,
+                number_value=decimal_to_float(point.entry.number_value),
                 date_value=(
                     point.entry.date_value.isoformat()
                     if point.entry.date_value is not None

@@ -11,33 +11,35 @@ def bootstrap_admin(client: TestClient) -> None:
     assert response.status_code == 201
 
 
-def test_create_and_update_integer_metric(client: TestClient) -> None:
+def test_create_and_update_number_metric(client: TestClient) -> None:
     bootstrap_admin(client)
 
     create_response = client.post(
         "/api/v1/metrics",
         json={
             "name": "Weight",
-            "metric_type": "integer",
+            "metric_type": "number",
+            "decimal_places": 1,
             "unit_label": "lbs",
-            "initial_integer_value": 245,
+            "initial_number_value": 245.5,
         },
     )
 
     assert create_response.status_code == 201
     payload = create_response.json()
     assert payload["name"] == "Weight"
-    assert payload["metric_type"] == "integer"
-    assert payload["latest_entry"]["integer_value"] == 245
+    assert payload["metric_type"] == "number"
+    assert payload["decimal_places"] == 1
+    assert payload["latest_entry"]["number_value"] == 245.5
 
     update_response = client.post(
         f"/api/v1/metrics/{payload['id']}/entries",
-        json={"integer_value": 242},
+        json={"number_value": 242.3},
     )
 
     assert update_response.status_code == 200
     updated_payload = update_response.json()
-    assert updated_payload["latest_entry"]["integer_value"] == 242
+    assert updated_payload["latest_entry"]["number_value"] == 242.3
     assert len(updated_payload["entries"]) == 2
 
 
@@ -59,6 +61,61 @@ def test_create_date_metric(client: TestClient) -> None:
     assert payload["latest_entry"]["date_value"] == "2026-04-10"
 
 
+def test_archived_metrics_are_hidden_by_default_and_can_be_included(client: TestClient) -> None:
+    bootstrap_admin(client)
+
+    create_response = client.post(
+        "/api/v1/metrics",
+        json={
+            "name": "Weight",
+            "metric_type": "number",
+            "decimal_places": 1,
+            "initial_number_value": 245.5,
+        },
+    )
+    assert create_response.status_code == 201
+    metric_id = create_response.json()["id"]
+
+    archive_response = client.patch(f"/api/v1/metrics/{metric_id}", json={"archived": True})
+    assert archive_response.status_code == 200
+    assert archive_response.json()["is_archived"] is True
+
+    default_list_response = client.get("/api/v1/metrics")
+    assert default_list_response.status_code == 200
+    assert default_list_response.json() == {"metrics": []}
+
+    archived_list_response = client.get("/api/v1/metrics?include_archived=true")
+    assert archived_list_response.status_code == 200
+    assert len(archived_list_response.json()["metrics"]) == 1
+    assert archived_list_response.json()["metrics"][0]["is_archived"] is True
+
+
+def test_archived_metrics_cannot_be_updated(client: TestClient) -> None:
+    bootstrap_admin(client)
+
+    create_response = client.post(
+        "/api/v1/metrics",
+        json={
+            "name": "Weight",
+            "metric_type": "number",
+            "decimal_places": 1,
+            "initial_number_value": 245.5,
+        },
+    )
+    assert create_response.status_code == 201
+    metric_id = create_response.json()["id"]
+
+    archive_response = client.patch(f"/api/v1/metrics/{metric_id}", json={"archived": True})
+    assert archive_response.status_code == 200
+
+    update_response = client.post(
+        f"/api/v1/metrics/{metric_id}/entries",
+        json={"number_value": 244.0},
+    )
+    assert update_response.status_code == 422
+    assert update_response.json()["detail"] == "Archived metrics cannot be updated."
+
+
 def test_create_goal_with_existing_metric(client: TestClient) -> None:
     bootstrap_admin(client)
 
@@ -66,8 +123,9 @@ def test_create_goal_with_existing_metric(client: TestClient) -> None:
         "/api/v1/metrics",
         json={
             "name": "Weight",
-            "metric_type": "integer",
-            "initial_integer_value": 245,
+            "metric_type": "number",
+            "decimal_places": 1,
+            "initial_number_value": 245.5,
         },
     )
     assert metric_response.status_code == 201
@@ -79,7 +137,7 @@ def test_create_goal_with_existing_metric(client: TestClient) -> None:
             "description": "Cut steadily over spring.",
             "start_date": "2026-04-11",
             "target_date": "2026-06-30",
-            "target_value_integer": 220,
+            "target_value_number": 220.0,
             "metric_id": metric_response.json()["id"],
         },
     )
@@ -88,7 +146,91 @@ def test_create_goal_with_existing_metric(client: TestClient) -> None:
     payload = goal_response.json()
     assert payload["title"] == "Reach 220"
     assert payload["metric"]["name"] == "Weight"
-    assert payload["target_value_integer"] == 220
+    assert payload["target_value_number"] == 220.0
+
+
+def test_metric_delete_requires_no_goal_or_widget_dependencies(client: TestClient) -> None:
+    bootstrap_admin(client)
+
+    standalone_metric_response = client.post(
+        "/api/v1/metrics",
+        json={
+            "name": "Standalone",
+            "metric_type": "number",
+            "decimal_places": 0,
+            "initial_number_value": 10,
+        },
+    )
+    assert standalone_metric_response.status_code == 201
+
+    delete_standalone_response = client.delete(
+        f"/api/v1/metrics/{standalone_metric_response.json()['id']}"
+    )
+    assert delete_standalone_response.status_code == 204
+
+    goal_metric_response = client.post(
+        "/api/v1/metrics",
+        json={
+            "name": "Weight",
+            "metric_type": "number",
+            "decimal_places": 1,
+            "initial_number_value": 245.5,
+        },
+    )
+    assert goal_metric_response.status_code == 201
+
+    goal_response = client.post(
+        "/api/v1/goals",
+        json={
+            "title": "Reach 220",
+            "start_date": "2026-04-11",
+            "target_value_number": 220.0,
+            "metric_id": goal_metric_response.json()["id"],
+        },
+    )
+    assert goal_response.status_code == 201
+
+    delete_goal_metric_response = client.delete(
+        f"/api/v1/metrics/{goal_metric_response.json()['id']}"
+    )
+    assert delete_goal_metric_response.status_code == 422
+    assert (
+        delete_goal_metric_response.json()["detail"] == "Metrics linked to goals cannot be deleted."
+    )
+
+    widget_metric_response = client.post(
+        "/api/v1/metrics",
+        json={
+            "name": "Steps",
+            "metric_type": "number",
+            "decimal_places": 0,
+            "initial_number_value": 1000,
+        },
+    )
+    assert widget_metric_response.status_code == 201
+
+    dashboard_response = client.post("/api/v1/dashboards", json={"name": "Main"})
+    assert dashboard_response.status_code == 201
+
+    widget_response = client.post(
+        f"/api/v1/dashboards/{dashboard_response.json()['id']}/widgets",
+        json={
+            "title": "Steps history",
+            "widget_type": "metric_history",
+            "metric_id": widget_metric_response.json()["id"],
+            "rolling_window_days": 30,
+        },
+    )
+    assert widget_response.status_code == 201
+
+    delete_widget_metric_response = client.delete(
+        f"/api/v1/metrics/{widget_metric_response.json()['id']}"
+    )
+    assert delete_widget_metric_response.status_code == 422
+    assert (
+        delete_widget_metric_response.json()["detail"]
+        == "Metrics linked to dashboard widgets cannot be deleted."
+    )
 
 
 def test_create_goal_with_inline_metric(client: TestClient) -> None:

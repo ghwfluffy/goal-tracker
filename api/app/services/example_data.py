@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import ExampleSeedApplication, Goal, Metric, User
 from app.services.goals import create_goal
-from app.services.metrics import METRIC_TYPE_DATE, METRIC_TYPE_INTEGER, create_metric
+from app.services.metrics import METRIC_TYPE_DATE, METRIC_TYPE_NUMBER, create_metric
 
 EXAMPLE_SEED_REVISION_INITIAL_GOALS = "2026-04-11-initial-example-metrics-goals"
 
@@ -73,9 +73,10 @@ def apply_initial_example_metrics_and_goals(db: Session, *, user: User) -> None:
             db,
             user=user,
             name=EXAMPLE_WEIGHT_METRIC_NAME,
-            metric_type=METRIC_TYPE_INTEGER,
+            metric_type=METRIC_TYPE_NUMBER,
+            decimal_places=1,
             unit_label="lbs",
-            initial_integer_value=245,
+            initial_number_value=245,
         )
 
     if not goal_exists_for_user(db, user=user, title=EXAMPLE_WEIGHT_GOAL_TITLE):
@@ -87,7 +88,7 @@ def apply_initial_example_metrics_and_goals(db: Session, *, user: User) -> None:
             description="Example seeded goal tied to the example weight metric.",
             start_date=today,
             target_date=example_goal_target_date(today),
-            target_value_integer=220,
+            target_value_number=220,
             target_value_date=None,
         )
 
@@ -115,7 +116,7 @@ def apply_initial_example_metrics_and_goals(db: Session, *, user: User) -> None:
             description="Example seeded goal tied to the example last-drink metric.",
             start_date=today,
             target_date=end_of_month(today),
-            target_value_integer=None,
+            target_value_number=None,
             target_value_date=None,
         )
 

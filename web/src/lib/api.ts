@@ -62,7 +62,6 @@ export interface InvitationCodeSummary {
   created_by_username: string | null;
   expires_at: string;
   id: string;
-  revoked_at: string | null;
   users_created: InvitationCodeUserSummary[];
 }
 
@@ -77,15 +76,18 @@ export interface InvitationCodePayload {
 export interface MetricEntrySummary {
   date_value: string | null;
   id: string;
-  integer_value: number | null;
+  number_value: number | null;
   recorded_at: string;
 }
 
 export interface MetricSummary {
+  archived_at: string | null;
+  decimal_places: number | null;
   entries: MetricEntrySummary[];
   id: string;
+  is_archived: boolean;
   latest_entry: MetricEntrySummary | null;
-  metric_type: "integer" | "date";
+  metric_type: "number" | "date";
   name: string;
   unit_label: string | null;
 }
@@ -95,9 +97,10 @@ export interface MetricListResponse {
 }
 
 export interface CreateMetricPayload {
+  decimal_places: number | null;
   initial_date_value: string | null;
-  initial_integer_value: number | null;
-  metric_type: "integer" | "date";
+  initial_number_value: number | null;
+  metric_type: "number" | "date";
   name: string;
   recorded_at?: string | null;
   unit_label: string | null;
@@ -105,14 +108,19 @@ export interface CreateMetricPayload {
 
 export interface CreateMetricEntryPayload {
   date_value: string | null;
-  integer_value: number | null;
+  number_value: number | null;
   recorded_at?: string | null;
 }
 
+export interface UpdateMetricPayload {
+  archived: boolean;
+}
+
 export interface GoalMetricSummary {
+  decimal_places: number | null;
   id: string;
   latest_entry: MetricEntrySummary | null;
-  metric_type: "integer" | "date";
+  metric_type: "number" | "date";
   name: string;
   unit_label: string | null;
 }
@@ -125,7 +133,7 @@ export interface GoalSummary {
   status: string;
   target_date: string | null;
   target_value_date: string | null;
-  target_value_integer: number | null;
+  target_value_number: number | null;
   title: string;
 }
 
@@ -142,14 +150,15 @@ export interface CreateGoalPayload {
   start_date: string;
   target_date: string | null;
   target_value_date: string | null;
-  target_value_integer: number | null;
+  target_value_number: number | null;
   title: string;
 }
 
 export interface DashboardMetricReference {
+  decimal_places: number | null;
   id: string;
   latest_entry: MetricEntrySummary | null;
-  metric_type: "integer" | "date";
+  metric_type: "number" | "date";
   name: string;
   unit_label: string | null;
 }
@@ -160,13 +169,13 @@ export interface DashboardGoalReference {
   start_date: string;
   target_date: string | null;
   target_value_date: string | null;
-  target_value_integer: number | null;
+  target_value_number: number | null;
   title: string;
 }
 
 export interface DashboardWidgetSeriesPoint {
   date_value: string | null;
-  integer_value: number | null;
+  number_value: number | null;
   progress_percent: number | null;
   recorded_at: string;
 }
@@ -480,8 +489,16 @@ export function deleteInvitationCode(
   );
 }
 
-export function fetchMetrics(fetcher: Fetcher = fetch): Promise<MetricListResponse> {
-  return requestJson<MetricListResponse>("/metrics", undefined, fetcher);
+export function fetchMetrics(
+  includeArchivedOrFetcher: boolean | Fetcher = false,
+  fetcher: Fetcher = fetch,
+): Promise<MetricListResponse> {
+  const includeArchived =
+    typeof includeArchivedOrFetcher === "boolean" ? includeArchivedOrFetcher : false;
+  const resolvedFetcher =
+    typeof includeArchivedOrFetcher === "function" ? includeArchivedOrFetcher : fetcher;
+  const suffix = includeArchived ? "?include_archived=true" : "";
+  return requestJson<MetricListResponse>(`/metrics${suffix}`, undefined, resolvedFetcher);
 }
 
 export function createMetric(
@@ -508,6 +525,31 @@ export function addMetricEntry(
     {
       body: JSON.stringify(payload),
       method: "POST",
+    },
+    fetcher,
+  );
+}
+
+export function updateMetric(
+  metricId: string,
+  payload: UpdateMetricPayload,
+  fetcher: Fetcher = fetch,
+): Promise<MetricSummary> {
+  return requestJson<MetricSummary>(
+    `/metrics/${metricId}`,
+    {
+      body: JSON.stringify(payload),
+      method: "PATCH",
+    },
+    fetcher,
+  );
+}
+
+export function deleteMetric(metricId: string, fetcher: Fetcher = fetch): Promise<void> {
+  return requestNoContent(
+    `/metrics/${metricId}`,
+    {
+      method: "DELETE",
     },
     fetcher,
   );

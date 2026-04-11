@@ -9,6 +9,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     LargeBinary,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -164,7 +165,9 @@ class Metric(Base):
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     metric_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    decimal_places: Mapped[int | None] = mapped_column(Integer, nullable=True)
     unit_label: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -183,6 +186,7 @@ class Metric(Base):
         order_by="desc(MetricEntry.recorded_at)",
     )
     goals: Mapped[list[Goal]] = relationship(back_populates="metric")
+    widgets: Mapped[list[DashboardWidget]] = relationship(back_populates="metric")
 
 
 class MetricEntry(Base):
@@ -194,7 +198,7 @@ class MetricEntry(Base):
         nullable=False,
     )
     recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    integer_value: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    number_value: Mapped[float | None] = mapped_column(Numeric(18, 6), nullable=True)
     date_value: Mapped[date | None] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -222,7 +226,7 @@ class Goal(Base):
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
     target_date: Mapped[date | None] = mapped_column(Date, nullable=True)
-    target_value_integer: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    target_value_number: Mapped[float | None] = mapped_column(Numeric(18, 6), nullable=True)
     target_value_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -312,7 +316,7 @@ class DashboardWidget(Base):
         foreign_keys=[user_id],
     )
     dashboard: Mapped[Dashboard] = relationship(back_populates="widgets")
-    metric: Mapped[Metric | None] = relationship()
+    metric: Mapped[Metric | None] = relationship(back_populates="widgets")
     goal: Mapped[Goal | None] = relationship(back_populates="widgets")
 
 

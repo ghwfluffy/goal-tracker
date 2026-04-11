@@ -47,7 +47,8 @@ What already exists:
 - a signed-in app shell with session restoration
 - admin-managed invitation codes for creating additional accounts
 - optional example-data account signup seeded with starter metrics and goals, with revision-based upgrades for existing example accounts
-- reusable metrics with quick integer/date updates
+- reusable metrics with quick number/date updates
+- metric archiving, with archived metrics hidden by default
 - goal creation backed by existing or newly created metrics
 - saved dashboards with reusable metric and goal widgets
 - a default dashboard per user, plus an edit mode for arranging widgets

@@ -49,9 +49,10 @@ def test_dashboard_widgets_include_metric_and_goal_series(client: TestClient) ->
         "/api/v1/metrics",
         json={
             "name": "Weight",
-            "metric_type": "integer",
+            "metric_type": "number",
+            "decimal_places": 1,
             "unit_label": "lbs",
-            "initial_integer_value": 250,
+            "initial_number_value": 250.0,
             "recorded_at": "2026-04-01T12:00:00Z",
         },
     )
@@ -61,7 +62,7 @@ def test_dashboard_widgets_include_metric_and_goal_series(client: TestClient) ->
     update_response = client.post(
         f"/api/v1/metrics/{metric_id}/entries",
         json={
-            "integer_value": 238,
+            "number_value": 238.0,
             "recorded_at": "2026-04-05T12:00:00Z",
         },
     )
@@ -73,7 +74,7 @@ def test_dashboard_widgets_include_metric_and_goal_series(client: TestClient) ->
             "title": "Reach 220",
             "start_date": "2026-04-01",
             "target_date": "2026-06-01",
-            "target_value_integer": 220,
+            "target_value_number": 220.0,
             "metric_id": metric_id,
         },
     )
@@ -99,7 +100,7 @@ def test_dashboard_widgets_include_metric_and_goal_series(client: TestClient) ->
     assert metric_widget_response.status_code == 201
     metric_widget = metric_widget_response.json()
     assert metric_widget["metric"]["name"] == "Weight"
-    assert [point["integer_value"] for point in metric_widget["series"]] == [250, 238]
+    assert [point["number_value"] for point in metric_widget["series"]] == [250.0, 238.0]
 
     goal_widget_response = client.post(
         f"/api/v1/dashboards/{dashboard_id}/widgets",

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+from decimal import ROUND_HALF_UP, Decimal
 from uuid import uuid4
 
 from sqlalchemy import select
@@ -36,7 +37,7 @@ def create_goal(
     description: str | None,
     start_date: date,
     target_date: date | None,
-    target_value_integer: int | None,
+    target_value_number: float | None,
     target_value_date: date | None,
 ) -> Goal:
     normalized_title = title.strip()
@@ -47,12 +48,21 @@ def create_goal(
     if target_date is not None and target_date < start_date:
         raise GoalError("Target date cannot be earlier than the start date.")
 
-    if metric.metric_type == "integer":
+    if metric.metric_type == "number":
         if target_value_date is not None:
-            raise GoalError("Integer metrics cannot use a date target value.")
+            raise GoalError("Number metrics cannot use a date target value.")
     elif metric.metric_type == "date":
-        if target_value_integer is not None:
-            raise GoalError("Date metrics cannot use an integer target value.")
+        if target_value_number is not None:
+            raise GoalError("Date metrics cannot use a numeric target value.")
+
+    normalized_target_number: Decimal | None = None
+    if metric.metric_type == "number" and target_value_number is not None:
+        decimal_places = metric.decimal_places or 0
+        quantizer = Decimal("1").scaleb(-decimal_places)
+        normalized_target_number = Decimal(str(target_value_number)).quantize(
+            quantizer,
+            rounding=ROUND_HALF_UP,
+        )
 
     goal = Goal(
         id=str(uuid4()),
@@ -64,7 +74,7 @@ def create_goal(
         ),
         start_date=start_date,
         target_date=target_date,
-        target_value_integer=target_value_integer,
+        target_value_number=normalized_target_number,
         target_value_date=target_value_date,
     )
     db.add(goal)

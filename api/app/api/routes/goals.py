@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Annotated, Literal, cast
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -19,13 +20,13 @@ from app.services.metrics import (
 
 router = APIRouter(prefix="/goals")
 
-MetricType = Literal["integer", "date"]
+MetricType = Literal["number", "date"]
 
 
 class GoalMetricEntrySummary(BaseModel):
     id: str
     recorded_at: str
-    integer_value: int | None
+    number_value: float | None
     date_value: str | None
 
 
@@ -33,6 +34,7 @@ class GoalMetricSummary(BaseModel):
     id: str
     name: str
     metric_type: MetricType
+    decimal_places: int | None
     unit_label: str | None
     latest_entry: GoalMetricEntrySummary | None
 
@@ -44,7 +46,7 @@ class GoalSummary(BaseModel):
     status: str
     start_date: str
     target_date: str | None
-    target_value_integer: int | None
+    target_value_number: float | None
     target_value_date: str | None
     metric: GoalMetricSummary
 
@@ -56,8 +58,9 @@ class GoalListResponse(BaseModel):
 class InlineMetricRequest(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     metric_type: MetricType
+    decimal_places: int | None = Field(default=None, ge=0, le=6)
     unit_label: str | None = Field(default=None, max_length=40)
-    initial_integer_value: int | None = None
+    initial_number_value: float | None = None
     initial_date_value: date | None = None
     recorded_at: datetime | None = None
 
@@ -67,7 +70,7 @@ class CreateGoalRequest(BaseModel):
     description: str | None = None
     start_date: date
     target_date: date | None = None
-    target_value_integer: int | None = None
+    target_value_number: float | None = None
     target_value_date: date | None = None
     metric_id: str | None = None
     new_metric: InlineMetricRequest | None = None
@@ -81,11 +84,17 @@ class CreateGoalRequest(BaseModel):
         return self
 
 
+def decimal_to_float(value: Decimal | float | None) -> float | None:
+    if value is None:
+        return None
+    return float(value)
+
+
 def serialize_metric_entry(entry: MetricEntry) -> GoalMetricEntrySummary:
     return GoalMetricEntrySummary(
         id=entry.id,
         recorded_at=entry.recorded_at.isoformat(),
-        integer_value=entry.integer_value,
+        number_value=decimal_to_float(entry.number_value),
         date_value=entry.date_value.isoformat() if entry.date_value is not None else None,
     )
 
@@ -96,6 +105,7 @@ def serialize_goal_metric(metric: Metric) -> GoalMetricSummary:
         id=metric.id,
         name=metric.name,
         metric_type=cast(MetricType, metric.metric_type),
+        decimal_places=metric.decimal_places,
         unit_label=metric.unit_label,
         latest_entry=serialize_metric_entry(latest_entry) if latest_entry is not None else None,
     )
@@ -109,7 +119,7 @@ def serialize_goal(goal: Goal) -> GoalSummary:
         status=goal.status,
         start_date=goal.start_date.isoformat(),
         target_date=goal.target_date.isoformat() if goal.target_date is not None else None,
-        target_value_integer=goal.target_value_integer,
+        target_value_number=decimal_to_float(goal.target_value_number),
         target_value_date=(
             goal.target_value_date.isoformat() if goal.target_value_date is not None else None
         ),
@@ -140,8 +150,9 @@ def post_goal(
                 user=user,
                 name=payload.new_metric.name,
                 metric_type=payload.new_metric.metric_type,
+                decimal_places=payload.new_metric.decimal_places,
                 unit_label=payload.new_metric.unit_label,
-                initial_integer_value=payload.new_metric.initial_integer_value,
+                initial_number_value=payload.new_metric.initial_number_value,
                 initial_date_value=payload.new_metric.initial_date_value,
                 recorded_at=payload.new_metric.recorded_at,
             )
@@ -156,7 +167,7 @@ def post_goal(
             description=payload.description,
             start_date=payload.start_date,
             target_date=payload.target_date,
-            target_value_integer=payload.target_value_integer,
+            target_value_number=payload.target_value_number,
             target_value_date=payload.target_value_date,
         )
         db.commit()

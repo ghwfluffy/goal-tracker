@@ -117,7 +117,7 @@ def ensure_active_invitation_code(
 
     now = utcnow()
     expires_at = normalize_utc_datetime(invitation_code.expires_at)
-    if invitation_code.revoked_at is not None or expires_at <= now:
+    if expires_at <= now:
         raise RegistrationError("Invitation code is no longer active.")
 
     return invitation_code

@@ -64,25 +64,27 @@ const metricSuccessMessage = ref("");
 const goalSuccessMessage = ref("");
 
 const metricNameInput = ref("");
-const metricTypeInput = ref<"integer" | "date">("integer");
+const metricTypeInput = ref<"number" | "date">("number");
+const metricDecimalPlacesInput = ref("0");
 const metricUnitLabelInput = ref("");
-const metricInitialIntegerValueInput = ref("");
+const metricInitialNumberValueInput = ref("");
 const metricInitialDateValueInput = ref("");
-const metricEntryIntegerInputs = ref<Record<string, string>>({});
+const metricEntryNumberInputs = ref<Record<string, string>>({});
 const metricEntryDateInputs = ref<Record<string, string>>({});
 
 const goalTitleInput = ref("");
 const goalDescriptionInput = ref("");
 const goalStartDateInput = ref(new Date().toISOString().slice(0, 10));
 const goalTargetDateInput = ref("");
-const goalTargetIntegerValueInput = ref("");
+const goalTargetNumberValueInput = ref("");
 const goalTargetDateValueInput = ref("");
 const goalUseNewMetric = ref(false);
 const goalMetricIdInput = ref("");
 const goalNewMetricNameInput = ref("");
-const goalNewMetricTypeInput = ref<"integer" | "date">("integer");
+const goalNewMetricTypeInput = ref<"number" | "date">("number");
+const goalNewMetricDecimalPlacesInput = ref("0");
 const goalNewMetricUnitLabelInput = ref("");
-const goalNewMetricInitialIntegerValueInput = ref("");
+const goalNewMetricInitialNumberValueInput = ref("");
 const goalNewMetricInitialDateValueInput = ref("");
 
 const timezoneOptions = computed(() => {
@@ -131,7 +133,11 @@ const isBusy = computed(() => {
 });
 
 const selectedGoalMetric = computed(() => {
-  return metricsStore.metrics.find((metric) => metric.id === goalMetricIdInput.value) ?? null;
+  return activeMetrics.value.find((metric) => metric.id === goalMetricIdInput.value) ?? null;
+});
+
+const activeMetrics = computed(() => {
+  return metricsStore.metrics.filter((metric) => !metric.is_archived);
 });
 
 const goalMetricType = computed(() => {
@@ -139,7 +145,7 @@ const goalMetricType = computed(() => {
     return goalNewMetricTypeInput.value;
   }
 
-  return selectedGoalMetric.value?.metric_type ?? "integer";
+  return selectedGoalMetric.value?.metric_type ?? "number";
 });
 
 const currentDisplayName = computed(() => {
@@ -301,9 +307,10 @@ function syncInvitationCodeInputs(): void {
 
 function resetMetricForm(): void {
   metricNameInput.value = "";
-  metricTypeInput.value = "integer";
+  metricTypeInput.value = "number";
+  metricDecimalPlacesInput.value = "0";
   metricUnitLabelInput.value = "";
-  metricInitialIntegerValueInput.value = "";
+  metricInitialNumberValueInput.value = "";
   metricInitialDateValueInput.value = "";
 }
 
@@ -312,18 +319,44 @@ function resetGoalForm(): void {
   goalDescriptionInput.value = "";
   goalStartDateInput.value = new Date().toISOString().slice(0, 10);
   goalTargetDateInput.value = "";
-  goalTargetIntegerValueInput.value = "";
+  goalTargetNumberValueInput.value = "";
   goalTargetDateValueInput.value = "";
   goalUseNewMetric.value = false;
-  goalMetricIdInput.value = metricsStore.metrics[0]?.id ?? "";
+  goalMetricIdInput.value = activeMetrics.value[0]?.id ?? "";
   goalNewMetricNameInput.value = "";
-  goalNewMetricTypeInput.value = "integer";
+  goalNewMetricTypeInput.value = "number";
+  goalNewMetricDecimalPlacesInput.value = "0";
   goalNewMetricUnitLabelInput.value = "";
-  goalNewMetricInitialIntegerValueInput.value = "";
+  goalNewMetricInitialNumberValueInput.value = "";
   goalNewMetricInitialDateValueInput.value = "";
 }
 
-function parseOptionalInteger(value: string): number | null {
+function parseOptionalNumber(value: string | number | null | undefined): number | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (typeof value === "number") {
+    return Number.isNaN(value) ? null : value;
+  }
+
+  if (value.trim() === "") {
+    return null;
+  }
+
+  const parsed = Number.parseFloat(value);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+function parseDecimalPlaces(value: string | number | null | undefined): number | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (typeof value === "number") {
+    return Number.isNaN(value) ? null : Math.trunc(value);
+  }
+
   if (value.trim() === "") {
     return null;
   }
@@ -332,16 +365,37 @@ function parseOptionalInteger(value: string): number | null {
   return Number.isNaN(parsed) ? null : parsed;
 }
 
-function formatMetricValue(metricType: "integer" | "date", integerValue: number | null, dateValue: string | null): string {
-  if (metricType === "integer") {
-    return integerValue === null ? "No value yet" : String(integerValue);
+function numberInputStep(decimalPlaces: number | null): string {
+  const places = Math.max(decimalPlaces ?? 0, 0);
+  if (places === 0) {
+    return "1";
+  }
+  return `0.${"0".repeat(places - 1)}1`;
+}
+
+function formatNumberValue(value: number | null, decimalPlaces: number | null): string {
+  if (value === null) {
+    return "No value yet";
+  }
+
+  return value.toFixed(decimalPlaces ?? 0);
+}
+
+function formatMetricValue(
+  metricType: "number" | "date",
+  numberValue: number | null,
+  dateValue: string | null,
+  decimalPlaces: number | null,
+): string {
+  if (metricType === "number") {
+    return formatNumberValue(numberValue, decimalPlaces);
   }
 
   return formatDateOnly(dateValue);
 }
 
 function syncMetricEntryInputs(): void {
-  metricEntryIntegerInputs.value = Object.fromEntries(metricsStore.metrics.map((metric) => [metric.id, ""]));
+  metricEntryNumberInputs.value = Object.fromEntries(metricsStore.metrics.map((metric) => [metric.id, ""]));
   metricEntryDateInputs.value = Object.fromEntries(metricsStore.metrics.map((metric) => [metric.id, ""]));
 }
 
@@ -351,8 +405,8 @@ async function loadTrackingData(): Promise<void> {
     metricsStore.loadMetrics(),
     goalsStore.loadGoals(),
   ]);
-  if (goalMetricIdInput.value === "" && metricsStore.metrics.length > 0) {
-    goalMetricIdInput.value = metricsStore.metrics[0].id;
+  if (goalMetricIdInput.value === "" && activeMetrics.value.length > 0) {
+    goalMetricIdInput.value = activeMetrics.value[0].id;
   }
   syncMetricEntryInputs();
 }
@@ -495,8 +549,9 @@ async function createNewInvitationCode(): Promise<void> {
 async function submitMetricForm(): Promise<void> {
   resetMetricMessages();
   const created = await metricsStore.createMetric({
+    decimal_places: metricTypeInput.value === "number" ? parseDecimalPlaces(metricDecimalPlacesInput.value) : null,
     initial_date_value: metricTypeInput.value === "date" ? metricInitialDateValueInput.value || null : null,
-    initial_integer_value: metricTypeInput.value === "integer" ? parseOptionalInteger(metricInitialIntegerValueInput.value) : null,
+    initial_number_value: metricTypeInput.value === "number" ? parseOptionalNumber(metricInitialNumberValueInput.value) : null,
     metric_type: metricTypeInput.value,
     name: metricNameInput.value,
     unit_label: metricUnitLabelInput.value.trim() === "" ? null : metricUnitLabelInput.value,
@@ -505,18 +560,18 @@ async function submitMetricForm(): Promise<void> {
   if (created) {
     metricSuccessMessage.value = "Metric created.";
     resetMetricForm();
-    if (goalMetricIdInput.value === "" && metricsStore.metrics.length > 0) {
-      goalMetricIdInput.value = metricsStore.metrics[0].id;
+    if (goalMetricIdInput.value === "" && activeMetrics.value.length > 0) {
+      goalMetricIdInput.value = activeMetrics.value[0].id;
     }
     syncMetricEntryInputs();
   }
 }
 
-async function submitMetricEntry(metricId: string, metricType: "integer" | "date"): Promise<void> {
+async function submitMetricEntry(metricId: string, metricType: "number" | "date"): Promise<void> {
   resetMetricMessages();
   const updated = await metricsStore.addMetricEntry(metricId, {
     date_value: metricType === "date" ? metricEntryDateInputs.value[metricId] || null : null,
-    integer_value: metricType === "integer" ? parseOptionalInteger(metricEntryIntegerInputs.value[metricId] ?? "") : null,
+    number_value: metricType === "number" ? parseOptionalNumber(metricEntryNumberInputs.value[metricId] ?? "") : null,
   });
 
   if (updated) {
@@ -533,11 +588,15 @@ async function submitGoalForm(): Promise<void> {
     metric_id: goalUseNewMetric.value ? null : goalMetricIdInput.value || null,
     new_metric: goalUseNewMetric.value
       ? {
+          decimal_places:
+            goalNewMetricTypeInput.value === "number"
+              ? parseDecimalPlaces(goalNewMetricDecimalPlacesInput.value)
+              : null,
           initial_date_value:
             goalNewMetricTypeInput.value === "date" ? goalNewMetricInitialDateValueInput.value || null : null,
-          initial_integer_value:
-            goalNewMetricTypeInput.value === "integer"
-              ? parseOptionalInteger(goalNewMetricInitialIntegerValueInput.value)
+          initial_number_value:
+            goalNewMetricTypeInput.value === "number"
+              ? parseOptionalNumber(goalNewMetricInitialNumberValueInput.value)
               : null,
           metric_type: goalNewMetricTypeInput.value,
           name: goalNewMetricNameInput.value,
@@ -548,8 +607,8 @@ async function submitGoalForm(): Promise<void> {
     start_date: goalStartDateInput.value,
     target_date: goalTargetDateInput.value || null,
     target_value_date: goalMetricType.value === "date" ? goalTargetDateValueInput.value || null : null,
-    target_value_integer:
-      goalMetricType.value === "integer" ? parseOptionalInteger(goalTargetIntegerValueInput.value) : null,
+    target_value_number:
+      goalMetricType.value === "number" ? parseOptionalNumber(goalTargetNumberValueInput.value) : null,
     title: goalTitleInput.value,
   });
 
@@ -586,6 +645,32 @@ async function deleteInvitationCodeEntry(invitationCodeId: string): Promise<void
 
   if (deleted) {
     invitationCodesSuccessMessage.value = "Invitation code deleted.";
+  }
+}
+
+async function setMetricArchived(metricId: string, archived: boolean): Promise<void> {
+  resetMetricMessages();
+  const updated = await metricsStore.setMetricArchived(metricId, archived);
+  if (updated) {
+    metricSuccessMessage.value = archived ? "Metric archived." : "Metric restored.";
+    await goalsStore.loadGoals();
+    syncMetricEntryInputs();
+    if (goalMetricIdInput.value !== "" && selectedGoalMetric.value === null) {
+      goalMetricIdInput.value = activeMetrics.value[0]?.id ?? "";
+    }
+  }
+}
+
+async function deleteMetricEntry(metricId: string): Promise<void> {
+  resetMetricMessages();
+  const deleted = await metricsStore.deleteMetric(metricId);
+  if (deleted) {
+    metricSuccessMessage.value = "Metric deleted.";
+    await goalsStore.loadGoals();
+    syncMetricEntryInputs();
+    if (goalMetricIdInput.value !== "" && selectedGoalMetric.value === null) {
+      goalMetricIdInput.value = activeMetrics.value[0]?.id ?? "";
+    }
   }
 }
 
@@ -627,7 +712,7 @@ watch(
   () => metricsStore.metrics,
   () => {
     if (!goalUseNewMetric.value && selectedGoalMetric.value === null) {
-      goalMetricIdInput.value = metricsStore.metrics[0]?.id ?? "";
+      goalMetricIdInput.value = activeMetrics.value[0]?.id ?? "";
     }
   },
   { deep: true },
@@ -644,7 +729,6 @@ onMounted(() => {
     <section v-if="authStore.isAuthenticated" class="app-shell">
       <header class="app-header">
         <div class="brand-block">
-          <p class="eyebrow">Phase 1</p>
           <h1 class="brand-title">Goal Tracker</h1>
           <p class="brand-summary">Track goals, dashboards, and updates from one responsive app.</p>
         </div>
@@ -705,9 +789,21 @@ onMounted(() => {
                   <label class="field">
                     <span class="label">Metric type</span>
                     <select v-model="metricTypeInput" class="native-file-input">
-                      <option value="integer">Integer</option>
+                      <option value="number">Number</option>
                       <option value="date">Date</option>
                     </select>
+                  </label>
+
+                  <label v-if="metricTypeInput === 'number'" class="field">
+                    <span class="label">Decimal places</span>
+                    <input
+                      v-model="metricDecimalPlacesInput"
+                      class="native-file-input"
+                      type="number"
+                      min="0"
+                      max="6"
+                      step="1"
+                    />
                   </label>
 
                   <label class="field">
@@ -715,13 +811,13 @@ onMounted(() => {
                     <InputText v-model="metricUnitLabelInput" placeholder="Optional, like lbs" />
                   </label>
 
-                  <label v-if="metricTypeInput === 'integer'" class="field">
+                  <label v-if="metricTypeInput === 'number'" class="field">
                     <span class="label">Initial value</span>
                     <input
-                      v-model="metricInitialIntegerValueInput"
+                      v-model="metricInitialNumberValueInput"
                       class="native-file-input"
                       type="number"
-                      step="1"
+                      :step="numberInputStep(parseDecimalPlaces(metricDecimalPlacesInput))"
                     />
                   </label>
 
@@ -747,6 +843,16 @@ onMounted(() => {
                 <p class="panel-eyebrow">Metric history</p>
                 <h2>Update tracked values</h2>
                 <p>Quick-add the latest value for each metric and review the most recent history.</p>
+
+                <label class="checkbox-row">
+                  <Checkbox
+                    v-model="metricsStore.includeArchived"
+                    binary
+                    input-id="include-archived-metrics"
+                    @change="metricsStore.loadMetrics()"
+                  />
+                  <span>Include archived</span>
+                </label>
 
                 <div v-if="metricsStore.viewState === 'loading'" class="loading">
                   <ProgressSpinner
@@ -775,24 +881,57 @@ onMounted(() => {
                           {{
                             formatMetricValue(
                               metric.metric_type,
-                              metric.latest_entry?.integer_value ?? null,
+                              metric.latest_entry?.number_value ?? null,
                               metric.latest_entry?.date_value ?? null,
+                              metric.decimal_places,
                             )
                           }}
                           <span v-if="metric.unit_label !== null"> {{ metric.unit_label }}</span>
                         </p>
                       </div>
-                      <Tag :value="metric.metric_type" severity="info" />
+                      <div class="metric-card-tags">
+                        <Tag :value="metric.metric_type" severity="info" />
+                        <Tag v-if="metric.is_archived" value="archived" severity="warning" />
+                      </div>
                     </div>
 
-                    <div class="quick-entry-grid">
-                      <label v-if="metric.metric_type === 'integer'" class="field">
+                    <div class="metric-card-actions">
+                      <Button
+                        v-if="!metric.is_archived"
+                        label="Archive"
+                        icon="pi pi-box"
+                        severity="secondary"
+                        text
+                        :loading="metricsStore.submissionState === 'submitting'"
+                        @click="setMetricArchived(metric.id, true)"
+                      />
+                      <Button
+                        v-else
+                        label="Restore"
+                        icon="pi pi-refresh"
+                        severity="secondary"
+                        text
+                        :loading="metricsStore.submissionState === 'submitting'"
+                        @click="setMetricArchived(metric.id, false)"
+                      />
+                      <Button
+                        label="Delete"
+                        icon="pi pi-trash"
+                        severity="danger"
+                        text
+                        :loading="metricsStore.submissionState === 'submitting'"
+                        @click="deleteMetricEntry(metric.id)"
+                      />
+                    </div>
+
+                    <div v-if="!metric.is_archived" class="quick-entry-grid">
+                      <label v-if="metric.metric_type === 'number'" class="field">
                         <span class="label">New value</span>
                         <input
-                          v-model="metricEntryIntegerInputs[metric.id]"
+                          v-model="metricEntryNumberInputs[metric.id]"
                           class="native-file-input"
                           type="number"
-                          step="1"
+                          :step="numberInputStep(metric.decimal_places)"
                         />
                       </label>
 
@@ -814,6 +953,10 @@ onMounted(() => {
                       />
                     </div>
 
+                    <Message v-else severity="warn" :closable="false">
+                      Archived metrics are hidden by default and cannot receive new updates.
+                    </Message>
+
                     <div class="history-list">
                       <div
                         v-for="entry in metric.entries.slice(0, 3)"
@@ -824,8 +967,9 @@ onMounted(() => {
                           {{
                             formatMetricValue(
                               metric.metric_type,
-                              entry.integer_value,
+                              entry.number_value,
                               entry.date_value,
+                              metric.decimal_places,
                             )
                           }}
                         </strong>
@@ -876,9 +1020,21 @@ onMounted(() => {
                     <label class="field">
                       <span class="label">New metric type</span>
                       <select v-model="goalNewMetricTypeInput" class="native-file-input">
-                        <option value="integer">Integer</option>
+                        <option value="number">Number</option>
                         <option value="date">Date</option>
                       </select>
+                    </label>
+
+                    <label v-if="goalNewMetricTypeInput === 'number'" class="field">
+                      <span class="label">Decimal places</span>
+                      <input
+                        v-model="goalNewMetricDecimalPlacesInput"
+                        class="native-file-input"
+                        type="number"
+                        min="0"
+                        max="6"
+                        step="1"
+                      />
                     </label>
 
                     <label class="field">
@@ -889,13 +1045,13 @@ onMounted(() => {
                       />
                     </label>
 
-                    <label v-if="goalNewMetricTypeInput === 'integer'" class="field">
+                    <label v-if="goalNewMetricTypeInput === 'number'" class="field">
                       <span class="label">Initial metric value</span>
                       <input
-                        v-model="goalNewMetricInitialIntegerValueInput"
+                        v-model="goalNewMetricInitialNumberValueInput"
                         class="native-file-input"
                         type="number"
-                        step="1"
+                        :step="numberInputStep(parseDecimalPlaces(goalNewMetricDecimalPlacesInput))"
                       />
                     </label>
 
@@ -913,7 +1069,7 @@ onMounted(() => {
                     <span class="label">Metric</span>
                     <select v-model="goalMetricIdInput" class="native-file-input">
                       <option
-                        v-for="metric in metricsStore.metrics"
+                        v-for="metric in activeMetrics"
                         :key="metric.id"
                         :value="metric.id"
                       >
@@ -934,13 +1090,13 @@ onMounted(() => {
                     </label>
                   </div>
 
-                  <label v-if="goalMetricType === 'integer'" class="field">
+                  <label v-if="goalMetricType === 'number'" class="field">
                     <span class="label">Target metric value</span>
                     <input
-                      v-model="goalTargetIntegerValueInput"
+                      v-model="goalTargetNumberValueInput"
                       class="native-file-input"
                       type="number"
-                      step="1"
+                      :step="numberInputStep(selectedGoalMetric?.decimal_places ?? parseDecimalPlaces(goalNewMetricDecimalPlacesInput))"
                     />
                   </label>
 
@@ -1003,10 +1159,14 @@ onMounted(() => {
                       </div>
                       <div
                         class="history-row"
-                        v-if="goal.target_value_integer !== null || goal.target_value_date !== null"
+                        v-if="goal.target_value_number !== null || goal.target_value_date !== null"
                       >
                         <strong>Target value</strong>
-                        <span>{{ goal.target_value_integer ?? goal.target_value_date }}</span>
+                        <span>{{
+                          goal.target_value_number !== null
+                            ? formatNumberValue(goal.target_value_number, goal.metric.decimal_places)
+                            : goal.target_value_date
+                        }}</span>
                       </div>
                       <div class="history-row" v-if="goal.metric.latest_entry !== null">
                         <strong>Latest metric</strong>
@@ -1014,8 +1174,9 @@ onMounted(() => {
                           {{
                             formatMetricValue(
                               goal.metric.metric_type,
-                              goal.metric.latest_entry.integer_value,
+                              goal.metric.latest_entry.number_value,
                               goal.metric.latest_entry.date_value,
+                              goal.metric.decimal_places,
                             )
                           }}
                         </span>
@@ -1246,7 +1407,7 @@ onMounted(() => {
             <section class="dialog-section">
               <div class="section-heading-text">
                 <h3>Existing codes</h3>
-                <p>Review expiration, revoke old codes, and see which accounts came from each one.</p>
+                <p>Review expiration, delete old codes, and see which accounts came from each one.</p>
               </div>
 
               <div
@@ -1266,10 +1427,7 @@ onMounted(() => {
                     <p class="code-label">Code</p>
                     <code>{{ invitationCode.code }}</code>
                   </div>
-                  <Tag
-                    :value="invitationCode.revoked_at === null ? 'active' : 'deleted'"
-                    :severity="invitationCode.revoked_at === null ? 'success' : 'danger'"
-                  />
+                  <Tag value="active" severity="success" />
                 </div>
 
                 <div class="invitation-code-meta">
@@ -1287,7 +1445,6 @@ onMounted(() => {
                       v-model="invitationCodeExpiresAtInputs[invitationCode.id]"
                       class="native-file-input"
                       type="datetime-local"
-                      :disabled="invitationCode.revoked_at !== null"
                     />
                   </label>
 
@@ -1296,7 +1453,6 @@ onMounted(() => {
                       label="Save"
                       icon="pi pi-save"
                       severity="secondary"
-                      :disabled="invitationCode.revoked_at !== null"
                       :loading="invitationCodesStore.submissionState === 'submitting'"
                       @click="saveInvitationCode(invitationCode.id)"
                     />
@@ -1304,7 +1460,6 @@ onMounted(() => {
                       label="Delete"
                       icon="pi pi-trash"
                       severity="danger"
-                      :disabled="invitationCode.revoked_at !== null"
                       :loading="invitationCodesStore.submissionState === 'submitting'"
                       @click="deleteInvitationCodeEntry(invitationCode.id)"
                     />
@@ -1341,7 +1496,6 @@ onMounted(() => {
 
     <section v-else class="hero">
       <div class="hero-copy">
-        <p class="eyebrow">Phase 1 Started</p>
         <h1>Goal tracking with a real account flow.</h1>
         <p class="summary">
           The app can now bootstrap its first administrator, manage invitation-based signup, restore

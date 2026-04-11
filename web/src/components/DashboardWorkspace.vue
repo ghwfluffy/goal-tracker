@@ -38,6 +38,9 @@ const widgetEditWindowDays = ref<Record<string, string>>({});
 const successMessage = ref("");
 
 const browserTimezone = getBrowserTimezone();
+const activeMetrics = computed(() => {
+  return metricsStore.metrics.filter((metric) => !metric.is_archived);
+});
 
 const selectedDashboard = computed(() => {
   return dashboardsStore.dashboards.find((dashboard) => dashboard.id === selectedDashboardId.value) ?? null;
@@ -98,7 +101,7 @@ function resetDashboardCreateForm(): void {
 function resetWidgetCreateForm(): void {
   widgetTitleInput.value = "";
   widgetTypeInput.value = "metric_summary";
-  widgetMetricIdInput.value = metricsStore.metrics[0]?.id ?? "";
+  widgetMetricIdInput.value = activeMetrics.value[0]?.id ?? "";
   widgetGoalIdInput.value = goalsStore.goals[0]?.id ?? "";
   widgetRollingWindowDaysInput.value = "30";
 }
@@ -119,9 +122,11 @@ function formatMetricValue(widget: DashboardWidgetSummary): string {
     return "No value yet";
   }
 
-  if (metric.metric_type === "integer") {
-    const value = latestEntry.integer_value;
-    return value === null ? "No value yet" : `${value}${metric.unit_label ? ` ${metric.unit_label}` : ""}`;
+  if (metric.metric_type === "number") {
+    const value = latestEntry.number_value;
+    return value === null
+      ? "No value yet"
+      : `${value.toFixed(metric.decimal_places ?? 0)}${metric.unit_label ? ` ${metric.unit_label}` : ""}`;
   }
 
   return formatDateOnly(latestEntry.date_value);
@@ -279,7 +284,7 @@ watch(
   () => widgetTypeInput.value,
   () => {
     if (widgetUsesMetric.value && widgetMetricIdInput.value === "") {
-      widgetMetricIdInput.value = metricsStore.metrics[0]?.id ?? "";
+      widgetMetricIdInput.value = activeMetrics.value[0]?.id ?? "";
     }
 
     if (!widgetUsesMetric.value && widgetGoalIdInput.value === "") {
@@ -292,8 +297,9 @@ watch(
 watch(
   () => metricsStore.metrics,
   () => {
-    if (widgetMetricIdInput.value === "") {
-      widgetMetricIdInput.value = metricsStore.metrics[0]?.id ?? "";
+    const activeMetricIds = new Set(activeMetrics.value.map((metric) => metric.id));
+    if (widgetMetricIdInput.value === "" || !activeMetricIds.has(widgetMetricIdInput.value)) {
+      widgetMetricIdInput.value = activeMetrics.value[0]?.id ?? "";
     }
   },
   { deep: true, immediate: true },
@@ -472,7 +478,7 @@ watch(
               <label v-if="widgetUsesMetric" class="field">
                 <span class="label">Metric</span>
                 <select v-model="widgetMetricIdInput" class="native-file-input">
-                  <option v-for="metric in metricsStore.metrics" :key="metric.id" :value="metric.id">
+                  <option v-for="metric in activeMetrics" :key="metric.id" :value="metric.id">
                     {{ metric.name }} ({{ metric.metric_type }})
                   </option>
                 </select>

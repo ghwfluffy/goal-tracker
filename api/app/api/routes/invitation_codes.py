@@ -15,8 +15,10 @@ from app.services.invitations import (
     create_invitation_code,
     get_invitation_code_by_id,
     list_invitation_codes,
-    revoke_invitation_code,
     update_invitation_code,
+)
+from app.services.invitations import (
+    delete_invitation_code as delete_invitation_code_record,
 )
 
 router = APIRouter(prefix="/invitation-codes")
@@ -35,7 +37,6 @@ class InvitationCodeSummary(BaseModel):
     code: str
     created_by_username: str | None
     expires_at: str
-    revoked_at: str | None
     created_at: str
     users_created: list[InvitationCodeUserSummary]
 
@@ -76,11 +77,6 @@ def serialize_invitation_code(invitation_code: InvitationCode) -> InvitationCode
             else None
         ),
         expires_at=invitation_code.expires_at.isoformat(),
-        revoked_at=(
-            invitation_code.revoked_at.isoformat()
-            if invitation_code.revoked_at is not None
-            else None
-        ),
         created_at=invitation_code.created_at.isoformat(),
         users_created=[serialize_invitation_code_user(user) for user in users_created],
     )
@@ -155,7 +151,7 @@ def delete_invitation_code(
 ) -> Response:
     try:
         invitation_code = get_invitation_code_by_id(db, invitation_code_id)
-        revoke_invitation_code(db, invitation_code=invitation_code)
+        delete_invitation_code_record(db, invitation_code=invitation_code)
         db.commit()
     except InvitationCodeNotFoundError as exc:
         db.rollback()

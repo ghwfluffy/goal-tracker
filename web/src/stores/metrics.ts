@@ -3,7 +3,9 @@ import { defineStore } from "pinia";
 import {
   addMetricEntry,
   createMetric,
+  deleteMetric,
   fetchMetrics,
+  updateMetric,
   type CreateMetricEntryPayload,
   type CreateMetricPayload,
   type MetricSummary,
@@ -14,6 +16,7 @@ type MetricsSubmissionState = "idle" | "submitting";
 
 interface MetricsStoreState {
   errorMessage: string;
+  includeArchived: boolean;
   metrics: MetricSummary[];
   submissionState: MetricsSubmissionState;
   viewState: MetricsViewState;
@@ -22,6 +25,7 @@ interface MetricsStoreState {
 export const useMetricsStore = defineStore("metrics", {
   state: (): MetricsStoreState => ({
     errorMessage: "",
+    includeArchived: false,
     metrics: [],
     submissionState: "idle",
     viewState: "idle",
@@ -29,6 +33,7 @@ export const useMetricsStore = defineStore("metrics", {
   actions: {
     reset(): void {
       this.errorMessage = "";
+      this.includeArchived = false;
       this.metrics = [];
       this.submissionState = "idle";
       this.viewState = "idle";
@@ -38,7 +43,7 @@ export const useMetricsStore = defineStore("metrics", {
       this.errorMessage = "";
 
       try {
-        const response = await fetchMetrics();
+        const response = await fetchMetrics(this.includeArchived);
         this.metrics = response.metrics;
         this.viewState = "ready";
       } catch (error: unknown) {
@@ -71,6 +76,37 @@ export const useMetricsStore = defineStore("metrics", {
         return true;
       } catch (error: unknown) {
         this.errorMessage = error instanceof Error ? error.message : "Unable to update metric.";
+        return false;
+      } finally {
+        this.submissionState = "idle";
+      }
+    },
+    async setMetricArchived(metricId: string, archived: boolean): Promise<boolean> {
+      this.submissionState = "submitting";
+      this.errorMessage = "";
+
+      try {
+        await updateMetric(metricId, { archived });
+        await this.loadMetrics();
+        return true;
+      } catch (error: unknown) {
+        this.errorMessage =
+          error instanceof Error ? error.message : "Unable to update metric archive state.";
+        return false;
+      } finally {
+        this.submissionState = "idle";
+      }
+    },
+    async deleteMetric(metricId: string): Promise<boolean> {
+      this.submissionState = "submitting";
+      this.errorMessage = "";
+
+      try {
+        await deleteMetric(metricId);
+        await this.loadMetrics();
+        return true;
+      } catch (error: unknown) {
+        this.errorMessage = error instanceof Error ? error.message : "Unable to delete metric.";
         return false;
       } finally {
         this.submissionState = "idle";

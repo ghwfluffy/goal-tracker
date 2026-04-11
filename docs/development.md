@@ -66,10 +66,11 @@ The frontend home page now consumes that auth foundation and can:
 5. restore the current session
 6. sign out
 7. let administrators create, update, review, and revoke invitation codes
-8. create reusable integer/date metrics and add quick updates
-9. create goals tied to an existing metric or a new inline metric
-10. create dashboards, choose a default dashboard, and manage dashboard widgets in a dedicated edit mode
-11. render widget timestamps in the browser timezone while showing the saved profile timezone used for day-boundary logic
+8. create reusable number/date metrics with configurable decimal places and add quick updates
+9. archive metrics so they are hidden by default, or permanently delete standalone metrics that are not used by goals or widgets
+10. create goals tied to an existing metric or a new inline metric
+11. create dashboards, choose a default dashboard, and manage dashboard widgets in a dedicated edit mode
+12. render widget timestamps in the browser timezone while showing the saved profile timezone used for day-boundary logic
 
 ## Local Run Commands
 

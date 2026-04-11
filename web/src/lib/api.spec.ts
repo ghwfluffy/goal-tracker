@@ -257,7 +257,6 @@ describe("auth api helpers", () => {
                 created_by_username: "admin",
                 expires_at: "2026-04-18T20:00:00Z",
                 id: "code-1",
-                revoked_at: null,
                 users_created: [],
               },
             ],
@@ -279,7 +278,6 @@ describe("auth api helpers", () => {
             created_by_username: "admin",
             expires_at: "2026-04-18T20:00:00Z",
             id: "code-2",
-            revoked_at: null,
             users_created: [],
           }),
           {
@@ -299,7 +297,6 @@ describe("auth api helpers", () => {
             created_by_username: "admin",
             expires_at: "2026-04-19T20:00:00Z",
             id: "code-1",
-            revoked_at: null,
             users_created: [],
           }),
           {
@@ -322,7 +319,6 @@ describe("auth api helpers", () => {
           created_by_username: "admin",
           expires_at: "2026-04-18T20:00:00Z",
           id: "code-1",
-          revoked_at: null,
           users_created: [],
         },
       ],
@@ -352,10 +348,11 @@ describe("auth api helpers", () => {
           JSON.stringify({
             metrics: [
               {
+                decimal_places: 1,
                 entries: [],
                 id: "metric-1",
                 latest_entry: null,
-                metric_type: "integer",
+                metric_type: "number",
                 name: "Weight",
                 unit_label: "lbs",
               },
@@ -392,18 +389,19 @@ describe("auth api helpers", () => {
               {
                 date_value: null,
                 id: "entry-1",
-                integer_value: 242,
+                number_value: 242.3,
                 recorded_at: "2026-04-11T20:30:00Z",
               },
             ],
+            decimal_places: 1,
             id: "metric-1",
             latest_entry: {
               date_value: null,
               id: "entry-1",
-              integer_value: 242,
+              number_value: 242.3,
               recorded_at: "2026-04-11T20:30:00Z",
             },
-            metric_type: "integer",
+            metric_type: "number",
             name: "Weight",
             unit_label: "lbs",
           }),
@@ -431,9 +429,10 @@ describe("auth api helpers", () => {
           description: "Cut steadily.",
           id: "goal-1",
           metric: {
+            decimal_places: 1,
             id: "metric-1",
             latest_entry: null,
-            metric_type: "integer",
+            metric_type: "number",
             name: "Weight",
             unit_label: "lbs",
           },
@@ -441,7 +440,7 @@ describe("auth api helpers", () => {
           status: "active",
           target_date: "2026-06-30",
           target_value_date: null,
-          target_value_integer: 220,
+          target_value_number: 220.5,
           title: "Reach 220",
         }),
         {
@@ -454,10 +453,11 @@ describe("auth api helpers", () => {
     await expect(fetchMetrics(fetcher)).resolves.toEqual({
       metrics: [
         {
+          decimal_places: 1,
           entries: [],
           id: "metric-1",
           latest_entry: null,
-          metric_type: "integer",
+          metric_type: "number",
           name: "Weight",
           unit_label: "lbs",
         },
@@ -467,9 +467,10 @@ describe("auth api helpers", () => {
     await expect(
       createMetric(
         {
+          decimal_places: 1,
           initial_date_value: null,
-          initial_integer_value: 245,
-          metric_type: "integer",
+          initial_number_value: 245.5,
+          metric_type: "number",
           name: "Weight",
           unit_label: "lbs",
         },
@@ -482,11 +483,11 @@ describe("auth api helpers", () => {
     await expect(
       addMetricEntry(
         "metric-1",
-        { date_value: null, integer_value: 242 },
+        { date_value: null, number_value: 242.3 },
         fetcher,
       ),
     ).resolves.toMatchObject({
-      latest_entry: { integer_value: 242 },
+      latest_entry: { number_value: 242.3 },
     });
 
     await expect(fetchGoals(fetcher)).resolves.toEqual({ goals: [] });
@@ -500,7 +501,7 @@ describe("auth api helpers", () => {
           start_date: "2026-04-11",
           target_date: "2026-06-30",
           target_value_date: null,
-          target_value_integer: 220,
+          target_value_number: 220.5,
           title: "Reach 220",
         },
         fetcher,
@@ -575,9 +576,10 @@ describe("auth api helpers", () => {
             goal: null,
             id: "widget-1",
             metric: {
+              decimal_places: 1,
               id: "metric-1",
               latest_entry: null,
-              metric_type: "integer",
+              metric_type: "number",
               name: "Weight",
               unit_label: "lbs",
             },
@@ -602,9 +604,10 @@ describe("auth api helpers", () => {
             goal: null,
             id: "widget-1",
             metric: {
+              decimal_places: 1,
               id: "metric-1",
               latest_entry: null,
-              metric_type: "integer",
+              metric_type: "number",
               name: "Weight",
               unit_label: "lbs",
             },

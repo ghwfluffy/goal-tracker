@@ -100,17 +100,12 @@ def update_invitation_code(
     invitation_code: InvitationCode,
     expires_at: datetime,
 ) -> InvitationCode:
-    if invitation_code.revoked_at is not None:
-        raise InvitationCodeError("Revoked invitation codes cannot be updated.")
-
     invitation_code.expires_at = normalize_invitation_expiration(expires_at)
     invitation_code.updated_at = utcnow()
     db.flush()
     return get_invitation_code_by_id(db, invitation_code.id)
 
 
-def revoke_invitation_code(db: Session, *, invitation_code: InvitationCode) -> None:
-    if invitation_code.revoked_at is None:
-        invitation_code.revoked_at = utcnow()
-        invitation_code.updated_at = utcnow()
-        db.flush()
+def delete_invitation_code(db: Session, *, invitation_code: InvitationCode) -> None:
+    db.delete(invitation_code)
+    db.flush()

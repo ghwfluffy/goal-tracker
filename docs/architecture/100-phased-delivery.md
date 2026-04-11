@@ -45,7 +45,7 @@ Current intended scope:
 
 Implemented so far in this phase:
 
-- reusable user-owned metrics with integer/date value history
+- reusable user-owned metrics with number/date value history
 - quick metric entry updates from the signed-in shell
 - goal creation backed by either an existing metric or a newly created inline metric
 

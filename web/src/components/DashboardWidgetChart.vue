@@ -42,10 +42,10 @@ const chartData = computed(() => {
       };
     }
 
-    if (props.widget.metric?.metric_type === "integer") {
+    if (props.widget.metric?.metric_type === "number") {
       return {
         label,
-        value: point.integer_value ?? 0,
+        value: point.number_value ?? 0,
       };
     }
 
@@ -66,6 +66,7 @@ const hasChartData = computed(() => {
 
 function createMetricHistoryOption(): object {
   const isDateMetric = props.widget.metric?.metric_type === "date";
+  const decimalPlaces = props.widget.metric?.decimal_places ?? 0;
 
   return {
     animation: false,
@@ -85,7 +86,7 @@ function createMetricHistoryOption(): object {
         color: "#64748b",
         formatter: (value: number) => {
           if (!isDateMetric) {
-            return String(Math.round(value));
+            return value.toFixed(decimalPlaces);
           }
 
           return formatDateOnly(new Date(value).toISOString().slice(0, 10));

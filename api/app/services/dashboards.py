@@ -328,17 +328,17 @@ def filter_entries_to_window(
     ]
 
 
-def metric_entry_numeric_value(metric: Metric, entry: MetricEntry) -> int | None:
-    if metric.metric_type == "integer":
-        return entry.integer_value
+def metric_entry_numeric_value(metric: Metric, entry: MetricEntry) -> float | int | None:
+    if metric.metric_type == "number":
+        return entry.number_value
     if entry.date_value is None:
         return None
     return entry.date_value.toordinal()
 
 
-def goal_target_numeric_value(goal: Goal) -> int | None:
-    if goal.metric.metric_type == "integer":
-        return goal.target_value_integer
+def goal_target_numeric_value(goal: Goal) -> float | int | None:
+    if goal.metric.metric_type == "number":
+        return goal.target_value_number
     if goal.target_value_date is None:
         return None
     return goal.target_value_date.toordinal()
@@ -364,18 +364,22 @@ def find_goal_baseline_entry(goal: Goal, ordered_entries: list[MetricEntry]) -> 
 
 def calculate_progress_percent(
     *,
-    baseline_value: int,
-    target_value: int,
-    current_value: int,
+    baseline_value: float | int,
+    target_value: float | int,
+    current_value: float | int,
 ) -> float:
     if target_value == baseline_value:
         return 100.0 if current_value == target_value else 0.0
 
-    progress_ratio = (current_value - baseline_value) / (target_value - baseline_value)
+    progress_ratio = (float(current_value) - float(baseline_value)) / (
+        float(target_value) - float(baseline_value)
+    )
     return max(0.0, min(progress_ratio * 100.0, 100.0))
 
 
-def is_target_met(*, baseline_value: int, target_value: int, current_value: int) -> bool:
+def is_target_met(
+    *, baseline_value: float | int, target_value: float | int, current_value: float | int
+) -> bool:
     if target_value == baseline_value:
         return current_value == target_value
     if target_value > baseline_value:
