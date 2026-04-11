@@ -52,18 +52,18 @@ export const useDashboardsStore = defineStore("dashboards", {
         this.viewState = "error";
       }
     },
-    async createDashboard(payload: CreateDashboardPayload): Promise<boolean> {
+    async createDashboard(payload: CreateDashboardPayload): Promise<string | null> {
       this.submissionState = "submitting";
       this.errorMessage = "";
 
       try {
-        await createDashboard(payload);
+        const createdDashboard = await createDashboard(payload);
         await this.loadDashboards();
-        return true;
+        return createdDashboard.id;
       } catch (error: unknown) {
         this.errorMessage =
           error instanceof Error ? error.message : "Unable to create the dashboard.";
-        return false;
+        return null;
       } finally {
         this.submissionState = "idle";
       }

@@ -32,6 +32,13 @@ METRIC_WIDGET_TYPES = {
     WIDGET_TYPE_METRIC_SUMMARY,
 }
 
+GRID_COLUMN_COUNT = 12
+DEFAULT_SUMMARY_WIDGET_WIDTH = 4
+DEFAULT_SUMMARY_WIDGET_HEIGHT = 3
+DEFAULT_CHART_WIDGET_WIDTH = 6
+DEFAULT_CHART_WIDGET_HEIGHT = 4
+MAX_WIDGET_HEIGHT = 12
+
 
 class DashboardError(Exception):
     pass
@@ -93,6 +100,138 @@ def normalize_rolling_window_days(rolling_window_days: int | None) -> int | None
     if rolling_window_days > 3650:
         raise DashboardError("Rolling window must be 3650 days or fewer.")
     return rolling_window_days
+
+
+def default_widget_dimensions(widget_type: str) -> tuple[int, int]:
+    if widget_type in {WIDGET_TYPE_METRIC_SUMMARY, WIDGET_TYPE_GOAL_SUMMARY}:
+        return DEFAULT_SUMMARY_WIDGET_WIDTH, DEFAULT_SUMMARY_WIDGET_HEIGHT
+    return DEFAULT_CHART_WIDGET_WIDTH, DEFAULT_CHART_WIDGET_HEIGHT
+
+
+def normalize_grid_dimension(
+    value: int,
+    *,
+    field_name: str,
+    minimum: int,
+    maximum: int,
+) -> int:
+    if value < minimum or value > maximum:
+        raise DashboardError(f"{field_name} must be between {minimum} and {maximum}.")
+    return value
+
+
+def normalize_widget_layout(
+    *,
+    grid_x: int,
+    grid_y: int,
+    grid_w: int,
+    grid_h: int,
+) -> tuple[int, int, int, int]:
+    normalized_w = normalize_grid_dimension(
+        grid_w,
+        field_name="Widget width",
+        minimum=1,
+        maximum=GRID_COLUMN_COUNT,
+    )
+    normalized_h = normalize_grid_dimension(
+        grid_h,
+        field_name="Widget height",
+        minimum=1,
+        maximum=MAX_WIDGET_HEIGHT,
+    )
+    normalized_x = normalize_grid_dimension(
+        grid_x,
+        field_name="Widget horizontal position",
+        minimum=0,
+        maximum=GRID_COLUMN_COUNT - 1,
+    )
+    normalized_y = normalize_grid_dimension(
+        grid_y,
+        field_name="Widget vertical position",
+        minimum=0,
+        maximum=10_000,
+    )
+    if normalized_x + normalized_w > GRID_COLUMN_COUNT:
+        raise DashboardError("Widget layout exceeds dashboard width.")
+    return normalized_x, normalized_y, normalized_w, normalized_h
+
+
+def widgets_overlap(
+    *,
+    first_x: int,
+    first_y: int,
+    first_w: int,
+    first_h: int,
+    second_x: int,
+    second_y: int,
+    second_w: int,
+    second_h: int,
+) -> bool:
+    return not (
+        first_x + first_w <= second_x
+        or second_x + second_w <= first_x
+        or first_y + first_h <= second_y
+        or second_y + second_h <= first_y
+    )
+
+
+def ensure_layout_slot_is_available(
+    db: Session,
+    *,
+    dashboard: Dashboard,
+    grid_x: int,
+    grid_y: int,
+    grid_w: int,
+    grid_h: int,
+    ignore_widget_id: str | None = None,
+) -> None:
+    statement = select(DashboardWidget).where(DashboardWidget.dashboard_id == dashboard.id)
+    widgets = list(db.scalars(statement))
+    for existing_widget in widgets:
+        if ignore_widget_id is not None and existing_widget.id == ignore_widget_id:
+            continue
+        if widgets_overlap(
+            first_x=grid_x,
+            first_y=grid_y,
+            first_w=grid_w,
+            first_h=grid_h,
+            second_x=existing_widget.grid_x,
+            second_y=existing_widget.grid_y,
+            second_w=existing_widget.grid_w,
+            second_h=existing_widget.grid_h,
+        ):
+            raise DashboardError("Widget layout overlaps another widget.")
+
+
+def find_first_available_layout_slot(
+    db: Session,
+    *,
+    dashboard: Dashboard,
+    grid_w: int,
+    grid_h: int,
+) -> tuple[int, int]:
+    existing_widgets = list(
+        db.scalars(select(DashboardWidget).where(DashboardWidget.dashboard_id == dashboard.id))
+    )
+    max_y = max((widget.grid_y + widget.grid_h for widget in existing_widgets), default=0)
+    for candidate_y in range(0, max_y + MAX_WIDGET_HEIGHT + 1):
+        for candidate_x in range(0, GRID_COLUMN_COUNT - grid_w + 1):
+            if any(
+                widgets_overlap(
+                    first_x=candidate_x,
+                    first_y=candidate_y,
+                    first_w=grid_w,
+                    first_h=grid_h,
+                    second_x=existing_widget.grid_x,
+                    second_y=existing_widget.grid_y,
+                    second_w=existing_widget.grid_w,
+                    second_h=existing_widget.grid_h,
+                )
+                for existing_widget in existing_widgets
+            ):
+                continue
+            return candidate_x, candidate_y
+    return 0, max_y
 
 
 def list_dashboards_for_user(db: Session, user: User) -> list[Dashboard]:
@@ -237,6 +376,10 @@ def create_dashboard_widget(
     metric: Metric | None = None,
     goal: Goal | None = None,
     rolling_window_days: int | None = None,
+    grid_x: int | None = None,
+    grid_y: int | None = None,
+    grid_w: int | None = None,
+    grid_h: int | None = None,
 ) -> DashboardWidget:
     normalized_widget_type = normalize_widget_type(widget_type)
     normalized_window = normalize_rolling_window_days(rolling_window_days)
@@ -251,6 +394,36 @@ def create_dashboard_widget(
         raise DashboardError("Widgets can only reference your own metrics.")
     if goal is not None and goal.user_id != user.id:
         raise DashboardError("Widgets can only reference your own goals.")
+
+    default_width, default_height = default_widget_dimensions(normalized_widget_type)
+    normalized_width = grid_w if grid_w is not None else default_width
+    normalized_height = grid_h if grid_h is not None else default_height
+
+    if grid_x is None or grid_y is None:
+        normalized_x, normalized_y = find_first_available_layout_slot(
+            db,
+            dashboard=dashboard,
+            grid_w=normalized_width,
+            grid_h=normalized_height,
+        )
+    else:
+        normalized_x = grid_x
+        normalized_y = grid_y
+
+    normalized_x, normalized_y, normalized_width, normalized_height = normalize_widget_layout(
+        grid_x=normalized_x,
+        grid_y=normalized_y,
+        grid_w=normalized_width,
+        grid_h=normalized_height,
+    )
+    ensure_layout_slot_is_available(
+        db,
+        dashboard=dashboard,
+        grid_x=normalized_x,
+        grid_y=normalized_y,
+        grid_w=normalized_width,
+        grid_h=normalized_height,
+    )
 
     display_order = (
         db.scalar(
@@ -271,6 +444,10 @@ def create_dashboard_widget(
         title=normalize_name(title, field_name="Widget title", max_length=120),
         widget_type=normalized_widget_type,
         rolling_window_days=normalized_window,
+        grid_x=normalized_x,
+        grid_y=normalized_y,
+        grid_w=normalized_width,
+        grid_h=normalized_height,
         display_order=display_order + 1,
         updated_at=utcnow(),
     )
@@ -287,15 +464,40 @@ def create_dashboard_widget(
 def update_dashboard_widget(
     db: Session,
     *,
+    dashboard: Dashboard,
     widget: DashboardWidget,
     user: User,
     title: str | None = None,
     rolling_window_days: int | None = None,
+    grid_x: int | None = None,
+    grid_y: int | None = None,
+    grid_w: int | None = None,
+    grid_h: int | None = None,
 ) -> DashboardWidget:
     if title is not None:
         widget.title = normalize_name(title, field_name="Widget title", max_length=120)
     if rolling_window_days is not None or widget.rolling_window_days is not None:
         widget.rolling_window_days = normalize_rolling_window_days(rolling_window_days)
+    if any(value is not None for value in (grid_x, grid_y, grid_w, grid_h)):
+        normalized_x, normalized_y, normalized_width, normalized_height = normalize_widget_layout(
+            grid_x=grid_x if grid_x is not None else widget.grid_x,
+            grid_y=grid_y if grid_y is not None else widget.grid_y,
+            grid_w=grid_w if grid_w is not None else widget.grid_w,
+            grid_h=grid_h if grid_h is not None else widget.grid_h,
+        )
+        ensure_layout_slot_is_available(
+            db,
+            dashboard=dashboard,
+            grid_x=normalized_x,
+            grid_y=normalized_y,
+            grid_w=normalized_width,
+            grid_h=normalized_height,
+            ignore_widget_id=widget.id,
+        )
+        widget.grid_x = normalized_x
+        widget.grid_y = normalized_y
+        widget.grid_w = normalized_width
+        widget.grid_h = normalized_height
     widget.updated_at = utcnow()
     db.flush()
     return get_dashboard_widget_for_user(

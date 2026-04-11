@@ -100,6 +100,17 @@ def test_dashboard_widgets_include_metric_and_goal_series(client: TestClient) ->
     assert metric_widget_response.status_code == 201
     metric_widget = metric_widget_response.json()
     assert metric_widget["metric"]["name"] == "Weight"
+    assert {
+        "grid_x": metric_widget["grid_x"],
+        "grid_y": metric_widget["grid_y"],
+        "grid_w": metric_widget["grid_w"],
+        "grid_h": metric_widget["grid_h"],
+    } == {
+        "grid_x": 0,
+        "grid_y": 0,
+        "grid_w": 6,
+        "grid_h": 4,
+    }
     assert [point["number_value"] for point in metric_widget["series"]] == [250.0, 238.0]
 
     goal_widget_response = client.post(
@@ -116,7 +127,36 @@ def test_dashboard_widgets_include_metric_and_goal_series(client: TestClient) ->
     assert goal_widget["goal"]["title"] == "Reach 220"
     assert goal_widget["current_progress_percent"] == 40.0
     assert goal_widget["target_met"] is False
+    assert {
+        "grid_x": goal_widget["grid_x"],
+        "grid_y": goal_widget["grid_y"],
+        "grid_w": goal_widget["grid_w"],
+        "grid_h": goal_widget["grid_h"],
+    } == {
+        "grid_x": 6,
+        "grid_y": 0,
+        "grid_w": 6,
+        "grid_h": 4,
+    }
     assert [point["progress_percent"] for point in goal_widget["series"]] == [0.0, 40.0]
+
+    move_widget_response = client.patch(
+        f"/api/v1/dashboards/{dashboard_id}/widgets/{metric_widget['id']}",
+        json={"grid_x": 0, "grid_y": 4, "grid_w": 12, "grid_h": 5},
+    )
+    assert move_widget_response.status_code == 200
+    moved_widget = move_widget_response.json()
+    assert {
+        "grid_x": moved_widget["grid_x"],
+        "grid_y": moved_widget["grid_y"],
+        "grid_w": moved_widget["grid_w"],
+        "grid_h": moved_widget["grid_h"],
+    } == {
+        "grid_x": 0,
+        "grid_y": 4,
+        "grid_w": 12,
+        "grid_h": 5,
+    }
 
     dashboards_response = client.get("/api/v1/dashboards")
     assert dashboards_response.status_code == 200

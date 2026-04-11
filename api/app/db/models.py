@@ -299,6 +299,10 @@ class DashboardWidget(Base):
     title: Mapped[str] = mapped_column(String(120), nullable=False)
     widget_type: Mapped[str] = mapped_column(String(40), nullable=False)
     rolling_window_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    grid_x: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    grid_y: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    grid_w: Mapped[int] = mapped_column(Integer, nullable=False, default=6)
+    grid_h: Mapped[int] = mapped_column(Integer, nullable=False, default=4)
     display_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

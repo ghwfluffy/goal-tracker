@@ -74,6 +74,10 @@ class WidgetSummary(BaseModel):
     title: str
     widget_type: WidgetType
     display_order: int
+    grid_x: int
+    grid_y: int
+    grid_w: int
+    grid_h: int
     rolling_window_days: int | None
     metric: MetricReferenceSummary | None
     goal: GoalReferenceSummary | None
@@ -112,6 +116,10 @@ class CreateWidgetRequest(BaseModel):
     metric_id: str | None = None
     goal_id: str | None = None
     rolling_window_days: int | None = Field(default=None, ge=1, le=3650)
+    grid_x: int | None = Field(default=None, ge=0, le=11)
+    grid_y: int | None = Field(default=None, ge=0, le=10000)
+    grid_w: int | None = Field(default=None, ge=1, le=12)
+    grid_h: int | None = Field(default=None, ge=1, le=12)
 
     @model_validator(mode="after")
     def validate_subject(self) -> CreateWidgetRequest:
@@ -126,6 +134,10 @@ class CreateWidgetRequest(BaseModel):
 class UpdateWidgetRequest(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=120)
     rolling_window_days: int | None = Field(default=None, ge=1, le=3650)
+    grid_x: int | None = Field(default=None, ge=0, le=11)
+    grid_y: int | None = Field(default=None, ge=0, le=10000)
+    grid_w: int | None = Field(default=None, ge=1, le=12)
+    grid_h: int | None = Field(default=None, ge=1, le=12)
 
 
 def decimal_to_float(value: Decimal | float | None) -> float | None:
@@ -213,6 +225,10 @@ def serialize_widget(widget: DashboardWidget) -> WidgetSummary:
         title=widget.title,
         widget_type=cast(WidgetType, widget.widget_type),
         display_order=widget.display_order,
+        grid_x=widget.grid_x,
+        grid_y=widget.grid_y,
+        grid_w=widget.grid_w,
+        grid_h=widget.grid_h,
         rolling_window_days=widget.rolling_window_days,
         metric=serialize_metric_reference(widget.metric) if widget.metric is not None else None,
         goal=serialize_goal_reference(widget.goal) if widget.goal is not None else None,
@@ -230,7 +246,13 @@ def serialize_dashboard(dashboard: Dashboard, *, user: User) -> DashboardSummary
         name=dashboard.name,
         description=dashboard.description,
         is_default=user.default_dashboard_id == dashboard.id,
-        widgets=[serialize_widget(widget) for widget in dashboard.widgets],
+        widgets=[
+            serialize_widget(widget)
+            for widget in sorted(
+                dashboard.widgets,
+                key=lambda widget: (widget.grid_y, widget.grid_x, widget.display_order),
+            )
+        ],
     )
 
 
@@ -350,6 +372,10 @@ def post_dashboard_widget(
             metric=metric,
             goal=goal,
             rolling_window_days=payload.rolling_window_days,
+            grid_x=payload.grid_x,
+            grid_y=payload.grid_y,
+            grid_w=payload.grid_w,
+            grid_h=payload.grid_h,
         )
         db.commit()
     except DashboardNotFoundError as exc:
@@ -380,6 +406,7 @@ def patch_dashboard_widget(
     db: Annotated[Session, Depends(get_db)],
 ) -> WidgetSummary:
     try:
+        dashboard = get_dashboard_for_user(db, user=user, dashboard_id=dashboard_id)
         widget = get_dashboard_widget_for_user(
             db,
             user=user,
@@ -388,12 +415,20 @@ def patch_dashboard_widget(
         )
         updated_widget = update_dashboard_widget(
             db,
+            dashboard=dashboard,
             widget=widget,
             user=user,
             title=payload.title,
             rolling_window_days=payload.rolling_window_days,
+            grid_x=payload.grid_x,
+            grid_y=payload.grid_y,
+            grid_w=payload.grid_w,
+            grid_h=payload.grid_h,
         )
         db.commit()
+    except DashboardNotFoundError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except DashboardWidgetNotFoundError as exc:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

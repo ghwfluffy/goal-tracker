@@ -31,7 +31,7 @@ def client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
     )
     Base.metadata.create_all(engine)
 
-    app = create_app()
+    app = create_app(session_factory=testing_session_factory)
 
     def override_get_db() -> Iterator[Session]:
         session = testing_session_factory()

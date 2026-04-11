@@ -573,6 +573,10 @@ describe("auth api helpers", () => {
           JSON.stringify({
             current_progress_percent: null,
             display_order: 1,
+            grid_h: 4,
+            grid_w: 6,
+            grid_x: 0,
+            grid_y: 0,
             goal: null,
             id: "widget-1",
             metric: {
@@ -601,6 +605,10 @@ describe("auth api helpers", () => {
           JSON.stringify({
             current_progress_percent: null,
             display_order: 1,
+            grid_h: 5,
+            grid_w: 12,
+            grid_x: 0,
+            grid_y: 4,
             goal: null,
             id: "widget-1",
             metric: {
@@ -668,6 +676,10 @@ describe("auth api helpers", () => {
       createDashboardWidget(
         "dashboard-1",
         {
+          grid_h: 4,
+          grid_w: 6,
+          grid_x: 0,
+          grid_y: 0,
           goal_id: null,
           metric_id: "metric-1",
           rolling_window_days: 30,
@@ -685,6 +697,10 @@ describe("auth api helpers", () => {
         "dashboard-1",
         "widget-1",
         {
+          grid_h: 5,
+          grid_w: 12,
+          grid_x: 0,
+          grid_y: 4,
           rolling_window_days: 90,
         },
         fetcher,

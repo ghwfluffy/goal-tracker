@@ -26,6 +26,7 @@ const props = defineProps<{
 
 const chartElement = ref<HTMLElement | null>(null);
 let chart: EChartsInstance | null = null;
+let resizeObserver: ResizeObserver | null = null;
 
 const chartData = computed(() => {
   return props.widget.series.map((point) => {
@@ -230,10 +231,17 @@ watch(
 onMounted(() => {
   renderChart();
   window.addEventListener("resize", handleResize);
+  if (chartElement.value !== null) {
+    resizeObserver = new ResizeObserver(() => {
+      chart?.resize();
+    });
+    resizeObserver.observe(chartElement.value);
+  }
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener("resize", handleResize);
+  resizeObserver?.disconnect();
   disposeChart();
 });
 </script>
@@ -246,11 +254,11 @@ onBeforeUnmount(() => {
 <style scoped>
 .widget-chart {
   width: 100%;
-  min-height: 15rem;
+  min-height: 13rem;
 }
 
 .chart-empty-state {
-  min-height: 15rem;
+  min-height: 13rem;
   display: grid;
   place-items: center;
   border: 1px dashed rgba(100, 116, 139, 0.45);

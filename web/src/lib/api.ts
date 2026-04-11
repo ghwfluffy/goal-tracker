@@ -183,6 +183,10 @@ export interface DashboardWidgetSeriesPoint {
 export interface DashboardWidgetSummary {
   current_progress_percent: number | null;
   display_order: number;
+  grid_h: number;
+  grid_w: number;
+  grid_x: number;
+  grid_y: number;
   goal: DashboardGoalReference | null;
   id: string;
   metric: DashboardMetricReference | null;
@@ -219,6 +223,10 @@ export interface UpdateDashboardPayload {
 
 export interface CreateDashboardWidgetPayload {
   goal_id: string | null;
+  grid_h?: number | null;
+  grid_w?: number | null;
+  grid_x?: number | null;
+  grid_y?: number | null;
   metric_id: string | null;
   rolling_window_days: number | null;
   title: string;
@@ -226,6 +234,10 @@ export interface CreateDashboardWidgetPayload {
 }
 
 export interface UpdateDashboardWidgetPayload {
+  grid_h?: number | null;
+  grid_w?: number | null;
+  grid_x?: number | null;
+  grid_y?: number | null;
   rolling_window_days?: number | null;
   title?: string | null;
 }
