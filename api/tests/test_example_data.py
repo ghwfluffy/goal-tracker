@@ -49,12 +49,8 @@ def test_example_data_upgrader_backfills_existing_accounts_without_duplicates() 
         upgrade_all_example_data_users(db)
         db.commit()
 
-        metric_count = db.scalar(
-            select(func.count()).select_from(Metric).where(Metric.user_id == user.id)
-        )
-        goal_count = db.scalar(
-            select(func.count()).select_from(Goal).where(Goal.user_id == user.id)
-        )
+        metric_count = db.scalar(select(func.count()).select_from(Metric).where(Metric.user_id == user.id))
+        goal_count = db.scalar(select(func.count()).select_from(Goal).where(Goal.user_id == user.id))
         dashboard_count = db.scalar(
             select(func.count()).select_from(Dashboard).where(Dashboard.user_id == user.id)
         )
@@ -96,9 +92,7 @@ def test_example_data_upgrader_backfills_existing_accounts_without_duplicates() 
             select(Metric).where(Metric.user_id == user.id, Metric.name == "Example Last Drink")
         )
         widget_titles = set(
-            db.scalars(
-                select(DashboardWidget.title).join(Dashboard).where(Dashboard.user_id == user.id)
-            )
+            db.scalars(select(DashboardWidget.title).join(Dashboard).where(Dashboard.user_id == user.id))
         )
 
         assert metric_count == 2

@@ -72,9 +72,7 @@ def serialize_invitation_code(invitation_code: InvitationCode) -> InvitationCode
         id=invitation_code.id,
         code=invitation_code.code,
         created_by_username=(
-            invitation_code.created_by_user.username
-            if invitation_code.created_by_user is not None
-            else None
+            invitation_code.created_by_user.username if invitation_code.created_by_user is not None else None
         ),
         expires_at=invitation_code.expires_at.isoformat(),
         created_at=invitation_code.created_at.isoformat(),

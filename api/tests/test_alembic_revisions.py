@@ -26,6 +26,5 @@ def test_alembic_revision_ids_fit_version_table_limit() -> None:
     for path in sorted(versions_dir.glob("*.py")):
         revision_id = _load_revision_id(path)
         assert len(revision_id) <= MAX_ALEMBIC_VERSION_LENGTH, (
-            f"{path.name} revision id {revision_id!r} exceeds "
-            f"{MAX_ALEMBIC_VERSION_LENGTH} characters"
+            f"{path.name} revision id {revision_id!r} exceeds {MAX_ALEMBIC_VERSION_LENGTH} characters"
         )

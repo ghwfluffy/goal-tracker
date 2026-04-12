@@ -30,9 +30,7 @@ def password_hash_needs_upgrade(stored_password_hash: str) -> bool:
 
 def verify_legacy_pbkdf2_password(password: str, stored_password_hash: str) -> bool:
     try:
-        algorithm, iterations, encoded_salt, encoded_hash = stored_password_hash.split(
-            "$", maxsplit=3
-        )
+        algorithm, iterations, encoded_salt, encoded_hash = stored_password_hash.split("$", maxsplit=3)
     except ValueError:
         return False
 

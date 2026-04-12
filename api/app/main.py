@@ -26,9 +26,7 @@ def create_app(
     if settings.session_key_source == "default":
         logger.warning("SESSION_KEY is using the insecure default 'changeme'.")
     elif settings.session_key_source == "generated":
-        logger.warning(
-            "SESSION_KEY was not set. A temporary in-memory key was generated at startup."
-        )
+        logger.warning("SESSION_KEY was not set. A temporary in-memory key was generated at startup.")
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:

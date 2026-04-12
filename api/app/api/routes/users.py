@@ -47,9 +47,7 @@ class DeleteAccountRequest(BaseModel):
 
 
 def serialize_user_profile(user: User) -> UserProfileResponse:
-    avatar_version = (
-        user.avatar_updated_at.isoformat() if user.avatar_updated_at is not None else None
-    )
+    avatar_version = user.avatar_updated_at.isoformat() if user.avatar_updated_at is not None else None
     return UserProfileResponse(
         id=user.id,
         username=user.username,
@@ -77,9 +75,7 @@ def patch_current_user_profile(
         db.commit()
     except ProfileError as exc:
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
 
     return serialize_user_profile(updated_user)
 
@@ -92,18 +88,14 @@ async def post_current_user_avatar(
 ) -> UserProfileResponse:
     avatar_bytes = await avatar.read()
     if avatar_bytes == b"":
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Avatar file is empty."
-        )
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Avatar file is empty.")
 
     try:
         updated_user = update_avatar(db, user=user, image_bytes=avatar_bytes)
         db.commit()
     except ProfileError as exc:
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
 
     return serialize_user_profile(updated_user)
 
@@ -134,9 +126,7 @@ def post_change_password(
         db.commit()
     except ProfileError as exc:
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
 
     return serialize_user_profile(updated_user)
 
@@ -153,9 +143,7 @@ def delete_current_account(
         db.commit()
     except ProfileError as exc:
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
 
     response = Response(status_code=status.HTTP_204_NO_CONTENT)
     clear_session_cookie(response, settings=settings)

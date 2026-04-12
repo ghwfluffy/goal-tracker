@@ -163,9 +163,7 @@ def test_metric_delete_requires_no_goal_or_widget_dependencies(client: TestClien
     )
     assert standalone_metric_response.status_code == 201
 
-    delete_standalone_response = client.delete(
-        f"/api/v1/metrics/{standalone_metric_response.json()['id']}"
-    )
+    delete_standalone_response = client.delete(f"/api/v1/metrics/{standalone_metric_response.json()['id']}")
     assert delete_standalone_response.status_code == 204
 
     goal_metric_response = client.post(
@@ -190,13 +188,9 @@ def test_metric_delete_requires_no_goal_or_widget_dependencies(client: TestClien
     )
     assert goal_response.status_code == 201
 
-    delete_goal_metric_response = client.delete(
-        f"/api/v1/metrics/{goal_metric_response.json()['id']}"
-    )
+    delete_goal_metric_response = client.delete(f"/api/v1/metrics/{goal_metric_response.json()['id']}")
     assert delete_goal_metric_response.status_code == 422
-    assert (
-        delete_goal_metric_response.json()["detail"] == "Metrics linked to goals cannot be deleted."
-    )
+    assert delete_goal_metric_response.json()["detail"] == "Metrics linked to goals cannot be deleted."
 
     widget_metric_response = client.post(
         "/api/v1/metrics",
@@ -223,9 +217,7 @@ def test_metric_delete_requires_no_goal_or_widget_dependencies(client: TestClien
     )
     assert widget_response.status_code == 201
 
-    delete_widget_metric_response = client.delete(
-        f"/api/v1/metrics/{widget_metric_response.json()['id']}"
-    )
+    delete_widget_metric_response = client.delete(f"/api/v1/metrics/{widget_metric_response.json()['id']}")
     assert delete_widget_metric_response.status_code == 422
     assert (
         delete_widget_metric_response.json()["detail"]

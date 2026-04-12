@@ -63,9 +63,7 @@ class User(Base):
         nullable=True,
     )
     avatar_png: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
-    avatar_updated_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    avatar_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     default_dashboard_id: Mapped[str | None] = mapped_column(
         ForeignKey(
             "dashboards.id",

@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
+import pytest
 from fastapi.testclient import TestClient
+
+from app.services import goal_progress
 
 
 def bootstrap_admin(client: TestClient) -> None:
@@ -396,3 +401,64 @@ def test_goal_percent_widgets_return_schedule_and_risk_fields(client: TestClient
     risk_widget = risk_widget_response.json()
     assert risk_widget["failure_risk_percent"] is not None
     assert risk_widget["forecast_algorithm"] is None
+
+
+def test_goal_time_completion_uses_profile_timezone_across_goals_and_dashboards(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        goal_progress,
+        "utcnow",
+        lambda: datetime(2026, 4, 12, 1, 0, tzinfo=UTC),
+    )
+
+    bootstrap_admin(client)
+
+    profile_response = client.patch(
+        "/api/v1/users/me",
+        json={"timezone": "America/Los_Angeles"},
+    )
+    assert profile_response.status_code == 200
+
+    metric_response = client.post(
+        "/api/v1/metrics",
+        json={
+            "name": "Weight",
+            "metric_type": "number",
+            "decimal_places": 1,
+            "initial_number_value": 245.0,
+            "recorded_at": "2026-04-10T12:00:00Z",
+        },
+    )
+    assert metric_response.status_code == 201
+    metric_id = metric_response.json()["id"]
+
+    goal_response = client.post(
+        "/api/v1/goals",
+        json={
+            "title": "Reach 220",
+            "start_date": "2026-04-11",
+            "target_date": "2026-04-13",
+            "target_value_number": 220.0,
+            "metric_id": metric_id,
+        },
+    )
+    assert goal_response.status_code == 201
+    assert goal_response.json()["time_progress_percent"] == 25.0
+    goal_id = goal_response.json()["id"]
+
+    dashboard_response = client.post("/api/v1/dashboards", json={"name": "Main"})
+    assert dashboard_response.status_code == 201
+    dashboard_id = dashboard_response.json()["id"]
+
+    widget_response = client.post(
+        f"/api/v1/dashboards/{dashboard_id}/widgets",
+        json={
+            "title": "Progress",
+            "widget_type": "goal_progress",
+            "goal_id": goal_id,
+        },
+    )
+    assert widget_response.status_code == 201
+    assert widget_response.json()["time_completion_percent"] == 25.0

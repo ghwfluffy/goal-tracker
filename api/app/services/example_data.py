@@ -16,14 +16,13 @@ from app.db.models import (
     MetricEntry,
     User,
 )
-from app.services.dashboards import (
+from app.services.dashboard_layout import (
     WIDGET_TYPE_GOAL_PROGRESS,
     WIDGET_TYPE_GOAL_SUMMARY,
     WIDGET_TYPE_METRIC_HISTORY,
     WIDGET_TYPE_METRIC_SUMMARY,
-    create_dashboard,
-    create_dashboard_widget,
 )
+from app.services.dashboards import create_dashboard, create_dashboard_widget
 from app.services.goals import create_goal
 from app.services.metrics import (
     METRIC_TYPE_DATE,
@@ -290,12 +289,7 @@ def apply_expanded_example_history_and_widgets(db: Session, *, user: User) -> No
         name=EXAMPLE_LAST_DRINK_METRIC_NAME,
     )
     dashboard = get_dashboard_by_name_for_user(db, user=user, name=EXAMPLE_DASHBOARD_NAME)
-    if (
-        weight_metric is None
-        or weight_goal is None
-        or last_drink_metric is None
-        or dashboard is None
-    ):
+    if weight_metric is None or weight_goal is None or last_drink_metric is None or dashboard is None:
         return
 
     weight_history = [

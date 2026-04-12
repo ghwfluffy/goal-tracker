@@ -71,9 +71,7 @@ def normalized_username(username: str) -> str:
 
 
 def serialize_user_summary(user: User) -> UserSummary:
-    avatar_version = (
-        user.avatar_updated_at.isoformat() if user.avatar_updated_at is not None else None
-    )
+    avatar_version = user.avatar_updated_at.isoformat() if user.avatar_updated_at is not None else None
     return UserSummary(
         id=user.id,
         username=user.username,

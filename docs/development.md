@@ -2,6 +2,11 @@
 
 This document captures the current implemented developer workflow for the Phase 0 foundation.
 
+Coding-style guidance and style-change notes now live in:
+
+- [`docs/style`](./style/README.md)
+- [`docs/style/backend-python-modularization.md`](./style/backend-python-modularization.md)
+
 ## Validation
 
 Run the full repository validation flow from the repo root:

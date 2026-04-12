@@ -1,74 +1,28 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import timedelta
+from typing import Any
 from uuid import uuid4
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.db.models import Dashboard, DashboardWidget, Goal, Metric, MetricEntry, User
-from app.services.goals import (
-    build_goal_date_progress_points,
-    goal_progress_as_of_date,
-    goal_target_met,
+from app.services.dashboard_layout import (
+    METRIC_WIDGET_TYPES,
+    WIDGET_TYPE_DAYS_SINCE,
+    DashboardError,
+    default_widget_dimensions,
+    ensure_layout_slot_is_available,
+    find_first_available_layout_slot,
+    normalize_forecast_algorithm,
+    normalize_name,
+    normalize_optional_text,
+    normalize_rolling_window_days,
+    normalize_widget_layout,
+    normalize_widget_type,
 )
-
-WIDGET_TYPE_METRIC_HISTORY = "metric_history"
-WIDGET_TYPE_METRIC_SUMMARY = "metric_summary"
-WIDGET_TYPE_DAYS_SINCE = "days_since"
-WIDGET_TYPE_GOAL_PROGRESS = "goal_progress"
-WIDGET_TYPE_GOAL_SUMMARY = "goal_summary"
-WIDGET_TYPE_GOAL_COMPLETION_PERCENT = "goal_completion_percent"
-WIDGET_TYPE_GOAL_SUCCESS_PERCENT = "goal_success_percent"
-WIDGET_TYPE_GOAL_FAILURE_RISK = "goal_failure_risk"
-
-FORECAST_ALGORITHM_SIMPLE = "simple"
-FORECAST_ALGORITHM_WEIGHTED_WEEK_OVER_WEEK = "weighted_week_over_week"
-FORECAST_ALGORITHM_WEIGHTED_DAY_OVER_DAY = "weighted_day_over_day"
-
-SUPPORTED_FORECAST_ALGORITHMS = {
-    FORECAST_ALGORITHM_SIMPLE,
-    FORECAST_ALGORITHM_WEIGHTED_WEEK_OVER_WEEK,
-    FORECAST_ALGORITHM_WEIGHTED_DAY_OVER_DAY,
-}
-
-SUPPORTED_WIDGET_TYPES = {
-    WIDGET_TYPE_METRIC_HISTORY,
-    WIDGET_TYPE_METRIC_SUMMARY,
-    WIDGET_TYPE_DAYS_SINCE,
-    WIDGET_TYPE_GOAL_PROGRESS,
-    WIDGET_TYPE_GOAL_SUMMARY,
-    WIDGET_TYPE_GOAL_COMPLETION_PERCENT,
-    WIDGET_TYPE_GOAL_SUCCESS_PERCENT,
-    WIDGET_TYPE_GOAL_FAILURE_RISK,
-}
-
-GOAL_WIDGET_TYPES = {
-    WIDGET_TYPE_GOAL_PROGRESS,
-    WIDGET_TYPE_GOAL_SUMMARY,
-    WIDGET_TYPE_GOAL_COMPLETION_PERCENT,
-    WIDGET_TYPE_GOAL_SUCCESS_PERCENT,
-    WIDGET_TYPE_GOAL_FAILURE_RISK,
-}
-
-METRIC_WIDGET_TYPES = {
-    WIDGET_TYPE_METRIC_HISTORY,
-    WIDGET_TYPE_METRIC_SUMMARY,
-    WIDGET_TYPE_DAYS_SINCE,
-}
-
-GRID_COLUMN_COUNT = 12
-DEFAULT_SUMMARY_WIDGET_WIDTH = 4
-DEFAULT_SUMMARY_WIDGET_HEIGHT = 3
-DEFAULT_CHART_WIDGET_WIDTH = 6
-DEFAULT_CHART_WIDGET_HEIGHT = 4
-MAX_WIDGET_HEIGHT = 12
-
-
-class DashboardError(Exception):
-    pass
+from app.services.goal_progress import normalize_recorded_at, sort_metric_entries_ascending, utcnow
 
 
 class DashboardNotFoundError(Exception):
@@ -79,232 +33,31 @@ class DashboardWidgetNotFoundError(Exception):
     pass
 
 
-def utcnow() -> datetime:
-    return datetime.now(UTC)
-
-
-def get_user_timezone(user: User) -> ZoneInfo:
-    try:
-        return ZoneInfo(user.timezone)
-    except ZoneInfoNotFoundError:
-        return ZoneInfo("America/Chicago")
-
-
-def normalize_recorded_at(value: datetime) -> datetime:
-    if value.tzinfo is None:
-        return value.replace(tzinfo=UTC)
-    return value.astimezone(UTC)
-
-
-def normalize_name(value: str, *, field_name: str, max_length: int) -> str:
-    normalized = value.strip()
-    if normalized == "":
-        raise DashboardError(f"{field_name} is required.")
-    if len(normalized) > max_length:
-        raise DashboardError(f"{field_name} must be at most {max_length} characters.")
-    return normalized
-
-
-def normalize_optional_text(value: str | None) -> str | None:
-    if value is None:
-        return None
-    normalized = value.strip()
-    return normalized if normalized != "" else None
-
-
-def normalize_widget_type(widget_type: str) -> str:
-    normalized = widget_type.strip().lower()
-    if normalized not in SUPPORTED_WIDGET_TYPES:
-        raise DashboardError("Unsupported widget type.")
-    return normalized
-
-
-def normalize_rolling_window_days(rolling_window_days: int | None) -> int | None:
-    if rolling_window_days is None:
-        return None
-    if rolling_window_days < 1:
-        raise DashboardError("Rolling window must be at least 1 day.")
-    if rolling_window_days > 3650:
-        raise DashboardError("Rolling window must be 3650 days or fewer.")
-    return rolling_window_days
-
-
-def normalize_forecast_algorithm(
-    *,
-    widget_type: str,
-    forecast_algorithm: str | None,
-) -> str | None:
-    if widget_type != WIDGET_TYPE_GOAL_PROGRESS:
-        if forecast_algorithm is not None:
-            raise DashboardError("Only goal progress widgets can set a forecast algorithm.")
-        return None
-
-    if forecast_algorithm is None:
-        return FORECAST_ALGORITHM_SIMPLE
-
-    normalized = forecast_algorithm.strip().lower()
-    if normalized not in SUPPORTED_FORECAST_ALGORITHMS:
-        raise DashboardError("Unsupported forecast algorithm.")
-    return normalized
-
-
-def default_widget_dimensions(widget_type: str) -> tuple[int, int]:
-    if widget_type in {
-        WIDGET_TYPE_METRIC_SUMMARY,
-        WIDGET_TYPE_DAYS_SINCE,
-        WIDGET_TYPE_GOAL_SUMMARY,
-        WIDGET_TYPE_GOAL_COMPLETION_PERCENT,
-        WIDGET_TYPE_GOAL_SUCCESS_PERCENT,
-        WIDGET_TYPE_GOAL_FAILURE_RISK,
-    }:
-        return DEFAULT_SUMMARY_WIDGET_WIDTH, DEFAULT_SUMMARY_WIDGET_HEIGHT
-    return DEFAULT_CHART_WIDGET_WIDTH, DEFAULT_CHART_WIDGET_HEIGHT
-
-
-def normalize_grid_dimension(
-    value: int,
-    *,
-    field_name: str,
-    minimum: int,
-    maximum: int,
-) -> int:
-    if value < minimum or value > maximum:
-        raise DashboardError(f"{field_name} must be between {minimum} and {maximum}.")
-    return value
-
-
-def normalize_widget_layout(
-    *,
-    grid_x: int,
-    grid_y: int,
-    grid_w: int,
-    grid_h: int,
-) -> tuple[int, int, int, int]:
-    normalized_w = normalize_grid_dimension(
-        grid_w,
-        field_name="Widget width",
-        minimum=1,
-        maximum=GRID_COLUMN_COUNT,
-    )
-    normalized_h = normalize_grid_dimension(
-        grid_h,
-        field_name="Widget height",
-        minimum=1,
-        maximum=MAX_WIDGET_HEIGHT,
-    )
-    normalized_x = normalize_grid_dimension(
-        grid_x,
-        field_name="Widget horizontal position",
-        minimum=0,
-        maximum=GRID_COLUMN_COUNT - 1,
-    )
-    normalized_y = normalize_grid_dimension(
-        grid_y,
-        field_name="Widget vertical position",
-        minimum=0,
-        maximum=10_000,
-    )
-    if normalized_x + normalized_w > GRID_COLUMN_COUNT:
-        raise DashboardError("Widget layout exceeds dashboard width.")
-    return normalized_x, normalized_y, normalized_w, normalized_h
-
-
-def widgets_overlap(
-    *,
-    first_x: int,
-    first_y: int,
-    first_w: int,
-    first_h: int,
-    second_x: int,
-    second_y: int,
-    second_w: int,
-    second_h: int,
-) -> bool:
-    return not (
-        first_x + first_w <= second_x
-        or second_x + second_w <= first_x
-        or first_y + first_h <= second_y
-        or second_y + second_h <= first_y
+def _dashboard_loading_options() -> tuple[Any, ...]:
+    return (
+        selectinload(Dashboard.widgets).selectinload(DashboardWidget.metric).selectinload(Metric.entries),
+        selectinload(Dashboard.widgets).selectinload(DashboardWidget.goal).selectinload(Goal.user),
+        selectinload(Dashboard.widgets).selectinload(DashboardWidget.goal).selectinload(Goal.exception_dates),
+        selectinload(Dashboard.widgets)
+        .selectinload(DashboardWidget.goal)
+        .selectinload(Goal.metric)
+        .selectinload(Metric.entries),
     )
 
 
-def ensure_layout_slot_is_available(
-    db: Session,
-    *,
-    dashboard: Dashboard,
-    grid_x: int,
-    grid_y: int,
-    grid_w: int,
-    grid_h: int,
-    ignore_widget_id: str | None = None,
-) -> None:
-    statement = select(DashboardWidget).where(DashboardWidget.dashboard_id == dashboard.id)
-    widgets = list(db.scalars(statement))
-    for existing_widget in widgets:
-        if ignore_widget_id is not None and existing_widget.id == ignore_widget_id:
-            continue
-        if widgets_overlap(
-            first_x=grid_x,
-            first_y=grid_y,
-            first_w=grid_w,
-            first_h=grid_h,
-            second_x=existing_widget.grid_x,
-            second_y=existing_widget.grid_y,
-            second_w=existing_widget.grid_w,
-            second_h=existing_widget.grid_h,
-        ):
-            raise DashboardError("Widget layout overlaps another widget.")
-
-
-def find_first_available_layout_slot(
-    db: Session,
-    *,
-    dashboard: Dashboard,
-    grid_w: int,
-    grid_h: int,
-) -> tuple[int, int]:
-    existing_widgets = list(
-        db.scalars(select(DashboardWidget).where(DashboardWidget.dashboard_id == dashboard.id))
+def _widget_loading_options() -> tuple[Any, ...]:
+    return (
+        selectinload(DashboardWidget.metric).selectinload(Metric.entries),
+        selectinload(DashboardWidget.goal).selectinload(Goal.user),
+        selectinload(DashboardWidget.goal).selectinload(Goal.exception_dates),
+        selectinload(DashboardWidget.goal).selectinload(Goal.metric).selectinload(Metric.entries),
     )
-    max_y = max((widget.grid_y + widget.grid_h for widget in existing_widgets), default=0)
-    for candidate_y in range(0, max_y + MAX_WIDGET_HEIGHT + 1):
-        for candidate_x in range(0, GRID_COLUMN_COUNT - grid_w + 1):
-            if any(
-                widgets_overlap(
-                    first_x=candidate_x,
-                    first_y=candidate_y,
-                    first_w=grid_w,
-                    first_h=grid_h,
-                    second_x=existing_widget.grid_x,
-                    second_y=existing_widget.grid_y,
-                    second_w=existing_widget.grid_w,
-                    second_h=existing_widget.grid_h,
-                )
-                for existing_widget in existing_widgets
-            ):
-                continue
-            return candidate_x, candidate_y
-    return 0, max_y
 
 
 def list_dashboards_for_user(db: Session, user: User) -> list[Dashboard]:
     statement = (
         select(Dashboard)
-        .options(
-            selectinload(Dashboard.widgets)
-            .selectinload(DashboardWidget.metric)
-            .selectinload(Metric.entries),
-            selectinload(Dashboard.widgets)
-            .selectinload(DashboardWidget.goal)
-            .selectinload(Goal.user),
-            selectinload(Dashboard.widgets)
-            .selectinload(DashboardWidget.goal)
-            .selectinload(Goal.exception_dates),
-            selectinload(Dashboard.widgets)
-            .selectinload(DashboardWidget.goal)
-            .selectinload(Goal.metric)
-            .selectinload(Metric.entries),
-        )
+        .options(*_dashboard_loading_options())
         .where(Dashboard.user_id == user.id)
         .order_by(Dashboard.created_at.asc())
     )
@@ -314,21 +67,7 @@ def list_dashboards_for_user(db: Session, user: User) -> list[Dashboard]:
 def get_dashboard_for_user(db: Session, *, user: User, dashboard_id: str) -> Dashboard:
     statement = (
         select(Dashboard)
-        .options(
-            selectinload(Dashboard.widgets)
-            .selectinload(DashboardWidget.metric)
-            .selectinload(Metric.entries),
-            selectinload(Dashboard.widgets)
-            .selectinload(DashboardWidget.goal)
-            .selectinload(Goal.user),
-            selectinload(Dashboard.widgets)
-            .selectinload(DashboardWidget.goal)
-            .selectinload(Goal.exception_dates),
-            selectinload(Dashboard.widgets)
-            .selectinload(DashboardWidget.goal)
-            .selectinload(Goal.metric)
-            .selectinload(Metric.entries),
-        )
+        .options(*_dashboard_loading_options())
         .where(Dashboard.id == dashboard_id, Dashboard.user_id == user.id)
     )
     dashboard = db.scalar(statement)
@@ -342,14 +81,7 @@ def get_dashboard_widget_for_user(
 ) -> DashboardWidget:
     statement = (
         select(DashboardWidget)
-        .options(
-            selectinload(DashboardWidget.metric).selectinload(Metric.entries),
-            selectinload(DashboardWidget.goal).selectinload(Goal.user),
-            selectinload(DashboardWidget.goal).selectinload(Goal.exception_dates),
-            selectinload(DashboardWidget.goal)
-            .selectinload(Goal.metric)
-            .selectinload(Metric.entries),
-        )
+        .options(*_widget_loading_options())
         .where(
             DashboardWidget.id == widget_id,
             DashboardWidget.dashboard_id == dashboard_id,
@@ -380,9 +112,7 @@ def create_dashboard(
     db.add(dashboard)
     db.flush()
 
-    existing_dashboard_count = db.scalar(
-        select(Dashboard).where(Dashboard.user_id == user.id).limit(2)
-    )
+    existing_dashboard_count = db.scalar(select(Dashboard).where(Dashboard.user_id == user.id).limit(2))
     if make_default or user.default_dashboard_id is None or existing_dashboard_count is None:
         user.default_dashboard_id = dashboard.id
 
@@ -459,9 +189,7 @@ def create_dashboard_widget(
         raise DashboardError("Widgets can only reference your own metrics.")
     if goal is not None and goal.user_id != user.id:
         raise DashboardError("Widgets can only reference your own goals.")
-    if normalized_widget_type == WIDGET_TYPE_DAYS_SINCE and (
-        metric is None or metric.metric_type != "date"
-    ):
+    if normalized_widget_type == WIDGET_TYPE_DAYS_SINCE and (metric is None or metric.metric_type != "date"):
         raise DashboardError("Days since widgets require a date metric.")
     if goal is not None and goal.target_date is not None:
         normalized_window = None
@@ -593,10 +321,6 @@ def delete_dashboard_widget(db: Session, *, widget: DashboardWidget) -> None:
     db.flush()
 
 
-def sort_metric_entries_ascending(entries: list[MetricEntry]) -> list[MetricEntry]:
-    return sorted(entries, key=lambda entry: normalize_recorded_at(entry.recorded_at))
-
-
 def filter_entries_to_window(
     entries: list[MetricEntry], *, rolling_window_days: int | None
 ) -> list[MetricEntry]:
@@ -605,261 +329,4 @@ def filter_entries_to_window(
         return ordered_entries
 
     threshold = utcnow() - timedelta(days=rolling_window_days)
-    return [
-        entry for entry in ordered_entries if normalize_recorded_at(entry.recorded_at) >= threshold
-    ]
-
-
-def metric_entry_numeric_value(metric: Metric, entry: MetricEntry) -> float | int | None:
-    if metric.metric_type == "number":
-        return entry.number_value
-    if entry.date_value is None:
-        return None
-    return entry.date_value.toordinal()
-
-
-def goal_target_numeric_value(goal: Goal) -> float | int | None:
-    if goal.metric.metric_type == "number":
-        return goal.target_value_number
-    if goal.target_value_date is None:
-        return None
-    return goal.target_value_date.toordinal()
-
-
-def find_goal_baseline_entry(goal: Goal, ordered_entries: list[MetricEntry]) -> MetricEntry | None:
-    user_timezone = get_user_timezone(goal.user)
-    start_cutoff = datetime.combine(goal.start_date, time.min, tzinfo=user_timezone).astimezone(UTC)
-    baseline_entry: MetricEntry | None = None
-    first_after_start: MetricEntry | None = None
-
-    for entry in ordered_entries:
-        recorded_at = normalize_recorded_at(entry.recorded_at)
-        if recorded_at <= start_cutoff:
-            baseline_entry = entry
-            continue
-        if first_after_start is None:
-            first_after_start = entry
-            break
-
-    return baseline_entry or first_after_start
-
-
-def calculate_progress_percent(
-    *,
-    baseline_value: float | int,
-    target_value: float | int,
-    current_value: float | int,
-) -> float:
-    if target_value == baseline_value:
-        return 100.0 if current_value == target_value else 0.0
-
-    progress_ratio = (float(current_value) - float(baseline_value)) / (
-        float(target_value) - float(baseline_value)
-    )
-    return max(0.0, min(progress_ratio * 100.0, 100.0))
-
-
-def goal_start_datetime(goal: Goal) -> datetime:
-    user_timezone = get_user_timezone(goal.user)
-    return datetime.combine(goal.start_date, time.min, tzinfo=user_timezone).astimezone(UTC)
-
-
-def goal_end_datetime(goal: Goal) -> datetime | None:
-    if goal.target_date is None:
-        return None
-
-    user_timezone = get_user_timezone(goal.user)
-    return datetime.combine(
-        goal.target_date + timedelta(days=1),
-        time.min,
-        tzinfo=user_timezone,
-    ).astimezone(UTC)
-
-
-def goal_time_completion_percent(goal: Goal, *, as_of: datetime | None = None) -> float | None:
-    end_datetime = goal_end_datetime(goal)
-    if end_datetime is None:
-        return None
-
-    start_datetime = goal_start_datetime(goal)
-    comparison_datetime = as_of or utcnow()
-    if comparison_datetime <= start_datetime:
-        return 0.0
-    if comparison_datetime >= end_datetime:
-        return 100.0
-
-    total_seconds = (end_datetime - start_datetime).total_seconds()
-    if total_seconds <= 0:
-        return 100.0
-
-    elapsed_seconds = (comparison_datetime - start_datetime).total_seconds()
-    return round(max(0.0, min((elapsed_seconds / total_seconds) * 100.0, 100.0)), 2)
-
-
-def goal_success_percent(goal: Goal) -> float | None:
-    if goal.metric.metric_type == "date":
-        return goal_progress_as_of_date(goal)
-
-    points = build_goal_progress_points(goal, rolling_window_days=None)
-    if len(points) == 0:
-        return None
-    return points[-1].progress_percent
-
-
-def goal_failure_risk_percent(goal: Goal) -> float | None:
-    time_completion_percent = goal_time_completion_percent(goal)
-    success_percent = goal_success_percent(goal)
-    if time_completion_percent is None or success_percent is None:
-        return None
-    return round(max(0.0, time_completion_percent - success_percent), 2)
-
-
-def is_target_met(
-    *, baseline_value: float | int, target_value: float | int, current_value: float | int
-) -> bool:
-    if target_value == baseline_value:
-        return current_value == target_value
-    if target_value > baseline_value:
-        return current_value >= target_value
-    return current_value <= target_value
-
-
-@dataclass
-class GoalProgressPoint:
-    recorded_at: datetime
-    number_value: float | int | None
-    date_value: date | None
-    progress_percent: float
-
-
-def build_goal_progress_points(
-    goal: Goal, *, rolling_window_days: int | None
-) -> list[GoalProgressPoint]:
-    effective_window = None if goal.target_date is not None else rolling_window_days
-
-    if goal.metric.metric_type == "date":
-        date_points = build_goal_date_progress_points(goal)
-        if effective_window is not None:
-            window_threshold = utcnow() - timedelta(days=effective_window)
-            date_points = [
-                point
-                for point in date_points
-                if normalize_recorded_at(point.recorded_at) >= window_threshold
-            ]
-        return [
-            GoalProgressPoint(
-                recorded_at=point.recorded_at,
-                number_value=None,
-                date_value=None,
-                progress_percent=point.progress_percent,
-            )
-            for point in date_points
-        ]
-
-    target_value = goal_target_numeric_value(goal)
-    if target_value is None:
-        return []
-
-    ordered_entries = sort_metric_entries_ascending(goal.metric.entries)
-    if len(ordered_entries) == 0:
-        return []
-
-    baseline_entry = find_goal_baseline_entry(goal, ordered_entries)
-    if baseline_entry is None:
-        return []
-
-    baseline_value = metric_entry_numeric_value(goal.metric, baseline_entry)
-    if baseline_value is None:
-        return []
-
-    user_timezone = get_user_timezone(goal.user)
-    start_cutoff = datetime.combine(goal.start_date, time.min, tzinfo=user_timezone).astimezone(UTC)
-    numeric_window_threshold: datetime | None = (
-        utcnow() - timedelta(days=effective_window) if effective_window is not None else None
-    )
-
-    points: list[GoalProgressPoint] = [
-        GoalProgressPoint(
-            recorded_at=start_cutoff,
-            number_value=baseline_entry.number_value,
-            date_value=baseline_entry.date_value,
-            progress_percent=0.0,
-        )
-    ]
-    for entry in ordered_entries:
-        recorded_at = normalize_recorded_at(entry.recorded_at)
-        if recorded_at < start_cutoff:
-            continue
-        if numeric_window_threshold is not None and recorded_at < numeric_window_threshold:
-            continue
-
-        current_value = metric_entry_numeric_value(goal.metric, entry)
-        if current_value is None:
-            continue
-        if current_value == baseline_value and len(points) == 1:
-            continue
-
-        points.append(
-            GoalProgressPoint(
-                recorded_at=entry.recorded_at,
-                number_value=entry.number_value,
-                date_value=entry.date_value,
-                progress_percent=calculate_progress_percent(
-                    baseline_value=baseline_value,
-                    target_value=target_value,
-                    current_value=current_value,
-                ),
-            )
-        )
-
-    return points
-
-
-def get_widget_current_progress_percent(widget: DashboardWidget) -> float | None:
-    if widget.goal is None:
-        return None
-    return goal_success_percent(widget.goal)
-
-
-def get_widget_time_completion_percent(widget: DashboardWidget) -> float | None:
-    if widget.goal is None:
-        return None
-    return goal_time_completion_percent(widget.goal)
-
-
-def get_widget_failure_risk_percent(widget: DashboardWidget) -> float | None:
-    if widget.goal is None:
-        return None
-    return goal_failure_risk_percent(widget.goal)
-
-
-def get_widget_target_met(widget: DashboardWidget) -> bool | None:
-    if widget.goal is None:
-        return None
-    if widget.goal.metric.metric_type == "date":
-        return goal_target_met(widget.goal)
-
-    target_value = goal_target_numeric_value(widget.goal)
-    if target_value is None:
-        return None
-
-    ordered_entries = sort_metric_entries_ascending(widget.goal.metric.entries)
-    if len(ordered_entries) == 0:
-        return None
-
-    baseline_entry = find_goal_baseline_entry(widget.goal, ordered_entries)
-    latest_entry = ordered_entries[-1]
-    baseline_value = (
-        metric_entry_numeric_value(widget.goal.metric, baseline_entry)
-        if baseline_entry is not None
-        else None
-    )
-    current_value = metric_entry_numeric_value(widget.goal.metric, latest_entry)
-    if baseline_value is None or current_value is None:
-        return None
-
-    return is_target_met(
-        baseline_value=baseline_value,
-        target_value=target_value,
-        current_value=current_value,
-    )
+    return [entry for entry in ordered_entries if normalize_recorded_at(entry.recorded_at) >= threshold]

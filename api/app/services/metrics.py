@@ -23,12 +23,8 @@ class MetricNotFoundError(Exception):
     pass
 
 
-def list_metrics_for_user(
-    db: Session, user: User, *, include_archived: bool = False
-) -> list[Metric]:
-    statement = (
-        select(Metric).options(selectinload(Metric.entries)).where(Metric.user_id == user.id)
-    )
+def list_metrics_for_user(db: Session, user: User, *, include_archived: bool = False) -> list[Metric]:
+    statement = select(Metric).options(selectinload(Metric.entries)).where(Metric.user_id == user.id)
     if not include_archived:
         statement = statement.where(Metric.archived_at.is_(None))
     statement = statement.order_by(Metric.created_at.desc())
@@ -127,9 +123,7 @@ def create_metric(
             metric_type=normalized_metric_type,
             decimal_places=decimal_places,
         ),
-        unit_label=(
-            unit_label.strip() if unit_label is not None and unit_label.strip() != "" else None
-        ),
+        unit_label=(unit_label.strip() if unit_label is not None and unit_label.strip() != "" else None),
         updated_at=utcnow(),
     )
     db.add(metric)
