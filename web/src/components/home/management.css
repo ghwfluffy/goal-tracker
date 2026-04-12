@@ -1,11 +1,8 @@
 .management-shell,
 .management-card-grid,
-.dialog-stack,
-.dialog-section,
-.form-stack,
 .goal-meta-grid {
   display: grid;
-  gap: 1rem;
+  gap: var(--space-6);
 }
 
 .management-card-grid {
@@ -19,7 +16,7 @@
 .dialog-actions-row {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--space-4);
 }
 
 .tracking-table-wrap {
@@ -35,21 +32,21 @@
 .tracking-table td {
   padding: 0.35rem 0.75rem;
   text-align: left;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.75);
+  border-bottom: 1px solid var(--color-border-soft-muted);
   vertical-align: middle;
 }
 
 .tracking-table th {
-  font-size: 0.72rem;
+  font-size: var(--font-size-table-header);
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: #64748b;
-  background: rgba(248, 250, 252, 0.95);
+  color: var(--color-text-faint);
+  background: var(--color-surface-muted);
 }
 
 .tracking-table td {
-  font-size: 0.92rem;
+  font-size: var(--font-size-body-sm);
   line-height: 1.2;
 }
 
@@ -59,7 +56,7 @@
 }
 
 .table-secondary-text {
-  color: #64748b;
+  color: var(--color-text-faint);
   font-size: 0.8rem;
 }
 
@@ -87,11 +84,11 @@
 
 .tracking-card {
   display: grid;
-  gap: 1rem;
-  padding: 1.1rem;
-  border-radius: 1rem;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(248, 250, 252, 0.84);
+  gap: var(--space-6);
+  padding: var(--space-7);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border-panel);
+  background: var(--color-surface-card);
 }
 
 .tracking-card-header,
@@ -106,20 +103,18 @@
 
 .tracking-card-header p,
 .section-heading-text p {
-  margin: 0.75rem 0 0;
-  line-height: 1.7;
-  color: #334155;
+  color: var(--color-text-muted);
 }
 
 .checkbox-row {
   display: inline-flex;
   align-items: center;
-  gap: 0.75rem;
-  color: #0f172a;
+  gap: var(--space-4);
+  color: var(--color-text-strong);
 }
 
 .empty-state {
-  color: #64748b;
+  color: var(--color-text-faint);
 }
 
 .dialog-actions-row {

@@ -107,32 +107,15 @@ const currentValueText = computed(() => {
   padding-inline: 0;
 }
 
-.dialog-stack,
-.dialog-section {
-  display: grid;
-  gap: 1rem;
-}
-
-.section-heading-text h3 {
-  margin: 0;
-  font-size: 1.1rem;
-}
-
-.section-heading-text p {
-  margin: 0.75rem 0 0;
-  line-height: 1.7;
-  color: #334155;
-}
-
 .empty-state {
-  color: #64748b;
+  color: var(--color-text-faint);
 }
 
 .metric-history-table-wrap {
   overflow-x: auto;
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  border-radius: 1rem;
-  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-panel-subtle);
 }
 
 .metric-history-table {
@@ -142,18 +125,18 @@ const currentValueText = computed(() => {
 
 .metric-history-table th,
 .metric-history-table td {
-  padding: 0.9rem 1rem;
+  padding: var(--space-5) var(--space-6);
   text-align: left;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.75);
+  border-bottom: 1px solid var(--color-border-soft-muted);
 }
 
 .metric-history-table th {
-  font-size: 0.76rem;
+  font-size: var(--font-size-caption);
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: #64748b;
-  background: rgba(248, 250, 252, 0.95);
+  color: var(--color-text-faint);
+  background: var(--color-surface-muted);
 }
 
 .metric-history-table tbody tr:last-child td {

@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
 import type { MetricSummary } from "../lib/api";
+import { getChartThemeColors } from "../lib/theme";
 import { formatDateOnly } from "../lib/time";
 
 interface EChartsInstance {
@@ -61,6 +62,7 @@ const hasChartData = computed(() => chartData.value.length > 0);
 function createChartOption(): object {
   const isDateMetric = props.metric.metric_type === "date";
   const decimalPlaces = props.metric.decimal_places ?? 0;
+  const chartTheme = getChartThemeColors();
 
   return {
     animation: false,
@@ -69,15 +71,15 @@ function createChartOption(): object {
     xAxis: {
       type: "category",
       data: chartData.value.map((point) => point.label),
-      axisLine: { lineStyle: { color: "#cbd5e1" } },
-      axisLabel: { color: "#64748b", fontSize: 11 },
+      axisLine: { lineStyle: { color: chartTheme.axisLine } },
+      axisLabel: { color: chartTheme.axisLabel, fontSize: 11 },
     },
     yAxis: {
       type: "value",
       axisLine: { show: false },
-      splitLine: { lineStyle: { color: "#e2e8f0" } },
+      splitLine: { lineStyle: { color: chartTheme.gridLine } },
       axisLabel: {
-        color: "#64748b",
+        color: chartTheme.axisLabel,
         formatter: (value: number) => {
           if (!isDateMetric) {
             return value.toFixed(decimalPlaces);
@@ -92,9 +94,9 @@ function createChartOption(): object {
         smooth: true,
         symbolSize: 7,
         data: chartData.value.map((point) => point.value),
-        lineStyle: { color: "#2563eb", width: 3 },
-        itemStyle: { color: "#0f172a" },
-        areaStyle: { color: "rgba(37, 99, 235, 0.12)" },
+        lineStyle: { color: chartTheme.primary, width: 3 },
+        itemStyle: { color: chartTheme.seriesInk },
+        areaStyle: { color: chartTheme.primarySoft },
       },
     ],
   };
@@ -151,7 +153,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div v-if="hasChartData" ref="chartElement" class="metric-history-chart"></div>
-  <div v-else class="metric-history-empty">No history recorded yet.</div>
+  <div v-else class="metric-history-empty empty-dashed-state">No history recorded yet.</div>
 </template>
 
 <style scoped>
@@ -162,12 +164,5 @@ onBeforeUnmount(() => {
 
 .metric-history-empty {
   min-height: 18rem;
-  display: grid;
-  place-items: center;
-  border: 1px dashed rgba(100, 116, 139, 0.45);
-  border-radius: 1rem;
-  color: #64748b;
-  background: rgba(248, 250, 252, 0.9);
-  text-align: center;
 }
 </style>

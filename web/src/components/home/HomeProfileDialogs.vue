@@ -539,14 +539,11 @@ watch(
 </template>
 
 <style scoped>
-.dialog-stack,
-.dialog-section,
-.field,
 .invitation-code-actions,
 .invitation-code-users,
 .invitation-code-user-list {
   display: grid;
-  gap: 0.75rem;
+  gap: var(--space-4);
 }
 
 .profile-dialog :deep(.p-dialog-content) {
@@ -556,56 +553,38 @@ watch(
 .section-heading {
   display: flex;
   align-items: center;
-  gap: 1rem;
-}
-
-.section-heading-text h3,
-.section-heading h3 {
-  margin: 0;
-  font-size: 1.1rem;
-}
-
-.section-heading-text p,
-.section-heading p {
-  margin: 0.75rem 0 0;
-  line-height: 1.7;
-  color: #334155;
+  gap: var(--space-6);
 }
 
 .dialog-copy {
   margin: 0;
-  line-height: 1.7;
-  color: #334155;
+  line-height: var(--line-height-copy);
+  color: var(--color-text-muted);
 }
 
 .danger-section {
-  padding: 1rem;
-  border-radius: 1rem;
-  background: rgba(185, 28, 28, 0.04);
+  padding: var(--space-6);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-danger-soft);
 }
 
 .loading {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-}
-
-.shell-center {
-  justify-content: center;
-  min-height: 12rem;
+  gap: var(--space-4);
 }
 
 .empty-invitation-state {
-  color: #64748b;
+  color: var(--color-text-faint);
 }
 
 .invitation-code-card {
   display: grid;
-  gap: 1rem;
-  padding: 1.1rem;
-  border-radius: 1rem;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(248, 250, 252, 0.8);
+  gap: var(--space-6);
+  padding: var(--space-7);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border-panel);
+  background: var(--color-surface-card-soft);
 }
 
 .invitation-code-header,
@@ -615,7 +594,7 @@ watch(
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: var(--space-4);
 }
 
 .invitation-code-header {
@@ -624,34 +603,34 @@ watch(
 
 .invitation-code-copy {
   display: grid;
-  gap: 0.35rem;
+  gap: var(--space-2);
 }
 
 .code-label {
   margin: 0;
-  font-size: 0.75rem;
+  font-size: var(--font-size-caption);
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #64748b;
+  color: var(--color-text-faint);
 }
 
 .invitation-code-copy code {
   font-family: "IBM Plex Mono", monospace;
   font-size: 0.95rem;
   word-break: break-all;
-  color: #0f172a;
+  color: var(--color-text-strong);
 }
 
 .invitation-code-meta {
   flex-wrap: wrap;
   justify-content: flex-start;
-  color: #475569;
-  font-size: 0.92rem;
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-body-sm);
 }
 
 .invitation-code-empty {
-  color: #64748b;
+  color: var(--color-text-faint);
 }
 
 .invitation-code-user-list {
@@ -662,9 +641,9 @@ watch(
   justify-content: flex-start;
   flex-wrap: wrap;
   padding: 0.85rem 1rem;
-  border-radius: 0.9rem;
-  background: #fff;
-  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-input);
+  border: 1px solid var(--color-border-panel-faint);
 }
 
 .profile-dialog :deep(.full-width-input),

@@ -16,7 +16,7 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <section class="tabs-shell">
+  <section class="tabs-shell surface-panel-soft">
     <TabView
       :active-index="activeIndex"
       @update:activeIndex="(value) => emit('update:activeIndex', value)"
@@ -30,11 +30,7 @@ const emit = defineEmits<{
 
 <style scoped>
 .tabs-shell {
-  margin-top: 1.5rem;
-  padding: 1rem;
-  border-radius: 1.6rem;
-  background: rgba(255, 255, 255, 0.78);
-  border: 1px solid rgba(31, 41, 55, 0.08);
-  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.08);
+  margin-top: var(--space-9);
+  padding: var(--space-6);
 }
 </style>

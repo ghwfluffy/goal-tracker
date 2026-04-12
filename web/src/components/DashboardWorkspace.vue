@@ -894,7 +894,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .dashboard-shell {
   display: grid;
-  gap: 1rem;
+  gap: var(--space-6);
 }
 
 .dashboard-toolbar,
@@ -902,18 +902,18 @@ onBeforeUnmount(() => {
 .widget-card,
 .empty-panel,
 .loading-panel {
-  background: rgba(255, 255, 255, 0.94);
+  background: var(--color-surface-panel-strong);
 }
 
 .dashboard-toolbar {
   display: flex;
   justify-content: flex-start;
-  gap: 1rem;
+  gap: var(--space-6);
   align-items: center;
 }
 
 .dashboard-description {
-  color: #475569;
+  color: var(--color-text-subtle);
 }
 
 .toolbar-actions {
@@ -921,7 +921,7 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
   justify-content: flex-start;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--space-4);
 }
 
 .dashboard-picker {
@@ -930,13 +930,13 @@ onBeforeUnmount(() => {
 
 .dashboard-view {
   display: grid;
-  gap: 1rem;
+  gap: var(--space-6);
 }
 
 .dashboard-summary {
   display: flex;
   justify-content: space-between;
-  gap: 1rem;
+  gap: var(--space-6);
   align-items: flex-start;
 }
 
@@ -945,14 +945,14 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: var(--space-4);
 }
 
 .widget-grid {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
   grid-auto-rows: 6rem;
-  gap: 1rem;
+  gap: var(--space-6);
   align-items: stretch;
 }
 
@@ -965,11 +965,11 @@ onBeforeUnmount(() => {
 }
 
 .widget-card.editable {
-  border: 1px solid rgba(59, 130, 246, 0.25);
+  border: 1px solid var(--color-border-interactive-soft);
 }
 
 .widget-card.active {
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  box-shadow: var(--shadow-focus-soft);
 }
 
 .widget-card-actions {
@@ -986,23 +986,23 @@ onBeforeUnmount(() => {
 .widget-icon-button {
   width: 2rem;
   height: 2rem;
-  border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  background: rgba(255, 255, 255, 0.92);
-  color: #1e293b;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border-icon);
+  background: var(--color-surface-panel-overlay);
+  color: var(--color-text-default);
   display: grid;
   place-items: center;
   cursor: pointer;
 }
 
 .widget-icon-button:hover {
-  border-color: rgba(59, 130, 246, 0.45);
-  color: #2563eb;
+  border-color: var(--color-border-interactive);
+  color: var(--color-text-link);
 }
 
 .widget-delete-button:hover {
-  border-color: rgba(239, 68, 68, 0.45);
-  color: #dc2626;
+  border-color: var(--color-border-danger-soft);
+  color: var(--chart-series-danger);
 }
 
 .widget-move-handle {
@@ -1011,13 +1011,13 @@ onBeforeUnmount(() => {
 
 .widget-layout-meta {
   position: absolute;
-  left: 1rem;
+  left: var(--space-6);
   bottom: 0.9rem;
-  font-size: 0.75rem;
-  color: #64748b;
-  background: rgba(248, 250, 252, 0.9);
+  font-size: var(--font-size-caption);
+  color: var(--color-text-faint);
+  background: var(--color-surface-muted-soft);
   padding: 0.15rem 0.45rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
 }
 
 .widget-resize-handle {
@@ -1027,9 +1027,9 @@ onBeforeUnmount(() => {
   width: 2rem;
   height: 2rem;
   border: 0;
-  background: rgba(37, 99, 235, 0.1);
-  color: #2563eb;
-  border-radius: 0.75rem;
+  background: var(--color-surface-interactive-soft);
+  color: var(--color-text-link);
+  border-radius: var(--radius-sm);
   display: grid;
   place-items: center;
   cursor: nwse-resize;
@@ -1037,18 +1037,18 @@ onBeforeUnmount(() => {
 
 .dialog-form {
   display: grid;
-  gap: 1rem;
+  gap: var(--space-6);
 }
 
 .dashboard-dialog-form,
 .widget-dialog-form {
-  gap: 1rem;
+  gap: var(--space-6);
 }
 
 .dialog-field,
 .widget-field {
   display: grid;
-  gap: 0.45rem;
+  gap: var(--space-3);
 }
 
 .dialog-form :deep(.p-inputtext),
@@ -1058,20 +1058,20 @@ onBeforeUnmount(() => {
 
 .field-hint,
 .widget-dialog-note {
-  color: #64748b;
+  color: var(--color-text-faint);
 }
 
 .widget-dialog-note {
   padding: 0.9rem 1rem;
-  border-radius: 0.9rem;
-  background: rgba(248, 250, 252, 0.95);
-  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border-soft);
 }
 
 .widget-dialog-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
+  gap: var(--space-6);
 }
 
 .dialog-control {
@@ -1085,10 +1085,10 @@ onBeforeUnmount(() => {
 
 .native-number-input {
   min-height: 2.85rem;
-  border-radius: 0.85rem;
-  border: 1px solid rgba(148, 163, 184, 0.45);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-input-strong);
   padding: 0.7rem 0.9rem;
-  background: #fff;
+  background: var(--color-surface-input);
 }
 
 .dashboard-dialog-actions,
@@ -1101,13 +1101,13 @@ onBeforeUnmount(() => {
 .dialog-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 0.75rem;
+  gap: var(--space-4);
 }
 
 .loading-panel,
 .empty-panel {
   display: grid;
-  gap: 0.75rem;
+  gap: var(--space-4);
 }
 
 @media (max-width: 1100px) {

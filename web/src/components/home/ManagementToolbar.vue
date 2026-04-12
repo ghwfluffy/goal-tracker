@@ -59,7 +59,7 @@ const emit = defineEmits<{
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 1rem;
+  gap: var(--space-6);
 }
 
 .management-toolbar-copy {
@@ -72,16 +72,16 @@ const emit = defineEmits<{
 }
 
 .management-toolbar-copy p {
-  margin: 0.75rem 0 0;
-  line-height: 1.7;
-  color: #334155;
+  margin: var(--space-4) 0 0;
+  line-height: var(--line-height-copy);
+  color: var(--color-text-muted);
 }
 
 .management-toolbar-actions,
 .view-toggle {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--space-4);
 }
 
 .management-toolbar-actions {

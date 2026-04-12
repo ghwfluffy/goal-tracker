@@ -116,28 +116,10 @@ async function submit(): Promise<void> {
 </template>
 
 <style scoped>
-.dialog-stack,
-.dialog-section,
-.field {
-  display: grid;
-  gap: 1rem;
-}
-
-.section-heading-text h3 {
-  margin: 0;
-  font-size: 1.1rem;
-}
-
-.section-heading-text p {
-  margin: 0.75rem 0 0;
-  line-height: 1.7;
-  color: #334155;
-}
-
 .dialog-actions-row {
   display: flex;
   justify-content: flex-end;
-  gap: 0.75rem;
+  gap: var(--space-4);
 }
 
 @media (max-width: 720px) {

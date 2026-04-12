@@ -563,16 +563,16 @@ async function submitGoalForm(): Promise<void> {
   align-items: center;
   gap: 0.45rem;
   padding: 0.45rem 0.7rem;
-  border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.4);
-  background: rgba(248, 250, 252, 0.95);
-  color: #334155;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border-chip);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
   cursor: pointer;
 }
 
 .exception-date-chip:hover {
-  border-color: rgba(239, 68, 68, 0.35);
-  color: #b91c1c;
+  border-color: var(--color-border-chip-hover);
+  color: var(--color-text-danger);
 }
 
 @media (max-width: 720px) {

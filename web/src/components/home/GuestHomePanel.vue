@@ -82,7 +82,7 @@ watch(authTabIndex, () => {
 
 <template>
   <section class="hero">
-    <div class="hero-copy">
+    <div class="hero-copy surface-panel-soft">
       <h1>Goal tracking with a real account flow.</h1>
       <p class="summary">
         The app can now bootstrap its first administrator, manage invitation-based signup, restore
@@ -248,16 +248,12 @@ watch(authTabIndex, () => {
 <style scoped>
 .hero {
   display: grid;
-  gap: 1.5rem;
+  gap: var(--space-9);
   align-items: start;
 }
 
 .hero-copy {
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(31, 41, 55, 0.08);
-  border-radius: 1.5rem;
-  padding: 2rem;
-  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.08);
+  padding: var(--space-11);
 }
 
 h1 {
@@ -268,40 +264,35 @@ h1 {
 }
 
 .summary {
-  margin: 0.75rem 0 0;
-  line-height: 1.7;
-  color: #334155;
+  margin: var(--space-4) 0 0;
+  line-height: var(--line-height-copy);
+  color: var(--color-text-muted);
 }
 
 .status-stack,
 .auth-form {
   display: grid;
-  gap: 1rem;
+  gap: var(--space-6);
 }
 
 .status-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: var(--space-6);
 }
 
 .loading {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-}
-
-.shell-center {
-  justify-content: center;
-  min-height: 12rem;
+  gap: var(--space-4);
 }
 
 .checkbox-row {
   display: inline-flex;
   align-items: center;
-  gap: 0.75rem;
-  color: #0f172a;
+  gap: var(--space-4);
+  color: var(--color-text-strong);
 }
 
 .auth-card :deep(.full-width-input) {

@@ -90,7 +90,7 @@ function toggleProfileMenu(event: Event): void {
 </script>
 
 <template>
-  <header class="app-header">
+  <header class="app-header surface-panel-soft">
     <div class="brand-block">
       <h1 class="brand-title">Goal Tracker</h1>
       <p class="brand-summary">Track goals, dashboards, and updates from one responsive app.</p>
@@ -117,13 +117,9 @@ function toggleProfileMenu(event: Event): void {
 .app-header {
   display: flex;
   justify-content: space-between;
-  gap: 1rem;
+  gap: var(--space-6);
   align-items: center;
-  padding: 1.5rem 1.75rem;
-  border-radius: 1.6rem;
-  background: rgba(255, 255, 255, 0.78);
-  border: 1px solid rgba(31, 41, 55, 0.08);
-  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.08);
+  padding: var(--space-9) var(--space-10);
 }
 
 .brand-title {
@@ -132,15 +128,15 @@ function toggleProfileMenu(event: Event): void {
 }
 
 .brand-summary {
-  margin: 0.75rem 0 0;
-  line-height: 1.7;
-  color: #334155;
+  margin: var(--space-4) 0 0;
+  line-height: var(--line-height-copy);
+  color: var(--color-text-muted);
 }
 
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--space-4);
 }
 
 .profile-button :deep(.p-button-label) {
@@ -150,12 +146,12 @@ function toggleProfileMenu(event: Event): void {
 .profile-button-content {
   display: inline-flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--space-4);
 }
 
 .profile-name {
   font-weight: 600;
-  color: #0f172a;
+  color: var(--color-text-strong);
 }
 
 @media (max-width: 720px) {

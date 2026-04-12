@@ -179,7 +179,7 @@ onMounted(() => {
 <style scoped>
 .home-view {
   min-height: 100vh;
-  padding: 1.5rem;
+  padding: var(--space-9);
 }
 
 .app-shell {
@@ -189,7 +189,7 @@ onMounted(() => {
 
 @media (max-width: 720px) {
   .home-view {
-    padding: 1rem;
+    padding: var(--space-6);
   }
 }
 </style>

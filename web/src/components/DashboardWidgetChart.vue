@@ -7,6 +7,7 @@ import {
   buildGoalForecastSeries,
   type ForecastChartPoint as ChartPoint,
 } from "../lib/goalForecast";
+import { getChartThemeColors } from "../lib/theme";
 import { DEFAULT_PROFILE_TIMEZONE, daysBetweenDateOnly, formatDateOnly, getCurrentDateInTimezone } from "../lib/time";
 import { useAuthStore } from "../stores/auth";
 
@@ -208,21 +209,22 @@ function formatGoalMetricAxisValue(value: number): string {
 }
 
 function createMetricHistoryOption(): object {
+  const chartTheme = getChartThemeColors();
   return {
     animation: false,
     grid: { left: 14, right: 10, top: 12, bottom: 20, containLabel: true },
     tooltip: { trigger: "axis" },
     xAxis: {
       type: "time",
-      axisLine: { lineStyle: { color: "#cbd5e1" } },
-      axisLabel: { color: "#64748b", fontSize: 11 },
+      axisLine: { lineStyle: { color: chartTheme.axisLine } },
+      axisLabel: { color: chartTheme.axisLabel, fontSize: 11 },
     },
     yAxis: {
       type: "value",
       axisLine: { show: false },
-      splitLine: { lineStyle: { color: "#e2e8f0" } },
+      splitLine: { lineStyle: { color: chartTheme.gridLine } },
       axisLabel: {
-        color: "#64748b",
+        color: chartTheme.axisLabel,
         formatter: (value: number) => formatMetricAxisValue(value),
       },
     },
@@ -233,14 +235,15 @@ function createMetricHistoryOption(): object {
         symbol: "circle",
         symbolSize: 7,
         data: metricChartPoints.value.map((point) => [point.timestamp, point.value]),
-        lineStyle: { color: "#2563eb", width: 3 },
-        itemStyle: { color: "#2563eb" },
+        lineStyle: { color: chartTheme.primary, width: 3 },
+        itemStyle: { color: chartTheme.primary },
       },
     ],
   };
 }
 
 function createGoalMetricProgressOption(): object {
+  const chartTheme = getChartThemeColors();
   const actualPoints = goalMetricChartPoints.value.map((point) => [point.timestamp, point.value]);
   const targetValue = goalTargetValue.value;
   const nowTimestamp = Date.now();
@@ -261,17 +264,17 @@ function createGoalMetricProgressOption(): object {
     tooltip: { trigger: "axis" },
     xAxis: {
       type: "time",
-      axisLine: { lineStyle: { color: "#cbd5e1" } },
-      axisLabel: { color: "#64748b", fontSize: 11 },
+      axisLine: { lineStyle: { color: chartTheme.axisLine } },
+      axisLabel: { color: chartTheme.axisLabel, fontSize: 11 },
     },
     yAxis: {
       type: "value",
       axisLine: { show: false },
       axisLabel: {
-        color: "#64748b",
+        color: chartTheme.axisLabel,
         formatter: (value: number) => formatGoalMetricAxisValue(value),
       },
-      splitLine: { lineStyle: { color: "#e2e8f0" } },
+      splitLine: { lineStyle: { color: chartTheme.gridLine } },
     },
     series: [
       {
@@ -280,8 +283,8 @@ function createGoalMetricProgressOption(): object {
         symbol: "circle",
         symbolSize: 7,
         data: actualPoints,
-        lineStyle: { color: "#16a34a", width: 3 },
-        itemStyle: { color: "#16a34a" },
+        lineStyle: { color: chartTheme.success, width: 3 },
+        itemStyle: { color: chartTheme.success },
       },
       {
         type: "line",
@@ -289,7 +292,7 @@ function createGoalMetricProgressOption(): object {
         symbol: "none",
         data: forecast.bridgeSeries,
         tooltip: { show: false },
-        lineStyle: { color: "#2563eb", width: 3 },
+        lineStyle: { color: chartTheme.primary, width: 3 },
       },
       {
         type: "scatter",
@@ -297,7 +300,7 @@ function createGoalMetricProgressOption(): object {
         symbolSize: 9,
         data: forecast.nowPoint === null ? [] : [forecast.nowPoint],
         tooltip: { show: false },
-        itemStyle: { color: "#2563eb" },
+        itemStyle: { color: chartTheme.primary },
       },
       {
         type: "line",
@@ -305,7 +308,7 @@ function createGoalMetricProgressOption(): object {
         symbol: "none",
         data: forecast.futureSeries,
         tooltip: { show: false },
-        lineStyle: { color: "#dc2626", width: 3 },
+        lineStyle: { color: chartTheme.danger, width: 3 },
       },
     ],
   };
@@ -338,6 +341,7 @@ function forecastValueAtTimestamp(
 }
 
 function createGoalPercentProgressOption(): object {
+  const chartTheme = getChartThemeColors();
   const actualPoints = goalPercentChartPoints.value.map((point) => [point.timestamp, point.value]);
   const lastActualPoint = goalPercentChartPoints.value.at(-1) ?? null;
   const targetEndTimestamp = goalTargetEndTimestamp.value;
@@ -382,15 +386,15 @@ function createGoalPercentProgressOption(): object {
     tooltip: { trigger: "axis" },
     xAxis: {
       type: "time",
-      axisLine: { lineStyle: { color: "#cbd5e1" } },
-      axisLabel: { color: "#64748b", fontSize: 11 },
+      axisLine: { lineStyle: { color: chartTheme.axisLine } },
+      axisLabel: { color: chartTheme.axisLabel, fontSize: 11 },
     },
     yAxis: {
       type: "value",
       min: 0,
       max: 100,
-      axisLabel: { color: "#64748b", formatter: "{value}%" },
-      splitLine: { lineStyle: { color: "#e2e8f0" } },
+      axisLabel: { color: chartTheme.axisLabel, formatter: "{value}%" },
+      splitLine: { lineStyle: { color: chartTheme.gridLine } },
     },
     series: [
       {
@@ -399,8 +403,8 @@ function createGoalPercentProgressOption(): object {
         symbol: "circle",
         symbolSize: 7,
         data: actualPoints,
-        lineStyle: { color: "#16a34a", width: 3 },
-        itemStyle: { color: "#16a34a" },
+        lineStyle: { color: chartTheme.success, width: 3 },
+        itemStyle: { color: chartTheme.success },
       },
       {
         type: "line",
@@ -408,7 +412,7 @@ function createGoalPercentProgressOption(): object {
         symbol: "none",
         data: bridgeSeries,
         tooltip: { show: false },
-        lineStyle: { color: "#2563eb", width: 3 },
+        lineStyle: { color: chartTheme.primary, width: 3 },
       },
       {
         type: "scatter",
@@ -416,7 +420,7 @@ function createGoalPercentProgressOption(): object {
         symbolSize: 9,
         data: bridgeSeries.length === 0 ? [] : [bridgeSeries[bridgeSeries.length - 1]!],
         tooltip: { show: false },
-        itemStyle: { color: "#2563eb" },
+        itemStyle: { color: chartTheme.primary },
       },
       {
         type: "line",
@@ -424,7 +428,7 @@ function createGoalPercentProgressOption(): object {
         symbol: "none",
         data: futureSeries,
         tooltip: { show: false },
-        lineStyle: { color: "#dc2626", width: 3 },
+        lineStyle: { color: chartTheme.danger, width: 3 },
       },
     ],
   };
@@ -502,7 +506,7 @@ onBeforeUnmount(() => {
     <div class="widget-value">{{ displayValueText }}</div>
   </div>
   <div v-else-if="hasRenderableContent" ref="chartElement" class="widget-chart"></div>
-  <div v-else class="chart-empty-state">Not enough data yet.</div>
+  <div v-else class="chart-empty-state empty-dashed-state">Not enough data yet.</div>
 </template>
 
 <style scoped>
@@ -523,16 +527,11 @@ onBeforeUnmount(() => {
   font-size: clamp(2rem, 4vw, 3.15rem);
   font-weight: 700;
   letter-spacing: -0.04em;
-  color: #0f172a;
+  color: var(--color-text-strong);
   text-align: center;
 }
 
 .chart-empty-state {
-  border: 1px dashed rgba(100, 116, 139, 0.45);
-  border-radius: 1rem;
-  color: #64748b;
-  background: rgba(248, 250, 252, 0.9);
-  text-align: center;
-  padding: 1rem;
+  min-height: 13rem;
 }
 </style>
