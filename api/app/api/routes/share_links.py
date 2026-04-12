@@ -54,6 +54,10 @@ def _absolute_share_url(settings: Settings, path: str, *, cache_bust: str | None
     return f"{settings.public_origin}{path}{suffix}"
 
 
+def _vendor_script_path(settings: Settings) -> str:
+    return f"{settings.normalized_app_base_path}/vendor/echarts.min.js"
+
+
 @router.get("/share-links", response_model=ShareLinkListResponse)
 def get_share_links(
     user: Annotated[User, Depends(get_current_user)],
@@ -138,6 +142,7 @@ def get_share_page(
             profile_timezone=share_link.user.timezone,
             share_url=share_url,
             preview_url=preview_url,
+            vendor_script_path=_vendor_script_path(settings),
         )
     elif share_link.target_type == "dashboard" and share_link.dashboard is not None:
         dashboard_summary = serialize_dashboard(share_link.dashboard, user=share_link.dashboard.user)

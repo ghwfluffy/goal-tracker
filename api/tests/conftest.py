@@ -14,9 +14,13 @@ from app.db.session import get_db
 from app.main import create_app
 
 
-@pytest.fixture
-def client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
+def _build_test_client(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    app_base_path: str = "",
+) -> Iterator[TestClient]:
     monkeypatch.setenv("APP_ENV", "test")
+    monkeypatch.setenv("APP_BASE_PATH", app_base_path)
     monkeypatch.setenv("PUBLIC_URL", "http://testserver")
     monkeypatch.setenv("SESSION_KEY", "test-session-key")
     get_settings.cache_clear()
@@ -47,3 +51,13 @@ def client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
     app.dependency_overrides.clear()
     Base.metadata.drop_all(engine)
     get_settings.cache_clear()
+
+
+@pytest.fixture
+def client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
+    yield from _build_test_client(monkeypatch)
+
+
+@pytest.fixture
+def prefixed_client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
+    yield from _build_test_client(monkeypatch, app_base_path="/goals")

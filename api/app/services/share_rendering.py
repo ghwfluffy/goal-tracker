@@ -1623,6 +1623,7 @@ def render_widget_share_page(
     profile_timezone: str,
     share_url: str,
     preview_url: str,
+    vendor_script_path: str,
 ) -> str:
     title = widget_og_title(widget, profile_timezone=profile_timezone)
     chart_script = _widget_chart_bootstrap_script(widget)
@@ -1680,7 +1681,7 @@ def render_widget_share_page(
         image_url=preview_url,
         share_url=share_url,
         body_html=body_html,
-        head_end_html='<script src="/vendor/echarts.min.js"></script>',
+        head_end_html=f'<script src="{escape(vendor_script_path, quote=True)}"></script>',
         body_end_html=f"<script>{chart_script}</script>",
     )
 

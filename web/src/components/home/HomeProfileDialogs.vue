@@ -9,6 +9,7 @@ import Password from "primevue/password";
 import ProgressSpinner from "primevue/progressspinner";
 import Tag from "primevue/tag";
 
+import { buildApiBaseUrl } from "../../lib/basePath";
 import { DEFAULT_PROFILE_TIMEZONE } from "../../lib/time";
 import { buildShareLinkUrl, copyCacheBustedShareLink } from "../../lib/shareLinks";
 import { formatDateTime } from "../../lib/tracking";
@@ -43,6 +44,10 @@ const dashboardsStore = useDashboardsStore();
 const invitationCodesStore = useInvitationCodesStore();
 const shareLinksStore = useShareLinksStore();
 const { showError, showSuccess } = useAppToast();
+const avatarApiBaseUrl = buildApiBaseUrl(
+  import.meta.env.BASE_URL,
+  import.meta.env.VITE_API_BASE_URL,
+);
 
 const displayNameInput = ref("");
 const timezoneInput = ref(DEFAULT_PROFILE_TIMEZONE);
@@ -107,7 +112,7 @@ const avatarUrl = computed(() => {
     return null;
   }
 
-  return `/api/v1/users/me/avatar?v=${encodeURIComponent(version)}`;
+  return `${avatarApiBaseUrl}/users/me/avatar?v=${encodeURIComponent(version)}`;
 });
 
 const shareTargetTypeOptions = [

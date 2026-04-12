@@ -1,3 +1,5 @@
+import { buildApiBaseUrl } from "./basePath";
+
 export interface StatusResponse {
   application: string;
   checked_at: string;
@@ -444,9 +446,9 @@ type Fetcher = (
   init?: RequestInit,
 ) => Promise<Response>;
 
-const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? "/api/v1").replace(
-  /\/$/,
-  "",
+const apiBaseUrl = buildApiBaseUrl(
+  import.meta.env.BASE_URL,
+  import.meta.env.VITE_API_BASE_URL,
 );
 
 export class ApiError extends Error {

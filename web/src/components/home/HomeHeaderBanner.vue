@@ -7,6 +7,7 @@ import Menu from "primevue/menu";
 import Tag from "primevue/tag";
 
 import type { UserSummary } from "../../lib/api";
+import { buildApiBaseUrl, joinBasePath } from "../../lib/basePath";
 
 const props = defineProps<{
   notificationCount: number;
@@ -26,6 +27,11 @@ const emit = defineEmits<{
 }>();
 
 const profileMenu = ref<InstanceType<typeof Menu> | null>(null);
+const brandLogoUrl = joinBasePath(import.meta.env.BASE_URL, "/logo-medium.png");
+const avatarApiBaseUrl = buildApiBaseUrl(
+  import.meta.env.BASE_URL,
+  import.meta.env.VITE_API_BASE_URL,
+);
 
 const currentDisplayName = computed(
   () => props.user.display_name || props.user.username,
@@ -49,7 +55,7 @@ const avatarUrl = computed(() => {
     return null;
   }
 
-  return `/api/v1/users/me/avatar?v=${encodeURIComponent(props.user.avatar_version)}`;
+  return `${avatarApiBaseUrl}/users/me/avatar?v=${encodeURIComponent(props.user.avatar_version)}`;
 });
 
 const profileMenuItems = computed<MenuItem[]>(() => {
@@ -108,7 +114,7 @@ function toggleProfileMenu(event: Event): void {
 <template>
   <header class="app-header surface-panel-soft">
     <div class="brand-block">
-      <img class="brand-logo" src="/logo-medium.png" alt="Goal Tracker" />
+      <img class="brand-logo" :src="brandLogoUrl" alt="Goal Tracker" />
       <h1 class="brand-title">
         <span class="brand-title-desktop">Goal Tracker</span>
         <span class="brand-title-mobile">Goals</span>

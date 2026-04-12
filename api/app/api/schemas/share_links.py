@@ -44,8 +44,10 @@ class CreateShareLinkRequest(BaseModel):
 
 
 def share_public_path(share_link: ShareLink) -> str:
-    api_prefix = get_settings().api_v1_prefix.rstrip("/")
-    return f"{api_prefix}/shares/{share_link.token}"
+    settings = get_settings()
+    app_base_path = settings.normalized_app_base_path
+    api_prefix = settings.api_v1_prefix.rstrip("/")
+    return f"{app_base_path}{api_prefix}/shares/{share_link.token}"
 
 
 def share_preview_image_path(share_link: ShareLink) -> str:

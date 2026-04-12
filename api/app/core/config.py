@@ -13,6 +13,14 @@ ROOT_DIR = Path(__file__).resolve().parents[3]
 ENV_FILE = ROOT_DIR / ".env"
 
 
+def normalize_path_prefix(value: str) -> str:
+    trimmed = value.strip()
+    if trimmed in {"", "/"}:
+        return ""
+    with_leading_slash = trimmed if trimmed.startswith("/") else f"/{trimmed}"
+    return with_leading_slash.rstrip("/")
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=str(ENV_FILE) if ENV_FILE.exists() else None,
@@ -23,6 +31,7 @@ class Settings(BaseSettings):
     app_name: str = "Goal Tracker"
     app_env: str = "development"
     app_version: str = __version__
+    app_base_path: str = ""
     api_v1_prefix: str = "/api/v1"
     public_url: str = "http://localhost:8081"
     postgres_user: str = "ghw"
@@ -60,6 +69,10 @@ class Settings(BaseSettings):
     @property
     def public_origin(self) -> str:
         return self.public_url.rstrip("/")
+
+    @property
+    def normalized_app_base_path(self) -> str:
+        return normalize_path_prefix(self.app_base_path)
 
     @property
     def session_cookie_secure(self) -> bool:

@@ -191,6 +191,31 @@ def test_dashboard_share_links_support_unlimited_expiration_and_read_only_dashbo
     assert "Edit dashboard" not in page_response.text
 
 
+def test_share_links_include_the_configured_app_base_path(prefixed_client: TestClient) -> None:
+    bootstrap_admin(prefixed_client)
+    seeded = seed_dashboard_with_widgets(prefixed_client)
+
+    create_response = prefixed_client.post(
+        "/api/v1/share-links",
+        json={
+            "target_type": "widget",
+            "target_id": seeded["goal_widget_id"],
+        },
+    )
+    assert create_response.status_code == 201
+
+    share_link = create_response.json()
+    assert share_link["public_path"].startswith("/goals/api/v1/shares/")
+    assert share_link["preview_image_path"].startswith("/goals/api/v1/shares/")
+
+    logout_response = prefixed_client.post("/api/v1/auth/logout")
+    assert logout_response.status_code == 204
+
+    page_response = prefixed_client.get(share_link["public_path"].removeprefix("/goals"))
+    assert page_response.status_code == 200
+    assert "/goals/vendor/echarts.min.js" in page_response.text
+
+
 def test_revoking_share_links_blocks_public_access_and_updates_status(client: TestClient) -> None:
     bootstrap_admin(client)
     seeded = seed_dashboard_with_widgets(client)

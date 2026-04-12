@@ -9,9 +9,11 @@ import ProgressSpinner from "primevue/progressspinner";
 import TabPanel from "primevue/tabpanel";
 import TabView from "primevue/tabview";
 
+import { joinBasePath } from "../../lib/basePath";
 import { useAuthStore } from "../../stores/auth";
 
 const authStore = useAuthStore();
+const guestLogoUrl = joinBasePath(import.meta.env.BASE_URL, "/logo-large.png");
 
 const loginUsername = ref("");
 const loginPassword = ref("");
@@ -71,7 +73,7 @@ watch(authTabIndex, () => {
 
 <template>
   <section class="guest-auth-shell">
-    <img class="guest-logo" src="/logo-large.png" alt="Goal Tracker" />
+    <img class="guest-logo" :src="guestLogoUrl" alt="Goal Tracker" />
 
     <Card class="auth-card">
       <template #title>

@@ -117,6 +117,30 @@ npm run dev -- --host 0.0.0.0 --port 8081
 
 The Vite dev server proxies `/api/*` requests to the backend by default.
 
+To run the app behind an ingress path such as `/goals` while still stripping that
+prefix before requests reach FastAPI, set:
+
+```bash
+# backend
+APP_BASE_PATH=/goals
+
+# frontend
+VITE_APP_BASE_PATH=/goals
+```
+
+With that setup:
+
+1. the Vue router and built asset URLs resolve under `/goals/`
+2. frontend API requests default to `/goals/api/v1`
+3. the Vite dev server rewrites `/goals/api/*` back to `/api/*` for local backend development
+4. backend-generated share links and widget share pages include `/goals` in their public URLs
+
+Keep `PUBLIC_URL` as the scheme + host for the public site, for example
+`https://example.com`, not `https://example.com/goals`.
+
+If the API is published somewhere else entirely, you can still override the frontend API root with
+`VITE_API_BASE_URL`.
+
 If `web/node_modules` was created by Docker and is root-owned, the frontend test/build scripts will reuse the existing dependency tree instead of trying to reinstall into that directory. If dependency versions actually change, rebuild that directory from a writable environment.
 
 ## PostgreSQL 18 Note
