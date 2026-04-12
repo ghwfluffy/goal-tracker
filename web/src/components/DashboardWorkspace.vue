@@ -4,11 +4,11 @@ import Button from "primevue/button";
 import Dialog from "primevue/dialog";
 import Dropdown from "primevue/dropdown";
 import InputText from "primevue/inputtext";
-import Message from "primevue/message";
 import ProgressSpinner from "primevue/progressspinner";
 import Tag from "primevue/tag";
 
 import type { DashboardForecastAlgorithm, DashboardWidgetSummary } from "../lib/api";
+import { useAppToast } from "../lib/toast";
 import { useDashboardsStore } from "../stores/dashboards";
 import { useGoalsStore } from "../stores/goals";
 import { useMetricsStore } from "../stores/metrics";
@@ -38,10 +38,10 @@ const MAX_WIDGET_HEIGHT = 12;
 const dashboardsStore = useDashboardsStore();
 const metricsStore = useMetricsStore();
 const goalsStore = useGoalsStore();
+const { showSuccess } = useAppToast();
 
 const selectedDashboardId = ref("");
 const editMode = ref(false);
-const successMessage = ref("");
 
 const dashboardDialogVisible = ref(false);
 const dashboardDialogMode = ref<"create" | "edit">("create");
@@ -132,11 +132,6 @@ const columnWidth = computed(() => {
   return gridWidth.value / GRID_COLUMNS;
 });
 
-function resetMessages(): void {
-  successMessage.value = "";
-  dashboardsStore.errorMessage = "";
-}
-
 function syncSelectedDashboard(): void {
   const availableIds = new Set(dashboardsStore.dashboards.map((dashboard) => dashboard.id));
   if (selectedDashboardId.value !== "" && availableIds.has(selectedDashboardId.value)) {
@@ -201,7 +196,6 @@ function parseRollingWindow(value: string): number | null {
 }
 
 function openCreateDashboardDialog(): void {
-  resetMessages();
   dashboardDialogMode.value = "create";
   dashboardNameInput.value = "";
   dashboardDescriptionInput.value = "";
@@ -213,7 +207,6 @@ function openEditDashboardDialog(): void {
     return;
   }
 
-  resetMessages();
   dashboardDialogMode.value = "edit";
   dashboardNameInput.value = selectedDashboard.value.name;
   dashboardDescriptionInput.value = selectedDashboard.value.description ?? "";
@@ -230,7 +223,7 @@ async function submitDashboardDialog(): Promise<void> {
     if (createdDashboardId !== null) {
       selectedDashboardId.value = createdDashboardId;
       dashboardDialogVisible.value = false;
-      successMessage.value = "Dashboard created.";
+      showSuccess("Dashboard created.", "Dashboards");
     }
     return;
   }
@@ -245,7 +238,7 @@ async function submitDashboardDialog(): Promise<void> {
   });
   if (updated) {
     dashboardDialogVisible.value = false;
-    successMessage.value = "Dashboard updated.";
+    showSuccess("Dashboard updated.", "Dashboards");
   }
 }
 
@@ -254,12 +247,11 @@ async function makeDashboardDefault(): Promise<void> {
     return;
   }
 
-  resetMessages();
   const updated = await dashboardsStore.updateDashboard(selectedDashboard.value.id, {
     make_default: true,
   });
   if (updated) {
-    successMessage.value = "Default dashboard updated.";
+    showSuccess("Default dashboard updated.", "Dashboards");
   }
 }
 
@@ -271,11 +263,10 @@ async function removeDashboard(): Promise<void> {
     return;
   }
 
-  resetMessages();
   const deleted = await dashboardsStore.deleteDashboard(selectedDashboard.value.id);
   if (deleted) {
     editMode.value = false;
-    successMessage.value = "Dashboard deleted.";
+    showSuccess("Dashboard deleted.", "Dashboards");
   }
 }
 
@@ -283,7 +274,6 @@ function enterEditMode(): void {
   if (selectedDashboard.value === null) {
     return;
   }
-  resetMessages();
   snapshotWidgetLayouts();
   editMode.value = true;
 }
@@ -295,7 +285,6 @@ function exitEditMode(): void {
 }
 
 function openCreateWidgetDialog(): void {
-  resetMessages();
   widgetDialogMode.value = "create";
   widgetEditId.value = "";
   widgetTitleInput.value = "";
@@ -308,7 +297,6 @@ function openCreateWidgetDialog(): void {
 }
 
 function openEditWidgetDialog(widget: DashboardWidgetSummary): void {
-  resetMessages();
   widgetDialogMode.value = "edit";
   widgetEditId.value = widget.id;
   widgetTitleInput.value = widget.title;
@@ -345,7 +333,6 @@ async function submitWidgetDialog(): Promise<void> {
     return;
   }
 
-  resetMessages();
   if (widgetDialogMode.value === "create") {
     const created = await dashboardsStore.createWidget(selectedDashboard.value.id, {
       goal_id: widgetUsesMetric.value ? null : widgetGoalIdInput.value || null,
@@ -357,7 +344,7 @@ async function submitWidgetDialog(): Promise<void> {
     });
     if (created) {
       widgetDialogVisible.value = false;
-      successMessage.value = "Widget added.";
+      showSuccess("Widget added.", "Dashboards");
       snapshotWidgetLayouts();
     }
     return;
@@ -370,7 +357,7 @@ async function submitWidgetDialog(): Promise<void> {
   });
   if (updated) {
     widgetDialogVisible.value = false;
-    successMessage.value = "Widget updated.";
+    showSuccess("Widget updated.", "Dashboards");
   }
 }
 
@@ -386,10 +373,9 @@ async function removeWidget(widgetId: string): Promise<void> {
     return;
   }
 
-  resetMessages();
   const deleted = await dashboardsStore.deleteWidget(selectedDashboard.value.id, widgetId);
   if (deleted) {
-    successMessage.value = "Widget removed.";
+    showSuccess("Widget removed.", "Dashboards");
     snapshotWidgetLayouts();
   }
 }
@@ -434,7 +420,6 @@ function startInteraction(
   }
 
   event.preventDefault();
-  resetMessages();
   activeInteraction.value = {
     kind,
     start_client_x: event.clientX,
@@ -494,7 +479,7 @@ async function persistWidgetLayout(widgetId: string): Promise<void> {
     snapshotWidgetLayouts();
     return;
   }
-  successMessage.value = "Widget layout saved.";
+  showSuccess("Widget layout saved.", "Dashboards");
 }
 
 function stopInteraction(): void {
@@ -650,13 +635,6 @@ onBeforeUnmount(() => {
         />
       </div>
     </div>
-
-    <Message v-if="successMessage !== ''" severity="success" :closable="false">
-      {{ successMessage }}
-    </Message>
-    <Message v-if="dashboardsStore.errorMessage !== ''" severity="error" :closable="false">
-      {{ dashboardsStore.errorMessage }}
-    </Message>
 
     <div v-if="dashboardsStore.viewState === 'loading'" class="panel-card loading-panel">
       <ProgressSpinner strokeWidth="5" style="width: 2rem; height: 2rem" animationDuration=".8s" />

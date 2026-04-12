@@ -5,13 +5,13 @@ import Button from "primevue/button";
 import Dialog from "primevue/dialog";
 import Dropdown from "primevue/dropdown";
 import InputText from "primevue/inputtext";
-import Message from "primevue/message";
 import Password from "primevue/password";
 import ProgressSpinner from "primevue/progressspinner";
 import Tag from "primevue/tag";
 
 import { DEFAULT_PROFILE_TIMEZONE } from "../../lib/time";
 import { formatDateTime } from "../../lib/tracking";
+import { useAppToast, watchToastError } from "../../lib/toast";
 import { useAuthStore } from "../../stores/auth";
 import { useInvitationCodesStore } from "../../stores/invitationCodes";
 
@@ -31,6 +31,7 @@ const emit = defineEmits<{
 
 const authStore = useAuthStore();
 const invitationCodesStore = useInvitationCodesStore();
+const { showError, showSuccess } = useAppToast();
 
 const displayNameInput = ref("");
 const timezoneInput = ref(DEFAULT_PROFILE_TIMEZONE);
@@ -39,12 +40,6 @@ const newPasswordInput = ref("");
 const deletePasswordInput = ref("");
 const createInvitationCodeExpiresAt = ref("");
 const invitationCodeExpiresAtInputs = ref<Record<string, string>>({});
-const profileSuccessMessage = ref("");
-const profileErrorMessage = ref("");
-const passwordSuccessMessage = ref("");
-const passwordErrorMessage = ref("");
-const deleteAccountErrorMessage = ref("");
-const invitationCodesSuccessMessage = ref("");
 
 const timezoneOptions = computed(() => {
   const intlWithSupportedValues = Intl as typeof Intl & {
@@ -92,25 +87,6 @@ const avatarUrl = computed(() => {
 
   return `/api/v1/users/me/avatar?v=${encodeURIComponent(version)}`;
 });
-
-function resetProfileMessages(): void {
-  profileSuccessMessage.value = "";
-  profileErrorMessage.value = "";
-}
-
-function resetPasswordMessages(): void {
-  passwordSuccessMessage.value = "";
-  passwordErrorMessage.value = "";
-}
-
-function resetDeleteAccountMessages(): void {
-  deleteAccountErrorMessage.value = "";
-}
-
-function resetInvitationCodeMessages(): void {
-  invitationCodesSuccessMessage.value = "";
-  invitationCodesStore.errorMessage = "";
-}
 
 function syncProfileInputs(): void {
   displayNameInput.value = authStore.currentUser?.display_name ?? "";
@@ -162,40 +138,32 @@ function syncInvitationCodeInputs(): void {
   );
 }
 
-async function saveProfile(): Promise<void> {
-  resetProfileMessages();
+watchToastError(() => invitationCodesStore.errorMessage, "Invitation codes");
 
+async function saveProfile(): Promise<void> {
   const updated = await authStore.updateProfile({
     display_name: displayNameInput.value.trim() === "" ? null : displayNameInput.value,
     timezone: timezoneInput.value.trim() === "" ? null : timezoneInput.value,
   });
 
   if (updated) {
-    profileSuccessMessage.value = "Profile updated.";
-  } else {
-    profileErrorMessage.value = authStore.errorMessage;
+    showSuccess("Profile updated.", "Profile");
   }
 }
 
 async function changePassword(): Promise<void> {
-  resetPasswordMessages();
-
   const updated = await authStore.changePassword({
     current_password: currentPasswordInput.value,
     new_password: newPasswordInput.value,
   });
 
   if (updated) {
-    passwordSuccessMessage.value = "Password changed.";
+    showSuccess("Password changed.", "Profile");
     resetPasswordInputs();
-  } else {
-    passwordErrorMessage.value = authStore.errorMessage;
   }
 }
 
 async function uploadAvatar(event: Event): Promise<void> {
-  resetProfileMessages();
-
   const input = event.target as HTMLInputElement;
   const file = input.files?.[0];
   if (file === undefined) {
@@ -204,34 +172,27 @@ async function uploadAvatar(event: Event): Promise<void> {
 
   const uploaded = await authStore.uploadAvatar(file);
   if (uploaded) {
-    profileSuccessMessage.value = "Avatar updated.";
-  } else {
-    profileErrorMessage.value = authStore.errorMessage;
+    showSuccess("Avatar updated.", "Profile");
   }
 
   input.value = "";
 }
 
 async function deleteAccount(): Promise<void> {
-  resetDeleteAccountMessages();
-
   const deleted = await authStore.deleteAccount({
     password: deletePasswordInput.value,
   });
 
   if (deleted) {
+    showSuccess("Account deleted.", "Profile");
     emit("update:deleteAccountVisible", false);
-    return;
   }
-
-  deleteAccountErrorMessage.value = authStore.errorMessage;
 }
 
 async function createNewInvitationCode(): Promise<void> {
-  resetInvitationCodeMessages();
   const expiresAt = toIsoDateTime(createInvitationCodeExpiresAt.value);
   if (expiresAt === null) {
-    invitationCodesStore.errorMessage = "Choose a valid expiration date.";
+    showError("Choose a valid expiration date.", "Invitation codes");
     return;
   }
 
@@ -239,16 +200,15 @@ async function createNewInvitationCode(): Promise<void> {
   syncInvitationCodeInputs();
 
   if (created) {
-    invitationCodesSuccessMessage.value = "Invitation code created.";
+    showSuccess("Invitation code created.", "Invitation codes");
     createInvitationCodeExpiresAt.value = defaultInvitationCodeExpiration();
   }
 }
 
 async function saveInvitationCode(invitationCodeId: string): Promise<void> {
-  resetInvitationCodeMessages();
   const expiresAt = toIsoDateTime(invitationCodeExpiresAtInputs.value[invitationCodeId] ?? "");
   if (expiresAt === null) {
-    invitationCodesStore.errorMessage = "Choose a valid expiration date.";
+    showError("Choose a valid expiration date.", "Invitation codes");
     return;
   }
 
@@ -258,17 +218,16 @@ async function saveInvitationCode(invitationCodeId: string): Promise<void> {
   syncInvitationCodeInputs();
 
   if (updated) {
-    invitationCodesSuccessMessage.value = "Invitation code updated.";
+    showSuccess("Invitation code updated.", "Invitation codes");
   }
 }
 
 async function deleteInvitationCodeEntry(invitationCodeId: string): Promise<void> {
-  resetInvitationCodeMessages();
   const deleted = await invitationCodesStore.deleteInvitationCode(invitationCodeId);
   syncInvitationCodeInputs();
 
   if (deleted) {
-    invitationCodesSuccessMessage.value = "Invitation code deleted.";
+    showSuccess("Invitation code deleted.", "Invitation codes");
   }
 }
 
@@ -296,7 +255,6 @@ watch(
     if (!visible) {
       return;
     }
-    resetInvitationCodeMessages();
     createInvitationCodeExpiresAt.value = defaultInvitationCodeExpiration();
     await invitationCodesStore.loadInvitationCodes();
     syncInvitationCodeInputs();
@@ -314,13 +272,6 @@ watch(
     @update:visible="(value) => emit('update:profileVisible', value)"
   >
     <div class="dialog-stack">
-      <Message v-if="profileSuccessMessage !== ''" severity="success" :closable="false">
-        {{ profileSuccessMessage }}
-      </Message>
-      <Message v-if="profileErrorMessage !== ''" severity="error" :closable="false">
-        {{ profileErrorMessage }}
-      </Message>
-
       <section class="dialog-section">
         <div class="section-heading">
           <Avatar
@@ -380,13 +331,6 @@ watch(
     @update:visible="(value) => emit('update:passwordVisible', value)"
   >
     <div class="dialog-stack">
-      <Message v-if="passwordSuccessMessage !== ''" severity="success" :closable="false">
-        {{ passwordSuccessMessage }}
-      </Message>
-      <Message v-if="passwordErrorMessage !== ''" severity="error" :closable="false">
-        {{ passwordErrorMessage }}
-      </Message>
-
       <section class="dialog-section">
         <div class="section-heading-text">
           <h3>Change password</h3>
@@ -433,10 +377,6 @@ watch(
     @update:visible="(value) => emit('update:deleteAccountVisible', value)"
   >
     <div class="dialog-stack">
-      <Message v-if="deleteAccountErrorMessage !== ''" severity="error" :closable="false">
-        {{ deleteAccountErrorMessage }}
-      </Message>
-
       <section class="dialog-section danger-section">
         <div class="section-heading-text">
           <h3>Delete account</h3>
@@ -473,21 +413,6 @@ watch(
     @update:visible="(value) => emit('update:invitationCodesVisible', value)"
   >
     <div class="dialog-stack">
-      <Message
-        v-if="invitationCodesSuccessMessage !== ''"
-        severity="success"
-        :closable="false"
-      >
-        {{ invitationCodesSuccessMessage }}
-      </Message>
-      <Message
-        v-if="invitationCodesStore.errorMessage !== ''"
-        severity="error"
-        :closable="false"
-      >
-        {{ invitationCodesStore.errorMessage }}
-      </Message>
-
       <div v-if="invitationCodesStore.viewState === 'loading'" class="loading shell-center">
         <ProgressSpinner
           strokeWidth="5"

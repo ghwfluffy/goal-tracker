@@ -10,6 +10,7 @@ import HomeProfileDialogs from "../components/home/HomeProfileDialogs.vue";
 import MetricEntryDialog from "../components/home/MetricEntryDialog.vue";
 import MetricHistoryDialog from "../components/home/MetricHistoryDialog.vue";
 import MetricsTab from "../components/home/MetricsTab.vue";
+import { watchToastError } from "../lib/toast";
 import { useAuthStore } from "../stores/auth";
 import { useDashboardsStore } from "../stores/dashboards";
 import { useGoalsStore } from "../stores/goals";
@@ -49,6 +50,11 @@ const selectedMetricHistory = computed(() => {
 const selectedMetricEntry = computed(() => {
   return metricsStore.metrics.find((metric) => metric.id === metricEntryMetricId.value) ?? null;
 });
+
+watchToastError(() => authStore.errorMessage, "Authentication");
+watchToastError(() => dashboardsStore.errorMessage, "Dashboards");
+watchToastError(() => goalsStore.errorMessage, "Goals");
+watchToastError(() => metricsStore.errorMessage, "Metrics");
 
 async function loadTrackingData(): Promise<void> {
   await Promise.all([

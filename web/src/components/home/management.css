@@ -1,0 +1,141 @@
+.management-shell,
+.management-card-grid,
+.dialog-stack,
+.dialog-section,
+.form-stack,
+.goal-meta-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.management-card-grid {
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  align-items: start;
+}
+
+.loading,
+.history-row,
+.card-header-actions,
+.dialog-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.tracking-table-wrap {
+  overflow-x: auto;
+}
+
+.tracking-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.tracking-table th,
+.tracking-table td {
+  padding: 0.35rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.75);
+  vertical-align: middle;
+}
+
+.tracking-table th {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #64748b;
+  background: rgba(248, 250, 252, 0.95);
+}
+
+.tracking-table td {
+  font-size: 0.92rem;
+  line-height: 1.2;
+}
+
+.table-primary-cell {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.table-secondary-text {
+  color: #64748b;
+  font-size: 0.8rem;
+}
+
+.table-actions-column,
+.table-kebab-cell {
+  width: 1%;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.tracking-table :deep(.p-tag) {
+  padding: 0.2rem 0.45rem;
+  font-size: 0.72rem;
+  line-height: 1.1;
+}
+
+.tracking-table :deep(.p-button.p-button-icon-only) {
+  width: 1.75rem;
+  height: 1.75rem;
+}
+
+.tracking-table :deep(.p-button.p-button-text) {
+  padding: 0.15rem;
+}
+
+.tracking-card {
+  display: grid;
+  gap: 1rem;
+  padding: 1.1rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(248, 250, 252, 0.84);
+}
+
+.tracking-card-header,
+.history-row {
+  justify-content: space-between;
+}
+
+.tracking-card-header h3,
+.section-heading-text h3 {
+  margin: 0;
+}
+
+.tracking-card-header p,
+.section-heading-text p {
+  margin: 0.75rem 0 0;
+  line-height: 1.7;
+  color: #334155;
+}
+
+.checkbox-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: #0f172a;
+}
+
+.empty-state {
+  color: #64748b;
+}
+
+.dialog-actions-row {
+  justify-content: flex-end;
+}
+
+@media (max-width: 720px) {
+  .tracking-card-header,
+  .history-row,
+  .dialog-actions-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .dialog-actions-row {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}

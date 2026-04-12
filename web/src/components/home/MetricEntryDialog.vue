@@ -2,10 +2,10 @@
 import { computed, ref, watch } from "vue";
 import Button from "primevue/button";
 import Dialog from "primevue/dialog";
-import Message from "primevue/message";
 
 import type { MetricSummary } from "../../lib/api";
 import { numberInputStep, parseOptionalNumber } from "../../lib/tracking";
+import { useAppToast } from "../../lib/toast";
 import { useGoalsStore } from "../../stores/goals";
 import { useMetricsStore } from "../../stores/metrics";
 
@@ -21,10 +21,10 @@ const emit = defineEmits<{
 
 const metricsStore = useMetricsStore();
 const goalsStore = useGoalsStore();
+const { showSuccess } = useAppToast();
 
 const numberValueInput = ref("");
 const dateValueInput = ref("");
-const successMessage = ref("");
 
 watch(
   () => props.visible,
@@ -32,8 +32,6 @@ watch(
     if (!visible) {
       numberValueInput.value = "";
       dateValueInput.value = "";
-      successMessage.value = "";
-      metricsStore.errorMessage = "";
     }
   },
 );
@@ -47,9 +45,6 @@ async function submit(): Promise<void> {
     return;
   }
 
-  successMessage.value = "";
-  metricsStore.errorMessage = "";
-
   const updated = await metricsStore.addMetricEntry(props.metric.id, {
     date_value: props.metric.metric_type === "date" ? dateValueInput.value || null : null,
     number_value: props.metric.metric_type === "number" ? parseOptionalNumber(numberValueInput.value) : null,
@@ -59,7 +54,7 @@ async function submit(): Promise<void> {
     return;
   }
 
-  successMessage.value = "Metric updated.";
+  showSuccess("Metric updated.", "Metrics");
   await goalsStore.loadGoals();
   emit("saved");
   emit("update:visible", false);
@@ -76,13 +71,6 @@ async function submit(): Promise<void> {
     @update:visible="(value) => emit('update:visible', value)"
   >
     <div class="dialog-stack">
-      <Message v-if="successMessage !== ''" severity="success" :closable="false">
-        {{ successMessage }}
-      </Message>
-      <Message v-if="metricsStore.errorMessage !== ''" severity="error" :closable="false">
-        {{ metricsStore.errorMessage }}
-      </Message>
-
       <section v-if="metric !== null" class="dialog-section">
         <div class="section-heading-text">
           <h3>{{ dialogTitle }}</h3>

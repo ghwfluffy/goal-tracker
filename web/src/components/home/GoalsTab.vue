@@ -6,13 +6,14 @@ import Checkbox from "primevue/checkbox";
 import Dialog from "primevue/dialog";
 import InputText from "primevue/inputtext";
 import Menu from "primevue/menu";
-import Message from "primevue/message";
 import ProgressSpinner from "primevue/progressspinner";
 import Tag from "primevue/tag";
 
 import { numberInputStep, parseDecimalPlaces, parseOptionalNumber } from "../../lib/tracking";
+import { useAppToast } from "../../lib/toast";
 import { useGoalsStore } from "../../stores/goals";
 import { useMetricsStore } from "../../stores/metrics";
+import ManagementToolbar from "./ManagementToolbar.vue";
 
 const emit = defineEmits<{
   openMetricEntry: [metricId: string];
@@ -26,7 +27,7 @@ const goalRowMenu = ref<InstanceType<typeof Menu> | null>(null);
 const activeGoalMenuId = ref("");
 const createDialogVisible = ref(false);
 const viewMode = ref<"table" | "cards">("table");
-const successMessage = ref("");
+const { showSuccess } = useAppToast();
 
 const goalTitleInput = ref("");
 const goalDescriptionInput = ref("");
@@ -83,11 +84,6 @@ const goalRowMenuItems = computed<MenuItem[]>(() => {
   ];
 });
 
-function resetMessages(): void {
-  successMessage.value = "";
-  goalsStore.errorMessage = "";
-}
-
 function resetGoalForm(): void {
   goalTitleInput.value = "";
   goalDescriptionInput.value = "";
@@ -108,7 +104,6 @@ function resetGoalForm(): void {
 }
 
 function openCreateDialog(): void {
-  resetMessages();
   resetGoalForm();
   createDialogVisible.value = true;
 }
@@ -178,7 +173,6 @@ function formatGoalLatestMetricSummary(goal: (typeof goalsStore.goals)[number]):
 }
 
 async function submitGoalForm(): Promise<void> {
-  resetMessages();
   const created = await goalsStore.createGoal({
     description: goalDescriptionInput.value.trim() === "" ? null : goalDescriptionInput.value,
     metric_id: goalUseNewMetric.value ? null : goalMetricIdInput.value || null,
@@ -215,7 +209,7 @@ async function submitGoalForm(): Promise<void> {
     return;
   }
 
-  successMessage.value = "Goal created.";
+  showSuccess("Goal created.", "Goals");
   createDialogVisible.value = false;
   resetGoalForm();
   await metricsStore.loadMetrics();
@@ -224,47 +218,15 @@ async function submitGoalForm(): Promise<void> {
 
 <template>
   <div class="management-shell">
-    <div class="management-toolbar panel-card">
-      <div>
-        <p class="panel-eyebrow">Goals</p>
-        <h2>Manage goals</h2>
-        <p>
-          Goals use the same management pattern as other backend records: table first, cards when
-          you want a looser browse view.
-        </p>
-      </div>
-      <div class="management-toolbar-actions">
-        <div class="view-toggle">
-          <Button
-            label="Table"
-            icon="pi pi-table"
-            :severity="viewMode === 'table' ? undefined : 'secondary'"
-            :outlined="viewMode !== 'table'"
-            @click="viewMode = 'table'"
-          />
-          <Button
-            label="Cards"
-            icon="pi pi-th-large"
-            :severity="viewMode === 'cards' ? undefined : 'secondary'"
-            :outlined="viewMode !== 'cards'"
-            @click="viewMode = 'cards'"
-          />
-        </div>
-        <Button
-          label="Add goal"
-          icon="pi pi-plus"
-          :loading="goalsStore.submissionState === 'submitting'"
-          @click="openCreateDialog"
-        />
-      </div>
-    </div>
-
-    <Message v-if="successMessage !== ''" severity="success" :closable="false">
-      {{ successMessage }}
-    </Message>
-    <Message v-if="goalsStore.errorMessage !== ''" severity="error" :closable="false">
-      {{ goalsStore.errorMessage }}
-    </Message>
+    <ManagementToolbar
+      v-model:viewMode="viewMode"
+      eyebrow="Goals"
+      title="Manage goals"
+      description="Goals use the same management pattern as other backend records: table first, cards when you want a looser browse view."
+      primary-action-label="Add goal"
+      :primary-action-loading="goalsStore.submissionState === 'submitting'"
+      @add="openCreateDialog"
+    />
 
     <div v-if="goalsStore.viewState === 'loading'" class="panel-card loading">
       <ProgressSpinner
@@ -399,13 +361,6 @@ async function submitGoalForm(): Promise<void> {
       :style="{ width: 'min(42rem, 96vw)' }"
     >
       <div class="dialog-stack">
-        <Message v-if="successMessage !== ''" severity="success" :closable="false">
-          {{ successMessage }}
-        </Message>
-        <Message v-if="goalsStore.errorMessage !== ''" severity="error" :closable="false">
-          {{ goalsStore.errorMessage }}
-        </Message>
-
         <section class="dialog-section">
           <div class="section-heading-text">
             <h3>Create a goal</h3>
@@ -579,158 +534,17 @@ async function submitGoalForm(): Promise<void> {
 </template>
 
 <style scoped>
-.management-shell,
-.management-card-grid,
-.dialog-stack,
-.dialog-section,
-.form-stack,
-.goal-meta-grid {
-  display: grid;
-  gap: 1rem;
-}
-
-.management-toolbar {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.management-toolbar-actions,
-.view-toggle,
-.card-header-actions,
-.dialog-actions-row,
-.exception-date-row {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.management-toolbar-actions {
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.management-card-grid {
-  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
-  align-items: start;
-}
-
-.loading,
-.history-row {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.tracking-table-wrap {
-  overflow-x: auto;
-}
-
-.tracking-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.tracking-table th,
-.tracking-table td {
-  padding: 0.35rem 0.75rem;
-  text-align: left;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.75);
-  vertical-align: middle;
-}
-
-.tracking-table th {
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: #64748b;
-  background: rgba(248, 250, 252, 0.95);
-}
-
-.tracking-table td {
-  font-size: 0.92rem;
-  line-height: 1.2;
-}
-
-.table-primary-cell {
-  display: grid;
-  gap: 0.1rem;
-}
-
-.table-secondary-text {
-  color: #64748b;
-  font-size: 0.8rem;
-}
-
-.table-actions-column,
-.table-kebab-cell {
-  width: 1%;
-  white-space: nowrap;
-  text-align: right;
-}
-
-.tracking-table :deep(.p-tag) {
-  padding: 0.2rem 0.45rem;
-  font-size: 0.72rem;
-  line-height: 1.1;
-}
-
-.tracking-table :deep(.p-button.p-button-icon-only) {
-  width: 1.75rem;
-  height: 1.75rem;
-}
-
-.tracking-table :deep(.p-button.p-button-text) {
-  padding: 0.15rem;
-}
-
-.tracking-card {
-  display: grid;
-  gap: 1rem;
-  padding: 1.1rem;
-  border-radius: 1rem;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(248, 250, 252, 0.84);
-}
-
-.tracking-card-header,
-.history-row {
-  justify-content: space-between;
-}
-
-.tracking-card-header h3,
-.section-heading-text h3 {
-  margin: 0;
-}
-
-.tracking-card-header p,
-.section-heading-text p,
-.management-toolbar p {
-  margin: 0.75rem 0 0;
-  line-height: 1.7;
-  color: #334155;
-}
-
-.checkbox-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.75rem;
-  color: #0f172a;
-}
-
-.empty-state {
-  color: #64748b;
-}
-
-.dialog-actions-row {
-  justify-content: flex-end;
-}
+@import "./management.css";
 
 .date-grid {
   display: grid;
   gap: 1rem;
+}
+
+.exception-date-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 
 .exception-date-row .native-file-input {
@@ -762,19 +576,9 @@ async function submitGoalForm(): Promise<void> {
 }
 
 @media (max-width: 720px) {
-  .management-toolbar,
-  .tracking-card-header,
-  .history-row,
   .exception-date-row {
     align-items: flex-start;
     flex-direction: column;
-  }
-
-  .management-toolbar-actions,
-  .view-toggle,
-  .dialog-actions-row {
-    width: 100%;
-    justify-content: flex-start;
   }
 }
 </style>

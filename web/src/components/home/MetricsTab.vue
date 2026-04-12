@@ -6,13 +6,14 @@ import Checkbox from "primevue/checkbox";
 import Dialog from "primevue/dialog";
 import InputText from "primevue/inputtext";
 import Menu from "primevue/menu";
-import Message from "primevue/message";
 import ProgressSpinner from "primevue/progressspinner";
 import Tag from "primevue/tag";
 
 import { numberInputStep, parseDecimalPlaces, parseOptionalNumber } from "../../lib/tracking";
+import { useAppToast } from "../../lib/toast";
 import { useGoalsStore } from "../../stores/goals";
 import { useMetricsStore } from "../../stores/metrics";
+import ManagementToolbar from "./ManagementToolbar.vue";
 
 const emit = defineEmits<{
   openMetricEntry: [metricId: string];
@@ -33,7 +34,7 @@ const metricDecimalPlacesInput = ref("0");
 const metricUnitLabelInput = ref("");
 const metricInitialNumberValueInput = ref("");
 const metricInitialDateValueInput = ref("");
-const successMessage = ref("");
+const { showSuccess } = useAppToast();
 
 const selectedMetricMenuMetric = computed(() => {
   return metricsStore.metrics.find((metric) => metric.id === activeMetricMenuId.value) ?? null;
@@ -90,11 +91,6 @@ const metricRowMenuItems = computed<MenuItem[]>(() => {
   return items;
 });
 
-function resetMessages(): void {
-  successMessage.value = "";
-  metricsStore.errorMessage = "";
-}
-
 function resetMetricForm(): void {
   metricNameInput.value = "";
   metricTypeInput.value = "number";
@@ -105,7 +101,6 @@ function resetMetricForm(): void {
 }
 
 function openCreateDialog(): void {
-  resetMessages();
   resetMetricForm();
   createDialogVisible.value = true;
 }
@@ -135,7 +130,6 @@ function formatMetricLatestSummary(metric: (typeof metricsStore.metrics)[number]
 }
 
 async function submitMetricForm(): Promise<void> {
-  resetMessages();
   const created = await metricsStore.createMetric({
     decimal_places:
       metricTypeInput.value === "number" ? parseDecimalPlaces(metricDecimalPlacesInput.value) : null,
@@ -152,47 +146,45 @@ async function submitMetricForm(): Promise<void> {
     return;
   }
 
-  successMessage.value = "Metric created.";
+  showSuccess("Metric created.", "Metrics");
   createDialogVisible.value = false;
   resetMetricForm();
   await goalsStore.loadGoals();
 }
 
 async function setMetricArchived(metricId: string, archived: boolean): Promise<void> {
-  resetMessages();
   const updated = await metricsStore.setMetricArchived(metricId, archived);
   if (!updated) {
     return;
   }
 
-  successMessage.value = archived ? "Metric archived." : "Metric restored.";
+  showSuccess(archived ? "Metric archived." : "Metric restored.", "Metrics");
   await goalsStore.loadGoals();
 }
 
 async function deleteMetricEntry(metricId: string): Promise<void> {
-  resetMessages();
   const deleted = await metricsStore.deleteMetric(metricId);
   if (!deleted) {
     return;
   }
 
-  successMessage.value = "Metric deleted.";
+  showSuccess("Metric deleted.", "Metrics");
   await goalsStore.loadGoals();
 }
 </script>
 
 <template>
   <div class="management-shell">
-    <div class="management-toolbar panel-card">
-      <div>
-        <p class="panel-eyebrow">Metrics</p>
-        <h2>Manage metrics</h2>
-        <p>
-          Reusable metric records are listed below. Add new ones from the toolbar and manage each
-          row from the kebab menu.
-        </p>
-      </div>
-      <div class="management-toolbar-actions">
+    <ManagementToolbar
+      v-model:viewMode="viewMode"
+      eyebrow="Metrics"
+      title="Manage metrics"
+      description="Reusable metric records are listed below. Add new ones from the toolbar and manage each row from the kebab menu."
+      primary-action-label="Add metric"
+      :primary-action-loading="metricsStore.submissionState === 'submitting'"
+      @add="openCreateDialog"
+    >
+      <template #leading-actions>
         <label class="checkbox-row">
           <Checkbox
             v-model="metricsStore.includeArchived"
@@ -202,37 +194,8 @@ async function deleteMetricEntry(metricId: string): Promise<void> {
           />
           <span>Include archived</span>
         </label>
-        <div class="view-toggle">
-          <Button
-            label="Table"
-            icon="pi pi-table"
-            :severity="viewMode === 'table' ? undefined : 'secondary'"
-            :outlined="viewMode !== 'table'"
-            @click="viewMode = 'table'"
-          />
-          <Button
-            label="Cards"
-            icon="pi pi-th-large"
-            :severity="viewMode === 'cards' ? undefined : 'secondary'"
-            :outlined="viewMode !== 'cards'"
-            @click="viewMode = 'cards'"
-          />
-        </div>
-        <Button
-          label="Add metric"
-          icon="pi pi-plus"
-          :loading="metricsStore.submissionState === 'submitting'"
-          @click="openCreateDialog"
-        />
-      </div>
-    </div>
-
-    <Message v-if="successMessage !== ''" severity="success" :closable="false">
-      {{ successMessage }}
-    </Message>
-    <Message v-if="metricsStore.errorMessage !== ''" severity="error" :closable="false">
-      {{ metricsStore.errorMessage }}
-    </Message>
+      </template>
+    </ManagementToolbar>
 
     <div v-if="metricsStore.viewState === 'loading'" class="panel-card loading">
       <ProgressSpinner
@@ -350,13 +313,6 @@ async function deleteMetricEntry(metricId: string): Promise<void> {
       :style="{ width: 'min(34rem, 96vw)' }"
     >
       <div class="dialog-stack">
-        <Message v-if="successMessage !== ''" severity="success" :closable="false">
-          {{ successMessage }}
-        </Message>
-        <Message v-if="metricsStore.errorMessage !== ''" severity="error" :closable="false">
-          {{ metricsStore.errorMessage }}
-        </Message>
-
         <section class="dialog-section">
           <div class="section-heading-text">
             <h3>Create a reusable metric</h3>
@@ -438,167 +394,11 @@ async function deleteMetricEntry(metricId: string): Promise<void> {
 </template>
 
 <style scoped>
-.management-shell,
-.management-card-grid,
-.dialog-stack,
-.dialog-section,
-.form-stack,
-.goal-meta-grid {
-  display: grid;
-  gap: 1rem;
-}
-
-.management-toolbar {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.management-toolbar-actions,
-.view-toggle,
-.card-header-actions,
-.dialog-actions-row {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.management-toolbar-actions {
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.management-card-grid {
-  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
-  align-items: start;
-}
-
-.loading,
-.history-row {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.tracking-table-wrap {
-  overflow-x: auto;
-}
-
-.tracking-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.tracking-table th,
-.tracking-table td {
-  padding: 0.35rem 0.75rem;
-  text-align: left;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.75);
-  vertical-align: middle;
-}
-
-.tracking-table th {
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: #64748b;
-  background: rgba(248, 250, 252, 0.95);
-}
-
-.tracking-table td {
-  font-size: 0.92rem;
-  line-height: 1.2;
-}
-
-.table-primary-cell {
-  display: grid;
-  gap: 0.1rem;
-}
-
-.table-secondary-text {
-  color: #64748b;
-  font-size: 0.8rem;
-}
-
-.table-actions-column,
-.table-kebab-cell {
-  width: 1%;
-  white-space: nowrap;
-  text-align: right;
-}
-
-.tracking-table :deep(.p-tag) {
-  padding: 0.2rem 0.45rem;
-  font-size: 0.72rem;
-  line-height: 1.1;
-}
-
-.tracking-table :deep(.p-button.p-button-icon-only) {
-  width: 1.75rem;
-  height: 1.75rem;
-}
-
-.tracking-table :deep(.p-button.p-button-text) {
-  padding: 0.15rem;
-}
-
-.tracking-card {
-  display: grid;
-  gap: 1rem;
-  padding: 1.1rem;
-  border-radius: 1rem;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(248, 250, 252, 0.84);
-}
-
-.tracking-card-header,
-.history-row {
-  justify-content: space-between;
-}
-
-.tracking-card-header h3,
-.section-heading-text h3 {
-  margin: 0;
-}
-
-.tracking-card-header p,
-.section-heading-text p,
-.management-toolbar p {
-  margin: 0.75rem 0 0;
-  line-height: 1.7;
-  color: #334155;
-}
-
-.checkbox-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.75rem;
-  color: #0f172a;
-}
-
-.empty-state {
-  color: #64748b;
-}
-
-.dialog-actions-row {
-  justify-content: flex-end;
-}
+@import "./management.css";
 
 @media (max-width: 720px) {
-  .management-toolbar,
-  .tracking-card-header,
-  .history-row {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .management-toolbar-actions,
-  .view-toggle,
-  .dialog-actions-row {
+  .checkbox-row {
     width: 100%;
-    justify-content: flex-start;
   }
 }
 </style>

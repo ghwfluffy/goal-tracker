@@ -4,7 +4,6 @@ import Card from "primevue/card";
 import Button from "primevue/button";
 import Checkbox from "primevue/checkbox";
 import InputText from "primevue/inputtext";
-import Message from "primevue/message";
 import Password from "primevue/password";
 import ProgressSpinner from "primevue/progressspinner";
 import TabPanel from "primevue/tabpanel";
@@ -109,10 +108,6 @@ watch(authTabIndex, () => {
         </div>
 
         <div v-else class="auth-form">
-          <Message v-if="authStore.errorMessage !== ''" severity="error" :closable="false">
-            {{ authStore.errorMessage }}
-          </Message>
-
           <form
             v-if="authStore.bootstrapRequired"
             class="auth-form"
