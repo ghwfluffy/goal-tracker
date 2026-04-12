@@ -1296,6 +1296,41 @@ watch(
 }
 
 @media (max-width: 720px) {
+  .profile-dialog :deep(.p-dialog) {
+    width: calc(100vw - 1rem) !important;
+    max-height: calc(100dvh - 1rem);
+    margin: 0.5rem;
+  }
+
+  .profile-dialog :deep(.p-dialog-header) {
+    padding: var(--space-5);
+    align-items: flex-start;
+  }
+
+  .profile-dialog :deep(.p-dialog-header-icons) {
+    margin-left: auto;
+  }
+
+  .profile-dialog :deep(.p-dialog-content) {
+    padding: 0 var(--space-5) var(--space-5);
+    overflow-y: auto;
+  }
+
+  .dialog-stack,
+  .dialog-section,
+  .field {
+    gap: var(--space-5);
+  }
+
+  .section-heading {
+    align-items: flex-start;
+    gap: var(--space-4);
+  }
+
+  .profile-dialog :deep(.p-button) {
+    width: 100%;
+  }
+
   .invitation-code-header,
   .invitation-code-buttons,
   .invitation-code-user {

@@ -237,7 +237,12 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main class="home-view">
+  <main
+    :class="[
+      'home-view',
+      { 'home-view--guest': !(authStore.isAuthenticated && authStore.currentUser !== null) },
+    ]"
+  >
     <section
       v-if="authStore.isAuthenticated && authStore.currentUser !== null"
       class="app-shell"
@@ -312,6 +317,10 @@ onBeforeUnmount(() => {
 .home-view {
   min-height: 100vh;
   padding: var(--space-9);
+}
+
+.home-view--guest {
+  padding: 0;
 }
 
 .app-shell {

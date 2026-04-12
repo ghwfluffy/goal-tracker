@@ -108,11 +108,20 @@ function toggleProfileMenu(event: Event): void {
 <template>
   <header class="app-header surface-panel-soft">
     <div class="brand-block">
-      <h1 class="brand-title">Goal Tracker</h1>
+      <img class="brand-logo" src="/logo-medium.png" alt="Goal Tracker" />
+      <h1 class="brand-title">
+        <span class="brand-title-desktop">Goal Tracker</span>
+        <span class="brand-title-mobile">Goals</span>
+      </h1>
     </div>
 
     <div class="header-actions">
-      <Tag v-if="version !== null" :value="`v${version}`" severity="success" />
+      <Tag
+        v-if="version !== null"
+        class="version-badge"
+        :value="`v${version}`"
+        severity="success"
+      />
       <Button
         class="notification-button"
         severity="secondary"
@@ -156,9 +165,25 @@ function toggleProfileMenu(event: Event): void {
   padding: var(--space-9) var(--space-10);
 }
 
+.brand-block {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+}
+
+.brand-logo {
+  width: auto;
+  height: clamp(2.25rem, 5vw, 3.5rem);
+  flex: 0 0 auto;
+}
+
 .brand-title {
   margin: 0;
   font-size: clamp(1.9rem, 4vw, 2.8rem);
+}
+
+.brand-title-mobile {
+  display: none;
 }
 
 .brand-summary {
@@ -225,13 +250,32 @@ function toggleProfileMenu(event: Event): void {
   }
 
   .header-actions {
-    justify-content: space-between;
-    width: 100%;
+    margin-left: auto;
+  }
+
+  .brand-block {
+    gap: var(--space-3);
+  }
+
+  .brand-logo {
+    height: 2.25rem;
   }
 
   .brand-title {
     font-size: 1.35rem;
     line-height: 1;
+  }
+
+  .brand-title-desktop {
+    display: none;
+  }
+
+  .brand-title-mobile {
+    display: inline;
+  }
+
+  .version-badge {
+    display: none;
   }
 
   .profile-name {
