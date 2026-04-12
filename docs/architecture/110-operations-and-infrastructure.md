@@ -70,6 +70,12 @@ Expected responsibilities:
 - proxy API requests
 - apply request shaping and rate limiting
 
+Current implementation direction:
+
+- a general per-IP API rate limit at Nginx for `/api/`
+- a stricter per-IP auth limit for `bootstrap`, `register`, and `login`
+- return `429 Too Many Requests` at the ingress layer before abusive traffic reaches FastAPI
+
 Certificate handling direction:
 
 - a separate service obtains and refreshes ACME certificates
