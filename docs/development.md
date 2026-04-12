@@ -141,6 +141,10 @@ Keep `PUBLIC_URL` as the scheme + host for the public site, for example
 If the API is published somewhere else entirely, you can still override the frontend API root with
 `VITE_API_BASE_URL`.
 
+The repo-level [`go.sh`](/home/tfuller/git/goals/go.sh) script now reads `.env`, normalizes
+`APP_BASE_PATH`, and defaults `VITE_APP_BASE_PATH` plus `VITE_API_BASE_URL` from that value before
+running `docker compose build` and `docker compose up`.
+
 If `web/node_modules` was created by Docker and is root-owned, the frontend test/build scripts will reuse the existing dependency tree instead of trying to reinstall into that directory. If dependency versions actually change, rebuild that directory from a writable environment.
 
 ## PostgreSQL 18 Note
