@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     app_version: str = __version__
     app_base_path: str = ""
     api_v1_prefix: str = "/api/v1"
-    public_url: str = "http://localhost:8081"
+    public_url: str = "http://localhost:8082"
     postgres_user: str = "ghw"
     postgres_password: str = "supersecure"
     postgres_db: str = "goals"
@@ -52,8 +52,10 @@ class Settings(BaseSettings):
     cors_origins: list[str] = [
         "http://127.0.0.1:8080",
         "http://127.0.0.1:8081",
+        "http://127.0.0.1:8082",
         "http://localhost:8080",
         "http://localhost:8081",
+        "http://localhost:8082",
         "http://127.0.0.1:5173",
         "http://localhost:5173",
     ]

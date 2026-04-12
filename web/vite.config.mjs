@@ -17,6 +17,32 @@ function toViteBasePath(value) {
   return normalized === "" ? "/" : `${normalized}/`;
 }
 
+function basePathCompatibilityPlugin(appBasePath) {
+  return {
+    name: "base-path-compatibility",
+    configureServer(server) {
+      server.middlewares.use((req, _res, next) => {
+        if (appBasePath === "" || req.url == null) {
+          next();
+          return;
+        }
+
+        if (
+          req.url.startsWith(appBasePath) ||
+          req.url.startsWith("/api") ||
+          req.url.startsWith("/__vite")
+        ) {
+          next();
+          return;
+        }
+
+        req.url = `${appBasePath}${req.url}`;
+        next();
+      });
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const appBasePath = normalizeBasePath(env.VITE_APP_BASE_PATH);
@@ -39,7 +65,7 @@ export default defineConfig(({ mode }) => {
   return {
     base: toViteBasePath(appBasePath),
     cacheDir: ".vite",
-    plugins: [vue()],
+    plugins: [basePathCompatibilityPlugin(appBasePath), vue()],
     server: {
       host: "0.0.0.0",
       port: 8081,

@@ -150,6 +150,18 @@ The bundled [`nginx/default.conf`](/home/tfuller/git/goals/nginx/default.conf) n
 root-relative upstream requests. Do not configure both this stack and an outer ingress to route
 `/goals` independently, or you will re-apply the prefix and break asset URLs.
 
+The default Docker Compose stack now exposes both frontend modes:
+
+1. nginx builds the Vue app with `vite build`
+2. nginx serves the compiled `web/dist` files directly
+3. nginx proxies only `/api/*` requests to FastAPI
+4. the separate `web` service still exposes the Vite dev server on port `8081` for manual debugging
+
+That means:
+
+1. `http://localhost:8081` is the live Vite dev server
+2. `http://localhost:8082` is the nginx-served production-style frontend
+
 If `web/node_modules` was created by Docker and is root-owned, the frontend test/build scripts will reuse the existing dependency tree instead of trying to reinstall into that directory. If dependency versions actually change, rebuild that directory from a writable environment.
 
 ## PostgreSQL 18 Note
