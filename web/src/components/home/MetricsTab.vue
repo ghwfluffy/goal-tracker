@@ -24,19 +24,28 @@ const goalsStore = useGoalsStore();
 
 const metricRowMenu = ref<InstanceType<typeof Menu> | null>(null);
 const activeMetricMenuId = ref("");
-const createDialogVisible = ref(false);
+const metricDialogVisible = ref(false);
+const metricDialogMode = ref<"create" | "edit">("create");
+const metricEditId = ref("");
 const viewMode = ref<"table" | "cards">("table");
 
 const metricNameInput = ref("");
 const metricTypeInput = ref<"number" | "date">("number");
+const metricUpdateTypeInput = ref<"success" | "failure">("success");
 const metricDecimalPlacesInput = ref("0");
 const metricUnitLabelInput = ref("");
 const metricInitialNumberValueInput = ref("");
 const metricInitialDateValueInput = ref("");
+const metricReminderTime1Input = ref("06:00");
+const metricReminderTime2Input = ref("");
 const { showSuccess } = useAppToast();
 
 const selectedMetricMenuMetric = computed(() => {
   return metricsStore.metrics.find((metric) => metric.id === activeMetricMenuId.value) ?? null;
+});
+
+const editingMetric = computed(() => {
+  return metricsStore.metrics.find((metric) => metric.id === metricEditId.value) ?? null;
 });
 
 const metricRowMenuItems = computed<MenuItem[]>(() => {
@@ -46,6 +55,12 @@ const metricRowMenuItems = computed<MenuItem[]>(() => {
   }
 
   const items: MenuItem[] = [];
+
+  items.push({
+    icon: "pi pi-pencil",
+    label: "Edit",
+    command: () => openEditDialog(metric),
+  });
 
   if (!metric.is_archived) {
     items.push({
@@ -93,15 +108,35 @@ const metricRowMenuItems = computed<MenuItem[]>(() => {
 function resetMetricForm(): void {
   metricNameInput.value = "";
   metricTypeInput.value = "number";
+  metricUpdateTypeInput.value = "success";
   metricDecimalPlacesInput.value = "0";
   metricUnitLabelInput.value = "";
   metricInitialNumberValueInput.value = "";
   metricInitialDateValueInput.value = "";
+  metricReminderTime1Input.value = "06:00";
+  metricReminderTime2Input.value = "";
 }
 
 function openCreateDialog(): void {
+  metricDialogMode.value = "create";
+  metricEditId.value = "";
   resetMetricForm();
-  createDialogVisible.value = true;
+  metricDialogVisible.value = true;
+}
+
+function openEditDialog(metric: (typeof metricsStore.metrics)[number]): void {
+  metricDialogMode.value = "edit";
+  metricEditId.value = metric.id;
+  metricNameInput.value = metric.name;
+  metricTypeInput.value = metric.metric_type;
+  metricUpdateTypeInput.value = metric.update_type;
+  metricDecimalPlacesInput.value = String(metric.decimal_places ?? 0);
+  metricUnitLabelInput.value = metric.unit_label ?? "";
+  metricInitialNumberValueInput.value = "";
+  metricInitialDateValueInput.value = "";
+  metricReminderTime1Input.value = metric.reminder_time_1;
+  metricReminderTime2Input.value = metric.reminder_time_2 ?? "";
+  metricDialogVisible.value = true;
 }
 
 function toggleMetricRowMenu(event: Event, metricId: string): void {
@@ -129,26 +164,52 @@ function formatMetricLatestSummary(metric: (typeof metricsStore.metrics)[number]
 }
 
 async function submitMetricForm(): Promise<void> {
-  const created = await metricsStore.createMetric({
-    decimal_places:
-      metricTypeInput.value === "number" ? parseDecimalPlaces(metricDecimalPlacesInput.value) : null,
-    initial_date_value:
-      metricTypeInput.value === "date" ? metricInitialDateValueInput.value || null : null,
-    initial_number_value:
-      metricTypeInput.value === "number" ? parseOptionalNumber(metricInitialNumberValueInput.value) : null,
-    metric_type: metricTypeInput.value,
-    name: metricNameInput.value,
-    unit_label: metricUnitLabelInput.value.trim() === "" ? null : metricUnitLabelInput.value,
-  });
+  if (metricDialogMode.value === "create") {
+    const created = await metricsStore.createMetric({
+      decimal_places:
+        metricTypeInput.value === "number" ? parseDecimalPlaces(metricDecimalPlacesInput.value) : null,
+      initial_date_value:
+        metricTypeInput.value === "date" ? metricInitialDateValueInput.value || null : null,
+      initial_number_value:
+        metricTypeInput.value === "number" ? parseOptionalNumber(metricInitialNumberValueInput.value) : null,
+      metric_type: metricTypeInput.value,
+      name: metricNameInput.value,
+      reminder_time_1: metricReminderTime1Input.value || null,
+      reminder_time_2: metricReminderTime2Input.value || null,
+      update_type: metricTypeInput.value === "date" ? metricUpdateTypeInput.value : null,
+      unit_label: metricUnitLabelInput.value.trim() === "" ? null : metricUnitLabelInput.value,
+    });
 
-  if (!created) {
+    if (!created) {
+      return;
+    }
+
+    showSuccess("Metric created.", "Metrics");
+    metricDialogVisible.value = false;
+    resetMetricForm();
+    await goalsStore.loadGoals();
     return;
   }
 
-  showSuccess("Metric created.", "Metrics");
-  createDialogVisible.value = false;
-  resetMetricForm();
-  await goalsStore.loadGoals();
+  if (editingMetric.value === null) {
+    return;
+  }
+
+  const updated = await metricsStore.updateMetricDetails(editingMetric.value.id, {
+    decimal_places:
+      metricTypeInput.value === "number" ? parseDecimalPlaces(metricDecimalPlacesInput.value) : null,
+    name: metricNameInput.value,
+    reminder_time_1: metricReminderTime1Input.value || null,
+    reminder_time_2: metricReminderTime2Input.value || null,
+    update_type: metricTypeInput.value === "date" ? metricUpdateTypeInput.value : null,
+    unit_label: metricUnitLabelInput.value.trim() === "" ? null : metricUnitLabelInput.value,
+  });
+  if (!updated) {
+    return;
+  }
+
+  showSuccess("Metric updated.", "Metrics");
+  metricDialogVisible.value = false;
 }
 
 async function setMetricArchived(metricId: string, archived: boolean): Promise<void> {
@@ -304,6 +365,16 @@ function toggleIncludeArchived(): void {
             <strong>Status</strong>
             <span>{{ metric.is_archived ? "Archived" : "Active" }}</span>
           </div>
+          <div class="history-row">
+            <strong>Reminders</strong>
+            <span>
+              {{ metric.reminder_time_1 }}<template v-if="metric.reminder_time_2 !== null">, {{ metric.reminder_time_2 }}</template>
+            </span>
+          </div>
+          <div v-if="metric.metric_type === 'date'" class="history-row">
+            <strong>Update type</strong>
+            <span>{{ metric.update_type === "failure" ? "Failure" : "Success" }}</span>
+          </div>
         </div>
       </article>
     </div>
@@ -311,20 +382,21 @@ function toggleIncludeArchived(): void {
     <Menu ref="metricRowMenu" :model="metricRowMenuItems" popup />
 
     <Dialog
-      v-model:visible="createDialogVisible"
+      v-model:visible="metricDialogVisible"
       modal
-      header="Add metric"
+      :header="metricDialogMode === 'create' ? 'Add metric' : 'Edit metric'"
       class="profile-dialog"
       :style="{ width: 'min(34rem, 96vw)' }"
     >
       <div class="dialog-stack">
         <section class="dialog-section">
           <div class="section-heading-text">
-            <h3>Create a reusable metric</h3>
-            <p>
+            <h3>{{ metricDialogMode === "create" ? "Create a reusable metric" : "Edit metric" }}</h3>
+            <p v-if="metricDialogMode === 'create'">
               Metrics hold the values you update over time. Goals can reference them instead of
               owning isolated history.
             </p>
+            <p v-else>Update the metric details and reminder schedule.</p>
           </div>
 
           <div class="form-stack">
@@ -333,11 +405,24 @@ function toggleIncludeArchived(): void {
               <InputText v-model="metricNameInput" />
             </label>
 
-            <label class="field">
-              <span class="label">Metric type</span>
-              <select v-model="metricTypeInput" class="native-file-input">
-                <option value="number">Number</option>
-                <option value="date">Date</option>
+            <template v-if="metricDialogMode === 'create'">
+              <label class="field">
+                <span class="label">Metric type</span>
+                <select v-model="metricTypeInput" class="native-file-input">
+                  <option value="number">Number</option>
+                  <option value="date">Date</option>
+                </select>
+              </label>
+            </template>
+            <div v-else class="widget-dialog-note">
+              Type: {{ metricTypeInput }}
+            </div>
+
+            <label v-if="metricTypeInput === 'date'" class="field">
+              <span class="label">Update type</span>
+              <select v-model="metricUpdateTypeInput" class="native-file-input">
+                <option value="success">Success</option>
+                <option value="failure">Failure</option>
               </select>
             </label>
 
@@ -358,7 +443,19 @@ function toggleIncludeArchived(): void {
               <InputText v-model="metricUnitLabelInput" placeholder="Optional, like lbs" />
             </label>
 
-            <label v-if="metricTypeInput === 'number'" class="field">
+            <div class="metric-reminder-grid">
+              <label class="field">
+                <span class="label">First reminder</span>
+                <input v-model="metricReminderTime1Input" class="native-file-input" type="time" />
+              </label>
+
+              <label class="field">
+                <span class="label">Second reminder</span>
+                <input v-model="metricReminderTime2Input" class="native-file-input" type="time" />
+              </label>
+            </div>
+
+            <label v-if="metricDialogMode === 'create' && metricTypeInput === 'number'" class="field">
               <span class="label">Initial value</span>
               <input
                 v-model="metricInitialNumberValueInput"
@@ -368,7 +465,7 @@ function toggleIncludeArchived(): void {
               />
             </label>
 
-            <label v-else class="field">
+            <label v-else-if="metricDialogMode === 'create'" class="field">
               <span class="label">Initial value</span>
               <input
                 v-model="metricInitialDateValueInput"
@@ -383,11 +480,11 @@ function toggleIncludeArchived(): void {
               label="Cancel"
               severity="secondary"
               text
-              @click="createDialogVisible = false"
+              @click="metricDialogVisible = false"
             />
             <Button
-              label="Create metric"
-              icon="pi pi-plus"
+              :label="metricDialogMode === 'create' ? 'Create metric' : 'Save metric'"
+              :icon="metricDialogMode === 'create' ? 'pi pi-plus' : 'pi pi-save'"
               :loading="metricsStore.submissionState === 'submitting'"
               @click="submitMetricForm"
             />
@@ -400,6 +497,11 @@ function toggleIncludeArchived(): void {
 
 <style scoped>
 @import "./management.css";
+
+.metric-reminder-grid {
+  display: grid;
+  gap: 1rem;
+}
 
 @media (max-width: 720px) {
   .toolbar-filter-button :deep(.p-button-label) {

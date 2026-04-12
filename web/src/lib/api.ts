@@ -89,6 +89,9 @@ export interface MetricSummary {
   latest_entry: MetricEntrySummary | null;
   metric_type: "number" | "date";
   name: string;
+  reminder_time_1: string;
+  reminder_time_2: string | null;
+  update_type: "success" | "failure";
   unit_label: string | null;
 }
 
@@ -103,6 +106,9 @@ export interface CreateMetricPayload {
   metric_type: "number" | "date";
   name: string;
   recorded_at?: string | null;
+  reminder_time_1?: string | null;
+  reminder_time_2?: string | null;
+  update_type?: "success" | "failure" | null;
   unit_label: string | null;
 }
 
@@ -113,7 +119,41 @@ export interface CreateMetricEntryPayload {
 }
 
 export interface UpdateMetricPayload {
-  archived: boolean;
+  archived?: boolean;
+  decimal_places?: number | null;
+  name?: string;
+  reminder_time_1?: string | null;
+  reminder_time_2?: string | null;
+  update_type?: "success" | "failure" | null;
+  unit_label?: string | null;
+}
+
+export interface NotificationMetricSummary {
+  decimal_places: number | null;
+  id: string;
+  metric_type: "number" | "date";
+  name: string;
+  update_type: "success" | "failure";
+  unit_label: string | null;
+}
+
+export interface NotificationSummary {
+  id: string;
+  metric: NotificationMetricSummary;
+  notification_date: string;
+  scheduled_time: string;
+  slot_index: number;
+  status: string;
+}
+
+export interface NotificationListResponse {
+  notifications: NotificationSummary[];
+}
+
+export interface CompleteNotificationPayload {
+  number_value?: number | null;
+  recorded_at?: string | null;
+  timezone: string;
 }
 
 export interface GoalMetricSummary {
@@ -607,6 +647,45 @@ export function updateMetric(
     {
       body: JSON.stringify(payload),
       method: "PATCH",
+    },
+    fetcher,
+  );
+}
+
+export function fetchNotifications(
+  timezone: string,
+  fetcher: Fetcher = fetch,
+): Promise<NotificationListResponse> {
+  return requestJson<NotificationListResponse>(
+    `/notifications?timezone=${encodeURIComponent(timezone)}`,
+    undefined,
+    fetcher,
+  );
+}
+
+export function completeNotification(
+  notificationId: string,
+  payload: CompleteNotificationPayload,
+  fetcher: Fetcher = fetch,
+): Promise<NotificationSummary> {
+  return requestJson<NotificationSummary>(
+    `/notifications/${notificationId}/complete`,
+    {
+      body: JSON.stringify(payload),
+      method: "POST",
+    },
+    fetcher,
+  );
+}
+
+export function skipNotification(
+  notificationId: string,
+  fetcher: Fetcher = fetch,
+): Promise<NotificationSummary> {
+  return requestJson<NotificationSummary>(
+    `/notifications/${notificationId}/skip`,
+    {
+      method: "POST",
     },
     fetcher,
   );

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from calendar import monthrange
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from uuid import uuid4
 
 from sqlalchemy import select
@@ -14,6 +14,7 @@ from app.db.models import (
     Goal,
     Metric,
     MetricEntry,
+    MetricNotification,
     User,
 )
 from app.services.dashboard_layout import (
@@ -30,10 +31,12 @@ from app.services.metrics import (
     create_metric,
     create_metric_entry,
 )
+from app.services.notifications import get_timezone, notification_is_satisfied
 
 EXAMPLE_SEED_REVISION_INITIAL_GOALS = "2026-04-11-initial-example-metrics-goals"
 EXAMPLE_SEED_REVISION_INITIAL_DASHBOARD = "2026-04-11-initial-example-dashboard"
 EXAMPLE_SEED_REVISION_EXPANDED_HISTORY = "2026-04-11-expanded-example-history-and-widgets"
+EXAMPLE_SEED_REVISION_NOTIFICATION_BACKLOG = "2026-04-12-example-notification-backlog"
 
 EXAMPLE_WEIGHT_METRIC_NAME = "Example Weight"
 EXAMPLE_LAST_DRINK_METRIC_NAME = "Example Last Drink"
@@ -120,6 +123,21 @@ def metric_entry_exists_at(
     statement = select(MetricEntry.id).where(
         MetricEntry.metric_id == metric.id,
         MetricEntry.recorded_at == recorded_at,
+    )
+    return db.scalar(statement) is not None
+
+
+def metric_notification_exists(
+    db: Session,
+    *,
+    metric: Metric,
+    notification_date: date,
+    slot_index: int,
+) -> bool:
+    statement = select(MetricNotification.id).where(
+        MetricNotification.metric_id == metric.id,
+        MetricNotification.notification_date == notification_date,
+        MetricNotification.slot_index == slot_index,
     )
     return db.scalar(statement) is not None
 
@@ -377,6 +395,67 @@ def apply_expanded_example_history_and_widgets(db: Session, *, user: User) -> No
         )
 
 
+def apply_example_notification_backlog(db: Session, *, user: User) -> None:
+    apply_expanded_example_history_and_widgets(db, user=user)
+
+    today = utcnow().date()
+    timezone = get_timezone(user.timezone)
+    weight_metric = get_metric_by_name_for_user(db, user=user, name=EXAMPLE_WEIGHT_METRIC_NAME)
+    last_drink_metric = get_metric_by_name_for_user(
+        db,
+        user=user,
+        name=EXAMPLE_LAST_DRINK_METRIC_NAME,
+    )
+    if weight_metric is None or last_drink_metric is None:
+        return
+
+    weight_metric.reminder_time_1 = time(6, 0)
+    weight_metric.reminder_time_2 = None
+    weight_metric.update_type = "success"
+
+    last_drink_metric.reminder_time_1 = time(20, 0)
+    last_drink_metric.reminder_time_2 = None
+    last_drink_metric.update_type = "failure"
+
+    backlog_targets = [
+        (weight_metric, [today - timedelta(days=2), today - timedelta(days=1), today]),
+        (last_drink_metric, [today - timedelta(days=3), today - timedelta(days=2)]),
+    ]
+
+    for metric, backlog_dates in backlog_targets:
+        for notification_date in backlog_dates:
+            if metric_notification_exists(
+                db,
+                metric=metric,
+                notification_date=notification_date,
+                slot_index=1,
+            ):
+                continue
+
+            if notification_is_satisfied(
+                metric=metric,
+                notification_date=notification_date,
+                slot_index=1,
+                timezone=timezone,
+            ):
+                continue
+
+            db.add(
+                MetricNotification(
+                    id=str(uuid4()),
+                    user_id=user.id,
+                    metric_id=metric.id,
+                    notification_date=notification_date,
+                    scheduled_time=metric.reminder_time_1,
+                    slot_index=1,
+                    status="pending",
+                    updated_at=utcnow(),
+                )
+            )
+
+    db.flush()
+
+
 def upgrade_example_data_for_user(db: Session, *, user: User) -> None:
     if not user.is_example_data:
         return
@@ -415,6 +494,18 @@ def upgrade_example_data_for_user(db: Session, *, user: User) -> None:
             db,
             user=user,
             revision=EXAMPLE_SEED_REVISION_EXPANDED_HISTORY,
+        )
+
+    if not is_example_seed_revision_applied(
+        db,
+        user=user,
+        revision=EXAMPLE_SEED_REVISION_NOTIFICATION_BACKLOG,
+    ):
+        apply_example_notification_backlog(db, user=user)
+        mark_example_seed_revision_applied(
+            db,
+            user=user,
+            revision=EXAMPLE_SEED_REVISION_NOTIFICATION_BACKLOG,
         )
 
 

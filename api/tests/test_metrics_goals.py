@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
+import pytest
 from fastapi.testclient import TestClient
 
 
@@ -58,7 +61,26 @@ def test_create_date_metric(client: TestClient) -> None:
     assert create_response.status_code == 201
     payload = create_response.json()
     assert payload["metric_type"] == "date"
+    assert payload["update_type"] == "success"
     assert payload["latest_entry"]["date_value"] == "2026-04-10"
+
+
+def test_create_date_metric_with_failure_update_type(client: TestClient) -> None:
+    bootstrap_admin(client)
+
+    create_response = client.post(
+        "/api/v1/metrics",
+        json={
+            "name": "Last drink",
+            "metric_type": "date",
+            "update_type": "failure",
+        },
+    )
+
+    assert create_response.status_code == 201
+    payload = create_response.json()
+    assert payload["metric_type"] == "date"
+    assert payload["update_type"] == "failure"
 
 
 def test_archived_metrics_are_hidden_by_default_and_can_be_included(client: TestClient) -> None:
@@ -114,6 +136,121 @@ def test_archived_metrics_cannot_be_updated(client: TestClient) -> None:
     )
     assert update_response.status_code == 422
     assert update_response.json()["detail"] == "Archived metrics cannot be updated."
+
+
+def test_metric_schedule_fields_can_be_created_and_updated(client: TestClient) -> None:
+    bootstrap_admin(client)
+
+    create_response = client.post(
+        "/api/v1/metrics",
+        json={
+            "name": "Weight",
+            "metric_type": "number",
+            "decimal_places": 1,
+            "reminder_time_1": "06:00",
+            "reminder_time_2": "16:30",
+        },
+    )
+    assert create_response.status_code == 201
+    payload = create_response.json()
+    assert payload["reminder_time_1"] == "06:00"
+    assert payload["reminder_time_2"] == "16:30"
+
+    update_response = client.patch(
+        f"/api/v1/metrics/{payload['id']}",
+        json={
+            "name": "Morning Weight",
+            "reminder_time_1": "07:15",
+            "reminder_time_2": None,
+        },
+    )
+    assert update_response.status_code == 200
+    updated_payload = update_response.json()
+    assert updated_payload["name"] == "Morning Weight"
+    assert updated_payload["reminder_time_1"] == "07:15"
+    assert updated_payload["reminder_time_2"] is None
+
+
+def test_due_number_metric_notification_can_be_completed(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bootstrap_admin(client)
+
+    create_response = client.post(
+        "/api/v1/metrics",
+        json={
+            "name": "Weight",
+            "metric_type": "number",
+            "decimal_places": 1,
+            "reminder_time_1": "23:59",
+        },
+    )
+    assert create_response.status_code == 201
+    metric_id = create_response.json()["id"]
+
+    monkeypatch.setattr(
+        "app.services.notifications.utcnow",
+        lambda: datetime(2026, 4, 12, 23, 59, tzinfo=UTC),
+    )
+
+    notification_list_response = client.get("/api/v1/notifications?timezone=UTC")
+    assert notification_list_response.status_code == 200
+    notifications = notification_list_response.json()["notifications"]
+    assert len(notifications) == 1
+    notification_id = notifications[0]["id"]
+    assert notifications[0]["metric"]["id"] == metric_id
+
+    complete_response = client.post(
+        f"/api/v1/notifications/{notification_id}/complete",
+        json={
+            "number_value": 244.4,
+            "recorded_at": "2026-04-12T23:59:00Z",
+            "timezone": "UTC",
+        },
+    )
+    assert complete_response.status_code == 200
+
+    metric_response = client.get("/api/v1/metrics")
+    assert metric_response.status_code == 200
+    assert metric_response.json()["metrics"][0]["latest_entry"]["number_value"] == 244.4
+
+    notification_list_response = client.get("/api/v1/notifications?timezone=UTC")
+    assert notification_list_response.status_code == 200
+    assert notification_list_response.json() == {"notifications": []}
+
+
+def test_due_date_metric_notification_can_be_skipped(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bootstrap_admin(client)
+
+    create_response = client.post(
+        "/api/v1/metrics",
+        json={
+            "name": "Cardio Date",
+            "metric_type": "date",
+            "reminder_time_1": "23:59",
+        },
+    )
+    assert create_response.status_code == 201
+
+    monkeypatch.setattr(
+        "app.services.notifications.utcnow",
+        lambda: datetime(2026, 4, 12, 23, 59, tzinfo=UTC),
+    )
+
+    notification_list_response = client.get("/api/v1/notifications?timezone=UTC")
+    assert notification_list_response.status_code == 200
+    notification_id = notification_list_response.json()["notifications"][0]["id"]
+
+    skip_response = client.post(f"/api/v1/notifications/{notification_id}/skip")
+    assert skip_response.status_code == 200
+
+    notification_list_response = client.get("/api/v1/notifications?timezone=UTC")
+    assert notification_list_response.status_code == 200
+    assert notification_list_response.json() == {"notifications": []}
 
 
 def test_create_goal_with_existing_metric(client: TestClient) -> None:
@@ -544,3 +681,7 @@ def test_example_data_user_is_seeded_with_metrics_and_goals(client: TestClient) 
         "Reach 220 lbs",
         "Stay dry this month",
     ]
+
+    notifications_response = client.get("/api/v1/notifications?timezone=America/Chicago")
+    assert notifications_response.status_code == 200
+    assert len(notifications_response.json()["notifications"]) == 4

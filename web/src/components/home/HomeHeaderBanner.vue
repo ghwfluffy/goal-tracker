@@ -9,6 +9,7 @@ import Tag from "primevue/tag";
 import type { UserSummary } from "../../lib/api";
 
 const props = defineProps<{
+  notificationCount: number;
   user: UserSummary;
   version: string | null;
 }>();
@@ -16,6 +17,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   deleteAccount: [];
   logout: [];
+  openNotifications: [];
   openInvitationCodes: [];
   openPassword: [];
   openProfile: [];
@@ -97,6 +99,18 @@ function toggleProfileMenu(event: Event): void {
 
     <div class="header-actions">
       <Tag v-if="version !== null" :value="`v${version}`" severity="success" />
+      <Button
+        class="notification-button"
+        severity="secondary"
+        text
+        aria-label="Open notifications"
+        @click="emit('openNotifications')"
+      >
+        <span class="notification-button-content">
+          <i class="pi pi-bell" />
+          <span v-if="notificationCount > 0" class="notification-badge">{{ notificationCount }}</span>
+        </span>
+      </Button>
       <Button class="profile-button" severity="secondary" text @click="toggleProfileMenu">
         <span class="profile-button-content">
           <Avatar
@@ -140,6 +154,35 @@ function toggleProfileMenu(event: Event): void {
 
 .profile-button :deep(.p-button-label) {
   flex: 0 0 auto;
+}
+
+.notification-button-content {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+}
+
+.notification-button-content .pi {
+  font-size: 1.1rem;
+}
+
+.notification-badge {
+  position: absolute;
+  top: -0.15rem;
+  right: -0.15rem;
+  min-width: 1.1rem;
+  height: 1.1rem;
+  padding: 0 0.2rem;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-panel-strong);
+  color: var(--color-text-danger);
+  border: 1px solid var(--color-border-danger-soft);
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.1rem;
+  text-align: center;
 }
 
 .profile-button-content {

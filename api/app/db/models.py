@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, time
 
 from sqlalchemy import (
     Boolean,
@@ -12,6 +12,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    Time,
     UniqueConstraint,
     func,
 )
@@ -163,8 +164,11 @@ class Metric(Base):
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     metric_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    update_type: Mapped[str] = mapped_column(String(20), nullable=False, default="success")
     decimal_places: Mapped[int | None] = mapped_column(Integer, nullable=True)
     unit_label: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    reminder_time_1: Mapped[time] = mapped_column(Time, nullable=False, default=time(6, 0))
+    reminder_time_2: Mapped[time | None] = mapped_column(Time, nullable=True)
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -182,6 +186,11 @@ class Metric(Base):
         back_populates="metric",
         cascade="all, delete-orphan",
         order_by="desc(MetricEntry.recorded_at)",
+    )
+    notifications: Mapped[list[MetricNotification]] = relationship(
+        back_populates="metric",
+        cascade="all, delete-orphan",
+        order_by="desc(MetricNotification.notification_date), desc(MetricNotification.scheduled_time)",
     )
     goals: Mapped[list[Goal]] = relationship(back_populates="metric")
     widgets: Mapped[list[DashboardWidget]] = relationship(back_populates="metric")
@@ -205,6 +214,40 @@ class MetricEntry(Base):
     )
 
     metric: Mapped[Metric] = relationship(back_populates="entries")
+
+
+class MetricNotification(Base):
+    __tablename__ = "metric_notifications"
+    __table_args__ = (
+        UniqueConstraint(
+            "metric_id",
+            "notification_date",
+            "slot_index",
+            name="uq_metric_notifications_metric_date_slot",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    metric_id: Mapped[str] = mapped_column(ForeignKey("metrics.id", ondelete="CASCADE"), nullable=False)
+    notification_date: Mapped[date] = mapped_column(Date, nullable=False)
+    scheduled_time: Mapped[time] = mapped_column(Time, nullable=False)
+    slot_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    user: Mapped[User] = relationship()
+    metric: Mapped[Metric] = relationship(back_populates="notifications")
 
 
 class Goal(Base):

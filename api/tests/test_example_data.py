@@ -5,7 +5,15 @@ from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.db.models import Base, Dashboard, DashboardWidget, ExampleSeedApplication, Goal, Metric
+from app.db.models import (
+    Base,
+    Dashboard,
+    DashboardWidget,
+    ExampleSeedApplication,
+    Goal,
+    Metric,
+    MetricNotification,
+)
 from app.main import create_app
 from app.services.auth import create_user
 from app.services.example_data import (
@@ -14,6 +22,7 @@ from app.services.example_data import (
     EXAMPLE_SEED_REVISION_EXPANDED_HISTORY,
     EXAMPLE_SEED_REVISION_INITIAL_DASHBOARD,
     EXAMPLE_SEED_REVISION_INITIAL_GOALS,
+    EXAMPLE_SEED_REVISION_NOTIFICATION_BACKLOG,
     EXAMPLE_WEIGHT_GOAL_SUMMARY_WIDGET_TITLE,
     EXAMPLE_WEIGHT_SUMMARY_WIDGET_TITLE,
     apply_initial_example_metrics_and_goals,
@@ -84,6 +93,17 @@ def test_example_data_upgrader_backfills_existing_accounts_without_duplicates() 
                 ExampleSeedApplication.revision == EXAMPLE_SEED_REVISION_EXPANDED_HISTORY,
             )
         )
+        applied_notification_revision_count = db.scalar(
+            select(func.count())
+            .select_from(ExampleSeedApplication)
+            .where(
+                ExampleSeedApplication.user_id == user.id,
+                ExampleSeedApplication.revision == EXAMPLE_SEED_REVISION_NOTIFICATION_BACKLOG,
+            )
+        )
+        notification_count = db.scalar(
+            select(func.count()).select_from(MetricNotification).where(MetricNotification.user_id == user.id)
+        )
         dashboard = db.scalar(select(Dashboard).where(Dashboard.user_id == user.id))
         weight_metric = db.scalar(
             select(Metric).where(Metric.user_id == user.id, Metric.name == "Example Weight")
@@ -102,13 +122,17 @@ def test_example_data_upgrader_backfills_existing_accounts_without_duplicates() 
         assert applied_revision_count == 1
         assert applied_dashboard_revision_count == 1
         assert applied_history_revision_count == 1
+        assert applied_notification_revision_count == 1
+        assert notification_count == 4
         assert dashboard is not None
         assert dashboard.name == EXAMPLE_DASHBOARD_NAME
         assert user.default_dashboard_id == dashboard.id
         assert weight_metric is not None
         assert len(weight_metric.entries) == 7
+        assert weight_metric.update_type == "success"
         assert last_drink_metric is not None
         assert len(last_drink_metric.entries) == 6
+        assert last_drink_metric.update_type == "failure"
         assert widget_titles == {
             "Weight Trend",
             "Weight Goal Progress",
@@ -160,6 +184,17 @@ def test_example_data_upgrader_backfills_existing_accounts_without_duplicates() 
                 ExampleSeedApplication.revision == EXAMPLE_SEED_REVISION_EXPANDED_HISTORY,
             )
         )
+        applied_notification_revision_count_after_second_run = db.scalar(
+            select(func.count())
+            .select_from(ExampleSeedApplication)
+            .where(
+                ExampleSeedApplication.user_id == user.id,
+                ExampleSeedApplication.revision == EXAMPLE_SEED_REVISION_NOTIFICATION_BACKLOG,
+            )
+        )
+        notification_count_after_second_run = db.scalar(
+            select(func.count()).select_from(MetricNotification).where(MetricNotification.user_id == user.id)
+        )
 
         assert metric_count_after_second_run == 2
         assert goal_count_after_second_run == 2
@@ -168,6 +203,8 @@ def test_example_data_upgrader_backfills_existing_accounts_without_duplicates() 
         assert applied_revision_count_after_second_run == 1
         assert applied_dashboard_revision_count_after_second_run == 1
         assert applied_history_revision_count_after_second_run == 1
+        assert applied_notification_revision_count_after_second_run == 1
+        assert notification_count_after_second_run == 4
 
     Base.metadata.drop_all(engine)
 
@@ -224,10 +261,23 @@ def test_startup_upgrades_existing_example_accounts() -> None:
                 ExampleSeedApplication.revision == EXAMPLE_SEED_REVISION_EXPANDED_HISTORY,
             )
         )
+        applied_notification_revision_count = db.scalar(
+            select(func.count())
+            .select_from(ExampleSeedApplication)
+            .where(
+                ExampleSeedApplication.user_id == user.id,
+                ExampleSeedApplication.revision == EXAMPLE_SEED_REVISION_NOTIFICATION_BACKLOG,
+            )
+        )
+        notification_count = db.scalar(
+            select(func.count()).select_from(MetricNotification).where(MetricNotification.user_id == user.id)
+        )
 
         assert dashboard is not None
         assert dashboard.name == EXAMPLE_DASHBOARD_NAME
         assert applied_dashboard_revision_count == 1
         assert applied_history_revision_count == 1
+        assert applied_notification_revision_count == 1
+        assert notification_count == 4
 
     Base.metadata.drop_all(engine)

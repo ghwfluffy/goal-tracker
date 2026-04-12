@@ -1,26 +1,31 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
 import DashboardWorkspace from "../components/DashboardWorkspace.vue";
 import AppTabsShell from "../components/home/AppTabsShell.vue";
 import GoalsTab from "../components/home/GoalsTab.vue";
 import GuestHomePanel from "../components/home/GuestHomePanel.vue";
 import HomeHeaderBanner from "../components/home/HomeHeaderBanner.vue";
+import HomeNotificationsDialog from "../components/home/HomeNotificationsDialog.vue";
 import HomeProfileDialogs from "../components/home/HomeProfileDialogs.vue";
 import MetricEntryDialog from "../components/home/MetricEntryDialog.vue";
 import MetricHistoryDialog from "../components/home/MetricHistoryDialog.vue";
 import MetricsTab from "../components/home/MetricsTab.vue";
+import NotificationEntryDialog from "../components/home/NotificationEntryDialog.vue";
+import { getBrowserTimezone } from "../lib/time";
 import { watchToastError } from "../lib/toast";
 import { useAuthStore } from "../stores/auth";
 import { useDashboardsStore } from "../stores/dashboards";
 import { useGoalsStore } from "../stores/goals";
 import { useMetricsStore } from "../stores/metrics";
+import { useNotificationsStore } from "../stores/notifications";
 import { useStatusStore } from "../stores/status";
 
 const authStore = useAuthStore();
 const dashboardsStore = useDashboardsStore();
 const goalsStore = useGoalsStore();
 const metricsStore = useMetricsStore();
+const notificationsStore = useNotificationsStore();
 const statusStore = useStatusStore();
 
 const activeTabIndex = ref(0);
@@ -28,6 +33,9 @@ const profileVisible = ref(false);
 const passwordVisible = ref(false);
 const deleteAccountVisible = ref(false);
 const invitationCodesVisible = ref(false);
+const notificationsVisible = ref(false);
+const notificationEntryVisible = ref(false);
+const notificationEntryId = ref("");
 const metricHistoryVisible = ref(false);
 const metricHistoryMetricId = ref("");
 const metricEntryVisible = ref(false);
@@ -51,16 +59,32 @@ const selectedMetricEntry = computed(() => {
   return metricsStore.metrics.find((metric) => metric.id === metricEntryMetricId.value) ?? null;
 });
 
+const selectedNotificationEntry = computed(() => {
+  return notificationsStore.notifications.find((notification) => notification.id === notificationEntryId.value) ?? null;
+});
+
+let notificationsRefreshTimer: number | null = null;
+
 watchToastError(() => authStore.errorMessage, "Authentication");
 watchToastError(() => dashboardsStore.errorMessage, "Dashboards");
 watchToastError(() => goalsStore.errorMessage, "Goals");
 watchToastError(() => metricsStore.errorMessage, "Metrics");
+watchToastError(() => notificationsStore.errorMessage, "Notifications");
 
 async function loadTrackingData(): Promise<void> {
   await Promise.all([
     dashboardsStore.loadDashboards(),
     metricsStore.loadMetrics(),
     goalsStore.loadGoals(),
+    notificationsStore.loadNotifications(getBrowserTimezone()),
+  ]);
+}
+
+async function refreshDependentTrackingViews(): Promise<void> {
+  await Promise.all([
+    dashboardsStore.loadDashboards(),
+    goalsStore.loadGoals(),
+    notificationsStore.loadNotifications(getBrowserTimezone()),
   ]);
 }
 
@@ -74,6 +98,26 @@ function openMetricEntry(metricId: string): void {
   metricEntryVisible.value = true;
 }
 
+function openNotificationEntry(notificationId: string): void {
+  notificationEntryId.value = notificationId;
+  notificationEntryVisible.value = true;
+}
+
+function restartNotificationsRefreshTimer(): void {
+  if (notificationsRefreshTimer !== null) {
+    window.clearInterval(notificationsRefreshTimer);
+    notificationsRefreshTimer = null;
+  }
+
+  if (authStore.currentUser === null) {
+    return;
+  }
+
+  notificationsRefreshTimer = window.setInterval(() => {
+    void notificationsStore.loadNotifications(getBrowserTimezone());
+  }, 60_000);
+}
+
 watch(
   () => authStore.currentUser,
   async (currentUser) => {
@@ -85,12 +129,16 @@ watch(
     dashboardsStore.reset();
     metricsStore.reset();
     goalsStore.reset();
+    notificationsStore.reset();
     profileVisible.value = false;
     passwordVisible.value = false;
     deleteAccountVisible.value = false;
     invitationCodesVisible.value = false;
+    notificationsVisible.value = false;
+    notificationEntryVisible.value = false;
     metricHistoryVisible.value = false;
     metricEntryVisible.value = false;
+    notificationEntryId.value = "";
     metricHistoryMetricId.value = "";
     metricEntryMetricId.value = "";
   },
@@ -98,8 +146,20 @@ watch(
 );
 
 watch(
+  () => authStore.currentUser,
+  () => {
+    restartNotificationsRefreshTimer();
+  },
+  { immediate: true },
+);
+
+watch(
   () => metricsStore.metrics,
   () => {
+    if (authStore.currentUser !== null) {
+      void notificationsStore.loadNotifications(getBrowserTimezone());
+    }
+
     if (
       metricHistoryMetricId.value !== "" &&
       metricsStore.metrics.every((metric) => metric.id !== metricHistoryMetricId.value)
@@ -123,14 +183,36 @@ onMounted(() => {
   void statusStore.loadStatus();
   void authStore.initialize();
 });
+
+watch(
+  () => notificationsStore.notifications,
+  () => {
+    if (
+      notificationEntryId.value !== "" &&
+      notificationsStore.notifications.every((notification) => notification.id !== notificationEntryId.value)
+    ) {
+      notificationEntryVisible.value = false;
+      notificationEntryId.value = "";
+    }
+  },
+  { deep: true },
+);
+
+onBeforeUnmount(() => {
+  if (notificationsRefreshTimer !== null) {
+    window.clearInterval(notificationsRefreshTimer);
+  }
+});
 </script>
 
 <template>
   <main class="home-view">
     <section v-if="authStore.isAuthenticated && authStore.currentUser !== null" class="app-shell">
       <HomeHeaderBanner
+        :notification-count="notificationsStore.count"
         :user="authStore.currentUser"
         :version="appVersion"
+        @open-notifications="notificationsVisible = true"
         @open-profile="profileVisible = true"
         @open-password="passwordVisible = true"
         @open-invitation-codes="invitationCodesVisible = true"
@@ -160,9 +242,21 @@ onMounted(() => {
         v-model:visible="metricHistoryVisible"
         :metric="selectedMetricHistory"
       />
+      <HomeNotificationsDialog
+        v-model:visible="notificationsVisible"
+        :notifications="notificationsStore.notifications"
+        :view-state="notificationsStore.viewState"
+        @open-notification="openNotificationEntry"
+      />
       <MetricEntryDialog
         v-model:visible="metricEntryVisible"
         :metric="selectedMetricEntry"
+        @saved="void refreshDependentTrackingViews()"
+      />
+      <NotificationEntryDialog
+        v-model:visible="notificationEntryVisible"
+        :notification="selectedNotificationEntry"
+        @resolved="void refreshDependentTrackingViews()"
       />
       <HomeProfileDialogs
         v-model:profileVisible="profileVisible"

@@ -22,6 +22,26 @@ export function formatDateOnly(value: string | null): string {
   }).format(new Date(`${value}T00:00:00Z`));
 }
 
+export function formatShortWeekdayDate(value: string): string {
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(`${value}T00:00:00Z`));
+}
+
+export function normalizeTimeInputValue(value: string | null): string {
+  if (value === null || value.trim() === "") {
+    return "";
+  }
+  return value.slice(0, 5);
+}
+
+export function combineLocalDateAndTimeToIso(dateValue: string, timeValue: string): string {
+  return new Date(`${dateValue}T${timeValue}:00`).toISOString();
+}
+
 function formatDatePartsInTimezone(value: Date, timeZone: string): {
   day: string;
   month: string;

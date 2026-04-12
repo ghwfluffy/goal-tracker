@@ -9,6 +9,7 @@ import {
   type CreateMetricEntryPayload,
   type CreateMetricPayload,
   type MetricSummary,
+  type UpdateMetricPayload,
 } from "../lib/api";
 
 type MetricsViewState = "idle" | "loading" | "ready" | "error";
@@ -61,6 +62,21 @@ export const useMetricsStore = defineStore("metrics", {
         return true;
       } catch (error: unknown) {
         this.errorMessage = error instanceof Error ? error.message : "Unable to create metric.";
+        return false;
+      } finally {
+        this.submissionState = "idle";
+      }
+    },
+    async updateMetricDetails(metricId: string, payload: UpdateMetricPayload): Promise<boolean> {
+      this.submissionState = "submitting";
+      this.errorMessage = "";
+
+      try {
+        await updateMetric(metricId, payload);
+        await this.loadMetrics();
+        return true;
+      } catch (error: unknown) {
+        this.errorMessage = error instanceof Error ? error.message : "Unable to update metric.";
         return false;
       } finally {
         this.submissionState = "idle";

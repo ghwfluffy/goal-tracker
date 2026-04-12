@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, time
 from decimal import Decimal
 from typing import Annotated, Literal, cast
 
@@ -18,12 +18,13 @@ from app.services.metrics import (
     delete_metric,
     get_metric_for_user,
     list_metrics_for_user,
-    set_metric_archived_state,
+    update_metric,
 )
 
 router = APIRouter(prefix="/metrics")
 
 MetricType = Literal["number", "date"]
+MetricUpdateType = Literal["success", "failure"]
 
 
 class MetricEntrySummary(BaseModel):
@@ -37,8 +38,11 @@ class MetricSummary(BaseModel):
     id: str
     name: str
     metric_type: MetricType
+    update_type: MetricUpdateType
     decimal_places: int | None
     unit_label: str | None
+    reminder_time_1: str
+    reminder_time_2: str | None
     archived_at: str | None
     is_archived: bool
     latest_entry: MetricEntrySummary | None
@@ -52,8 +56,11 @@ class MetricListResponse(BaseModel):
 class CreateMetricRequest(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     metric_type: MetricType
+    update_type: MetricUpdateType | None = None
     decimal_places: int | None = Field(default=None, ge=0, le=6)
     unit_label: str | None = Field(default=None, max_length=40)
+    reminder_time_1: time | None = None
+    reminder_time_2: time | None = None
     initial_number_value: float | None = None
     initial_date_value: date | None = None
     recorded_at: datetime | None = None
@@ -66,7 +73,13 @@ class CreateMetricEntryRequest(BaseModel):
 
 
 class UpdateMetricRequest(BaseModel):
-    archived: bool
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    update_type: MetricUpdateType | None = None
+    decimal_places: int | None = Field(default=None, ge=0, le=6)
+    unit_label: str | None = Field(default=None, max_length=40)
+    reminder_time_1: time | None = None
+    reminder_time_2: time | None = None
+    archived: bool | None = None
 
 
 def decimal_to_float(value: Decimal | float | None) -> float | None:
@@ -90,8 +103,13 @@ def serialize_metric(metric: Metric) -> MetricSummary:
         id=metric.id,
         name=metric.name,
         metric_type=cast(MetricType, metric.metric_type),
+        update_type=cast(MetricUpdateType, metric.update_type),
         decimal_places=metric.decimal_places,
         unit_label=metric.unit_label,
+        reminder_time_1=metric.reminder_time_1.strftime("%H:%M"),
+        reminder_time_2=(
+            metric.reminder_time_2.strftime("%H:%M") if metric.reminder_time_2 is not None else None
+        ),
         archived_at=metric.archived_at.isoformat() if metric.archived_at is not None else None,
         is_archived=metric.archived_at is not None,
         latest_entry=entries[0] if len(entries) > 0 else None,
@@ -125,8 +143,11 @@ def post_metric(
             user=user,
             name=payload.name,
             metric_type=payload.metric_type,
+            update_type=payload.update_type,
             decimal_places=payload.decimal_places,
             unit_label=payload.unit_label,
+            reminder_time_1=payload.reminder_time_1,
+            reminder_time_2=payload.reminder_time_2,
             initial_number_value=payload.initial_number_value,
             initial_date_value=payload.initial_date_value,
             recorded_at=payload.recorded_at,
@@ -181,7 +202,18 @@ def patch_metric(
 ) -> MetricSummary:
     try:
         metric = get_metric_for_user(db, user=user, metric_id=metric_id)
-        updated_metric = set_metric_archived_state(db, metric=metric, archived=payload.archived)
+        updated_metric = update_metric(
+            db,
+            metric=metric,
+            update_fields=set(payload.model_fields_set),
+            name=payload.name,
+            update_type=payload.update_type,
+            decimal_places=payload.decimal_places,
+            unit_label=payload.unit_label,
+            reminder_time_1=payload.reminder_time_1,
+            reminder_time_2=payload.reminder_time_2,
+            archived=payload.archived,
+        )
         db.commit()
     except MetricNotFoundError as exc:
         db.rollback()

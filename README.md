@@ -48,7 +48,9 @@ What already exists:
 - admin-managed invitation codes for creating additional accounts
 - optional example-data account signup seeded with starter metrics, realistic history, goals, and a dashboard that exercises multiple widget types, with revision-based upgrades for existing example accounts at server startup and during auth traffic
 - reusable metrics with quick number/date updates
+- reusable metrics with configurable reminder times plus notification-driven quick entry on mobile and desktop
 - metric archiving, with archived metrics hidden by default
+- a notification bell for due metric updates, including stacked missed reminders and quick submit/skip flows
 - goal archiving, with archived goals hidden by default
 - goal creation and editing backed by existing or newly created metrics, including date-based compliance goals with exception dates and success thresholds
 - saved dashboards with reusable metric and goal widgets, including target-date goal charts with selectable forecast algorithms plus completion, success, and risk widgets, plus separate mobile and desktop widget layouts

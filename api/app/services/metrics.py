@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, time
 from decimal import ROUND_HALF_UP, Decimal
 from uuid import uuid4
 
@@ -12,6 +12,9 @@ from app.db.models import DashboardWidget, Goal, Metric, MetricEntry, User
 METRIC_TYPE_NUMBER = "number"
 METRIC_TYPE_DATE = "date"
 SUPPORTED_METRIC_TYPES = {METRIC_TYPE_NUMBER, METRIC_TYPE_DATE}
+UPDATE_TYPE_SUCCESS = "success"
+UPDATE_TYPE_FAILURE = "failure"
+SUPPORTED_UPDATE_TYPES = {UPDATE_TYPE_SUCCESS, UPDATE_TYPE_FAILURE}
 MAX_DECIMAL_PLACES = 6
 
 
@@ -54,6 +57,38 @@ def normalize_metric_name(name: str) -> str:
     if len(normalized) < 1:
         raise MetricError("Metric name is required.")
     return normalized
+
+
+def normalize_update_type(*, metric_type: str, update_type: str | None) -> str:
+    if metric_type == METRIC_TYPE_NUMBER:
+        return UPDATE_TYPE_SUCCESS
+
+    normalized = (update_type or UPDATE_TYPE_SUCCESS).strip().lower()
+    if normalized not in SUPPORTED_UPDATE_TYPES:
+        raise MetricError("Date metric update type must be either 'success' or 'failure'.")
+    return normalized
+
+
+def normalize_reminder_time(value: time | None, *, default: time | None = None) -> time | None:
+    if value is not None:
+        return value.replace(second=0, microsecond=0, tzinfo=None)
+    if default is not None:
+        return default.replace(second=0, microsecond=0, tzinfo=None)
+    return None
+
+
+def normalize_metric_reminder_schedule(
+    *,
+    reminder_time_1: time | None,
+    reminder_time_2: time | None,
+) -> tuple[time, time | None]:
+    normalized_time_1 = normalize_reminder_time(reminder_time_1, default=time(6, 0))
+    normalized_time_2 = normalize_reminder_time(reminder_time_2)
+    if normalized_time_1 is None:
+        raise MetricError("Primary reminder time is required.")
+    if normalized_time_2 is not None and normalized_time_2 <= normalized_time_1:
+        raise MetricError("Second reminder time must be later than the first reminder time.")
+    return normalized_time_1, normalized_time_2
 
 
 def normalize_decimal_places(*, metric_type: str, decimal_places: int | None) -> int | None:
@@ -109,21 +144,35 @@ def create_metric(
     metric_type: str,
     unit_label: str | None,
     decimal_places: int | None = None,
+    update_type: str | None = None,
+    reminder_time_1: time | None = None,
+    reminder_time_2: time | None = None,
     initial_number_value: float | None = None,
     initial_date_value: date | None = None,
     recorded_at: datetime | None = None,
 ) -> Metric:
     normalized_metric_type = normalize_metric_type(metric_type)
+    normalized_update_type = normalize_update_type(
+        metric_type=normalized_metric_type,
+        update_type=update_type,
+    )
+    normalized_reminder_time_1, normalized_reminder_time_2 = normalize_metric_reminder_schedule(
+        reminder_time_1=reminder_time_1,
+        reminder_time_2=reminder_time_2,
+    )
     metric = Metric(
         id=str(uuid4()),
         user_id=user.id,
         name=normalize_metric_name(name),
         metric_type=normalized_metric_type,
+        update_type=normalized_update_type,
         decimal_places=normalize_decimal_places(
             metric_type=normalized_metric_type,
             decimal_places=decimal_places,
         ),
         unit_label=(unit_label.strip() if unit_label is not None and unit_label.strip() != "" else None),
+        reminder_time_1=normalized_reminder_time_1,
+        reminder_time_2=normalized_reminder_time_2,
         updated_at=utcnow(),
     )
     db.add(metric)
@@ -178,6 +227,57 @@ def create_metric_entry(
 
 def set_metric_archived_state(db: Session, *, metric: Metric, archived: bool) -> Metric:
     metric.archived_at = utcnow() if archived else None
+    metric.updated_at = utcnow()
+    db.flush()
+    return get_metric_for_user(db, user=metric.user, metric_id=metric.id)
+
+
+def update_metric(
+    db: Session,
+    *,
+    metric: Metric,
+    update_fields: set[str],
+    name: str | None = None,
+    decimal_places: int | None = None,
+    update_type: str | None = None,
+    unit_label: str | None = None,
+    reminder_time_1: time | None = None,
+    reminder_time_2: time | None = None,
+    archived: bool | None = None,
+) -> Metric:
+    if "name" in update_fields:
+        metric.name = normalize_metric_name(name or "")
+
+    if "decimal_places" in update_fields:
+        metric.decimal_places = normalize_decimal_places(
+            metric_type=metric.metric_type,
+            decimal_places=decimal_places,
+        )
+
+    if "update_type" in update_fields:
+        metric.update_type = normalize_update_type(
+            metric_type=metric.metric_type,
+            update_type=update_type,
+        )
+
+    if "unit_label" in update_fields:
+        metric.unit_label = (
+            unit_label.strip() if unit_label is not None and unit_label.strip() != "" else None
+        )
+
+    if "reminder_time_1" in update_fields or "reminder_time_2" in update_fields:
+        resolved_time_1 = reminder_time_1 if "reminder_time_1" in update_fields else metric.reminder_time_1
+        resolved_time_2 = reminder_time_2 if "reminder_time_2" in update_fields else metric.reminder_time_2
+        normalized_time_1, normalized_time_2 = normalize_metric_reminder_schedule(
+            reminder_time_1=resolved_time_1,
+            reminder_time_2=resolved_time_2,
+        )
+        metric.reminder_time_1 = normalized_time_1
+        metric.reminder_time_2 = normalized_time_2
+
+    if "archived" in update_fields:
+        metric.archived_at = utcnow() if archived else None
+
     metric.updated_at = utcnow()
     db.flush()
     return get_metric_for_user(db, user=metric.user, metric_id=metric.id)

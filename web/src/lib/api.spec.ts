@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   ApiError,
   addMetricEntry,
+  completeNotification,
   createDashboard,
   createDashboardWidget,
   createGoal,
@@ -14,15 +15,18 @@ import {
   fetchBootstrapStatus,
   fetchCurrentSession,
   fetchDashboards,
+  fetchNotifications,
   fetchGoals,
   fetchInvitationCodes,
   fetchMetrics,
   fetchStatus,
   loginWithPassword,
   registerWithInvitationCode,
+  skipNotification,
   updateDashboard,
   updateDashboardWidget,
   updateGoal,
+  updateMetric,
   updateInvitationCode,
 } from "./api";
 
@@ -349,12 +353,17 @@ describe("auth api helpers", () => {
           JSON.stringify({
             metrics: [
               {
+                archived_at: null,
                 decimal_places: 1,
                 entries: [],
                 id: "metric-1",
+                is_archived: false,
                 latest_entry: null,
                 metric_type: "number",
                 name: "Weight",
+                reminder_time_1: "06:00",
+                reminder_time_2: null,
+                update_type: "success",
                 unit_label: "lbs",
               },
             ],
@@ -369,11 +378,17 @@ describe("auth api helpers", () => {
       if (path.endsWith("/metrics") && init?.method === "POST") {
         return new Response(
           JSON.stringify({
+            archived_at: null,
+            decimal_places: null,
             entries: [],
             id: "metric-2",
+            is_archived: false,
             latest_entry: null,
             metric_type: "date",
             name: "Last drink",
+            reminder_time_1: "06:00",
+            reminder_time_2: null,
+            update_type: "success",
             unit_label: null,
           }),
           {
@@ -394,8 +409,10 @@ describe("auth api helpers", () => {
                 recorded_at: "2026-04-11T20:30:00Z",
               },
             ],
+            archived_at: null,
             decimal_places: 1,
             id: "metric-1",
+            is_archived: false,
             latest_entry: {
               date_value: null,
               id: "entry-1",
@@ -404,6 +421,9 @@ describe("auth api helpers", () => {
             },
             metric_type: "number",
             name: "Weight",
+            reminder_time_1: "06:00",
+            reminder_time_2: null,
+            update_type: "success",
             unit_label: "lbs",
           }),
           {
@@ -462,12 +482,17 @@ describe("auth api helpers", () => {
     await expect(fetchMetrics(fetcher)).resolves.toEqual({
       metrics: [
         {
+          archived_at: null,
           decimal_places: 1,
           entries: [],
           id: "metric-1",
+          is_archived: false,
           latest_entry: null,
           metric_type: "number",
           name: "Weight",
+          reminder_time_1: "06:00",
+          reminder_time_2: null,
+          update_type: "success",
           unit_label: "lbs",
         },
       ],
@@ -481,6 +506,8 @@ describe("auth api helpers", () => {
           initial_number_value: 245.5,
           metric_type: "number",
           name: "Weight",
+          reminder_time_1: "06:00",
+          reminder_time_2: null,
           unit_label: "lbs",
         },
         fetcher,
@@ -611,6 +638,172 @@ describe("auth api helpers", () => {
     await expect(updateGoal("goal-1", { archived: true }, fetcher)).resolves.toMatchObject({
       id: "goal-1",
       is_archived: true,
+    });
+  });
+
+  it("supports metric update and notification helpers", async () => {
+    const fetcher = vi.fn(async (input, init) => {
+      const path = String(input);
+
+      if (path.endsWith("/metrics/metric-1") && init?.method === "PATCH") {
+        expect(init.body).toBe(
+          JSON.stringify({
+            name: "Morning Weight",
+            reminder_time_1: "07:15",
+            reminder_time_2: null,
+            unit_label: "lbs",
+          }),
+        );
+
+        return new Response(
+          JSON.stringify({
+            archived_at: null,
+            decimal_places: 1,
+            entries: [],
+            id: "metric-1",
+            is_archived: false,
+            latest_entry: null,
+            metric_type: "number",
+            name: "Morning Weight",
+            reminder_time_1: "07:15",
+            reminder_time_2: null,
+            update_type: "success",
+            unit_label: "lbs",
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      if (path.endsWith("/notifications?timezone=America%2FChicago")) {
+        return new Response(
+          JSON.stringify({
+            notifications: [
+              {
+                id: "notification-1",
+                metric: {
+                  decimal_places: 1,
+                  id: "metric-1",
+                metric_type: "number",
+                name: "Weight",
+                update_type: "success",
+                unit_label: "lbs",
+              },
+                notification_date: "2026-04-12",
+                scheduled_time: "06:00",
+                slot_index: 1,
+                status: "pending",
+              },
+            ],
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      if (path.endsWith("/notifications/notification-1/complete")) {
+        return new Response(
+          JSON.stringify({
+            id: "notification-1",
+            metric: {
+              decimal_places: 1,
+              id: "metric-1",
+              metric_type: "number",
+              name: "Weight",
+              update_type: "success",
+              unit_label: "lbs",
+            },
+            notification_date: "2026-04-12",
+            scheduled_time: "06:00",
+            slot_index: 1,
+            status: "completed",
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      if (path.endsWith("/notifications/notification-1/skip")) {
+        return new Response(
+          JSON.stringify({
+            id: "notification-1",
+            metric: {
+              decimal_places: 1,
+              id: "metric-1",
+              metric_type: "number",
+              name: "Weight",
+              update_type: "success",
+              unit_label: "lbs",
+            },
+            notification_date: "2026-04-12",
+            scheduled_time: "06:00",
+            slot_index: 1,
+            status: "skipped",
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      throw new Error(`Unexpected request: ${path}`);
+    });
+
+    await expect(
+      updateMetric(
+        "metric-1",
+        {
+          name: "Morning Weight",
+          reminder_time_1: "07:15",
+          reminder_time_2: null,
+          unit_label: "lbs",
+        },
+        fetcher,
+      ),
+    ).resolves.toMatchObject({
+      name: "Morning Weight",
+      reminder_time_1: "07:15",
+    });
+
+    await expect(fetchNotifications("America/Chicago", fetcher)).resolves.toEqual({
+      notifications: [
+        {
+          id: "notification-1",
+          metric: {
+            decimal_places: 1,
+            id: "metric-1",
+            metric_type: "number",
+            name: "Weight",
+            update_type: "success",
+            unit_label: "lbs",
+          },
+          notification_date: "2026-04-12",
+          scheduled_time: "06:00",
+          slot_index: 1,
+          status: "pending",
+        },
+      ],
+    });
+
+    await expect(
+      completeNotification(
+        "notification-1",
+        { number_value: 244.4, recorded_at: "2026-04-12T11:43:00.000Z", timezone: "America/Chicago" },
+        fetcher,
+      ),
+    ).resolves.toMatchObject({
+      status: "completed",
+    });
+
+    await expect(skipNotification("notification-1", fetcher)).resolves.toMatchObject({
+      status: "skipped",
     });
   });
 
