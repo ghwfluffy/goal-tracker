@@ -280,8 +280,8 @@ def test_mobile_widget_updates_restack_a_vertical_dashboard_layout(client: TestC
     assert second_widget_response.status_code == 201
     second_widget = second_widget_response.json()
 
-    assert [first_widget["mobile_grid_h"], second_widget["mobile_grid_h"]] == [2, 2]
-    assert [first_widget["mobile_grid_y"], second_widget["mobile_grid_y"]] == [0, 2]
+    assert [first_widget["mobile_grid_h"], second_widget["mobile_grid_h"]] == [1, 1]
+    assert [first_widget["mobile_grid_y"], second_widget["mobile_grid_y"]] == [0, 1]
 
     mobile_move_response = client.patch(
         f"/api/v1/dashboards/{dashboard_id}/widgets/{second_widget['id']}",
@@ -299,7 +299,7 @@ def test_mobile_widget_updates_restack_a_vertical_dashboard_layout(client: TestC
     ]
     assert [
         widget["mobile_grid_y"] for widget in sorted(widgets, key=lambda widget: widget["mobile_grid_y"])
-    ] == [0, 2]
+    ] == [0, 1]
 
 
 def test_date_goal_progress_widget_uses_compliance_percent(client: TestClient) -> None:

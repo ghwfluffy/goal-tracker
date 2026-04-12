@@ -8,11 +8,13 @@ import ProgressSpinner from "primevue/progressspinner";
 import Tag from "primevue/tag";
 
 import type { DashboardForecastAlgorithm, DashboardWidgetSummary } from "../lib/api";
+import { isDashboardMobileCompactWidget } from "../lib/dashboardWidgets";
 import { useAppToast } from "../lib/toast";
 import { useDashboardsStore } from "../stores/dashboards";
 import { useGoalsStore } from "../stores/goals";
 import { useMetricsStore } from "../stores/metrics";
 import DashboardWidgetChart from "./DashboardWidgetChart.vue";
+import MobileDashboardWidgetContent from "./MobileDashboardWidgetContent.vue";
 
 type WidgetType = DashboardWidgetSummary["widget_type"];
 
@@ -36,6 +38,7 @@ const MOBILE_GRID_COLUMNS = 1;
 const GRID_ROW_HEIGHT_PX = 96;
 const MAX_WIDGET_HEIGHT = 12;
 const MOBILE_LAYOUT_BREAKPOINT = "(max-width: 860px)";
+const MOBILE_COMPACT_WIDGET_HEIGHT = 1;
 
 const dashboardsStore = useDashboardsStore();
 const metricsStore = useMetricsStore();
@@ -64,7 +67,7 @@ const widgetForecastAlgorithmInput = ref<DashboardForecastAlgorithm>("simple");
 
 const gridHost = ref<HTMLElement | null>(null);
 const gridWidth = ref(0);
-const localLayouts = ref<Record<string, WidgetLayoutDraft>>({});
+const desktopDraftLayouts = ref<Record<string, WidgetLayoutDraft>>({});
 const activeInteraction = ref<WidgetInteractionState | null>(null);
 let resizeObserver: ResizeObserver | null = null;
 let mobileLayoutMediaQuery: MediaQueryList | null = null;
@@ -97,8 +100,11 @@ function layoutForMode(
   layoutMode: "desktop" | "mobile" = activeLayoutMode.value,
 ): WidgetLayoutDraft {
   if (layoutMode === "mobile") {
+    const mobileHeight = isDashboardMobileCompactWidget(widget.widget_type)
+      ? MOBILE_COMPACT_WIDGET_HEIGHT
+      : (widget.mobile_grid_h ?? widget.grid_h);
     return {
-      grid_h: widget.mobile_grid_h ?? widget.grid_h,
+      grid_h: mobileHeight,
       grid_w: widget.mobile_grid_w ?? 1,
       grid_x: widget.mobile_grid_x ?? 0,
       grid_y: widget.mobile_grid_y ?? widget.grid_y,
@@ -193,8 +199,8 @@ function syncSelectedDashboard(): void {
 }
 
 function snapshotWidgetLayouts(): void {
-  localLayouts.value = Object.fromEntries(
-    (selectedDashboard.value?.widgets ?? []).map((widget) => [widget.id, layoutForMode(widget)]),
+  desktopDraftLayouts.value = Object.fromEntries(
+    (selectedDashboard.value?.widgets ?? []).map((widget) => [widget.id, layoutForMode(widget, "desktop")]),
   );
 }
 
@@ -203,7 +209,10 @@ function refreshGridMetrics(): void {
 }
 
 function getWidgetLayout(widget: DashboardWidgetSummary): WidgetLayoutDraft {
-  return localLayouts.value[widget.id] ?? layoutForMode(widget);
+  if (activeLayoutMode.value === "mobile") {
+    return layoutForMode(widget, "mobile");
+  }
+  return desktopDraftLayouts.value[widget.id] ?? layoutForMode(widget, "desktop");
 }
 
 function widgetGridStyle(widget: DashboardWidgetSummary): Record<string, string> {
@@ -253,7 +262,7 @@ function handleDashboardPanelToggle(event: Event): void {
 function syncMobileLayout(mediaQuery: MediaQueryList | MediaQueryListEvent): void {
   const wasMobileLayout = isMobileLayout.value;
   isMobileLayout.value = mediaQuery.matches;
-  if (wasMobileLayout !== isMobileLayout.value) {
+  if (wasMobileLayout !== isMobileLayout.value && !isMobileLayout.value) {
     snapshotWidgetLayouts();
   }
 }
@@ -504,8 +513,8 @@ function handlePointerMove(event: PointerEvent): void {
     return;
   }
 
-  localLayouts.value = {
-    ...localLayouts.value,
+  desktopDraftLayouts.value = {
+    ...desktopDraftLayouts.value,
     [activeInteraction.value.widget_id]: candidate,
   };
 }
@@ -515,7 +524,7 @@ async function persistWidgetLayout(widgetId: string): Promise<void> {
     return;
   }
 
-  const layout = localLayouts.value[widgetId];
+  const layout = desktopDraftLayouts.value[widgetId];
   if (layout === undefined) {
     return;
   }
@@ -781,25 +790,17 @@ onBeforeUnmount(() => {
     </div>
 
     <div v-else-if="selectedDashboard !== null" class="dashboard-view">
-      <div
-        v-if="orderedWidgets.length > 0"
-        ref="gridHost"
-        class="widget-grid"
-        :class="{ editing: editMode }"
-        :style="widgetGridInlineStyle"
-      >
+      <div v-if="isMobileLayout && orderedWidgets.length > 0" class="mobile-widget-stack">
         <article
           v-for="widget in orderedWidgets"
           :key="widget.id"
-          class="panel-card widget-card"
-          :class="{ active: activeInteraction?.widget_id === widget.id, editable: editMode }"
-          :style="widgetGridStyle(widget)"
+          class="panel-card mobile-widget-card"
         >
           <div class="widget-card-header">
             <h4>{{ widget.title }}</h4>
 
             <div class="widget-card-actions">
-              <template v-if="editMode && isMobileLayout">
+              <template v-if="editMode">
                 <button
                   class="widget-icon-button"
                   type="button"
@@ -818,9 +819,50 @@ onBeforeUnmount(() => {
                 >
                   <i class="pi pi-arrow-down" />
                 </button>
+                <button
+                  class="widget-icon-button"
+                  type="button"
+                  title="Edit widget"
+                  @click="openEditWidgetDialog(widget)"
+                >
+                  <i class="pi pi-cog" />
+                </button>
+                <button
+                  class="widget-icon-button widget-delete-button"
+                  type="button"
+                  title="Remove widget"
+                  @click="void removeWidget(widget.id)"
+                >
+                  <i class="pi pi-trash" />
+                </button>
               </template>
+            </div>
+          </div>
+
+          <MobileDashboardWidgetContent :widget="widget" />
+        </article>
+      </div>
+
+      <div
+        v-else-if="orderedWidgets.length > 0"
+        ref="gridHost"
+        class="widget-grid"
+        :class="{ editing: editMode }"
+        :style="widgetGridInlineStyle"
+      >
+        <article
+          v-for="widget in orderedWidgets"
+          :key="widget.id"
+          class="panel-card widget-card"
+          :class="{ active: activeInteraction?.widget_id === widget.id, editable: editMode }"
+          :style="widgetGridStyle(widget)"
+        >
+          <div class="widget-card-header">
+            <h4>{{ widget.title }}</h4>
+
+            <div class="widget-card-actions">
               <button
-                v-else-if="editMode"
+                v-if="editMode"
                 class="widget-icon-button widget-move-handle"
                 type="button"
                 title="Drag widget"
@@ -852,12 +894,7 @@ onBeforeUnmount(() => {
           <DashboardWidgetChart :widget="widget" />
 
           <div v-if="editMode" class="widget-layout-meta">
-            <template v-if="isMobileLayout">
-              {{ layoutModeLabel }}: stacked
-            </template>
-            <template v-else>
-              {{ layoutModeLabel }}: {{ getWidgetLayout(widget).grid_w }} x {{ getWidgetLayout(widget).grid_h }}
-            </template>
+            {{ layoutModeLabel }}: {{ getWidgetLayout(widget).grid_w }} x {{ getWidgetLayout(widget).grid_h }}
           </div>
           <button
             v-if="editMode && !isMobileLayout"
@@ -1137,6 +1174,17 @@ onBeforeUnmount(() => {
   gap: var(--space-6);
 }
 
+.mobile-widget-stack {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.mobile-widget-card {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-5);
+}
+
 .dashboard-summary {
   display: flex;
   justify-content: space-between;
@@ -1283,16 +1331,20 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 900px) {
-  .dashboard-disclosure-summary,
   .dashboard-summary,
   .dashboard-title-row {
     flex-direction: column;
   }
 
+  .dashboard-disclosure-summary {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
   .dashboard-disclosure-meta {
-    margin-left: 0;
-    width: 100%;
-    justify-content: space-between;
+    margin-left: auto;
+    width: auto;
+    justify-content: flex-end;
   }
 }
 
@@ -1333,6 +1385,10 @@ onBeforeUnmount(() => {
 
   .widget-grid {
     gap: var(--space-4);
+  }
+
+  .mobile-widget-card {
+    border-radius: var(--radius-lg);
   }
 
   .widget-dialog-grid {

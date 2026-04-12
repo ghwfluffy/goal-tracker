@@ -3,12 +3,13 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { getActivePinia } from "pinia";
 
 import type { DashboardWidgetSummary } from "../lib/api";
+import { getDashboardWidgetValueText, isDashboardValueWidget } from "../lib/dashboardWidgets";
 import {
   buildGoalForecastSeries,
   type ForecastChartPoint as ChartPoint,
 } from "../lib/goalForecast";
 import { getChartThemeColors } from "../lib/theme";
-import { DEFAULT_PROFILE_TIMEZONE, daysBetweenDateOnly, formatDateOnly, getCurrentDateInTimezone } from "../lib/time";
+import { DEFAULT_PROFILE_TIMEZONE, formatDateOnly } from "../lib/time";
 import { useAuthStore } from "../stores/auth";
 
 interface EChartsInstance {
@@ -34,17 +35,7 @@ const props = defineProps<{
 const chartElement = ref<HTMLElement | null>(null);
 let chart: EChartsInstance | null = null;
 let resizeObserver: ResizeObserver | null = null;
-
-const valueWidgetTypes = new Set([
-  "metric_summary",
-  "days_since",
-  "goal_summary",
-  "goal_completion_percent",
-  "goal_success_percent",
-  "goal_failure_risk",
-]);
-
-const isValueWidget = computed(() => valueWidgetTypes.has(props.widget.widget_type));
+const isValueWidget = computed(() => isDashboardValueWidget(props.widget.widget_type));
 
 const profileTimezone = computed(() => {
   const pinia = getActivePinia();
@@ -134,53 +125,7 @@ const goalTargetValue = computed(() => {
 
 const goalProgressUsesMetricSeries = computed(() => goalMetricChartPoints.value.length > 0);
 
-const displayValueText = computed(() => {
-  if (props.widget.widget_type === "metric_summary") {
-    const metric = props.widget.metric;
-    const latestEntry = metric?.latest_entry;
-    if (metric === null || metric === undefined || latestEntry === null || latestEntry === undefined) {
-      return "No value";
-    }
-    if (metric.metric_type === "number") {
-      const numberValue = latestEntry.number_value;
-      if (numberValue === null) {
-        return "No value";
-      }
-      const formatted = numberValue.toFixed(metric.decimal_places ?? 0);
-      return metric.unit_label ? `${formatted} ${metric.unit_label}` : formatted;
-    }
-    if (latestEntry.date_value === null) {
-      return "No value";
-    }
-    return formatDateOnly(latestEntry.date_value);
-  }
-
-  if (props.widget.widget_type === "days_since") {
-    const latestEntry = props.widget.metric?.latest_entry;
-    if (props.widget.metric?.metric_type !== "date" || latestEntry?.date_value === null || latestEntry === null) {
-      return "No value";
-    }
-
-    const today = getCurrentDateInTimezone(profileTimezone.value);
-    const daysSince = daysBetweenDateOnly(latestEntry.date_value, today);
-    if (daysSince < 0) {
-      return "0 days";
-    }
-    return daysSince === 1 ? "1 day" : `${daysSince} days`;
-  }
-
-  const percentValue =
-    props.widget.widget_type === "goal_completion_percent"
-      ? props.widget.time_completion_percent
-      : props.widget.widget_type === "goal_failure_risk"
-        ? props.widget.failure_risk_percent
-        : props.widget.current_progress_percent;
-
-  if (percentValue === null) {
-    return "No value";
-  }
-  return `${Math.round(percentValue)}%`;
-});
+const displayValueText = computed(() => getDashboardWidgetValueText(props.widget, profileTimezone.value));
 
 const hasRenderableContent = computed(() => {
   if (isValueWidget.value) {
