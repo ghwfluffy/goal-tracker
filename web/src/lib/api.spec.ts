@@ -22,6 +22,7 @@ import {
   registerWithInvitationCode,
   updateDashboard,
   updateDashboardWidget,
+  updateGoal,
   updateInvitationCode,
 } from "./api";
 
@@ -426,11 +427,13 @@ describe("auth api helpers", () => {
 
       return new Response(
         JSON.stringify({
+          archived_at: null,
           current_progress_percent: null,
           description: "Cut steadily.",
           exception_dates: [],
           failure_risk_percent: null,
           id: "goal-1",
+          is_archived: false,
           metric: {
             decimal_places: 1,
             id: "metric-1",
@@ -517,6 +520,97 @@ describe("auth api helpers", () => {
     ).resolves.toMatchObject({
       id: "goal-1",
       title: "Reach 220",
+    });
+  });
+
+  it("supports goal archiving helpers", async () => {
+    const fetcher = vi.fn(async (input, init) => {
+      const path = String(input);
+
+      if (path.endsWith("/goals?include_archived=true")) {
+        return new Response(
+          JSON.stringify({
+            goals: [
+              {
+                archived_at: "2026-04-12T15:00:00Z",
+                current_progress_percent: null,
+                description: null,
+                exception_dates: [],
+                failure_risk_percent: null,
+                id: "goal-1",
+                is_archived: true,
+                metric: {
+                  decimal_places: 1,
+                  id: "metric-1",
+                  latest_entry: null,
+                  metric_type: "number",
+                  name: "Weight",
+                  unit_label: "lbs",
+                },
+                start_date: "2026-04-11",
+                status: "active",
+                success_threshold_percent: null,
+                target_date: "2026-06-30",
+                target_value_date: null,
+                target_value_number: 220.5,
+                target_met: null,
+                time_progress_percent: null,
+                title: "Reach 220",
+              },
+            ],
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      if (path.endsWith("/goals/goal-1") && init?.method === "PATCH") {
+        return new Response(
+          JSON.stringify({
+            archived_at: "2026-04-12T15:00:00Z",
+            current_progress_percent: null,
+            description: null,
+            exception_dates: [],
+            failure_risk_percent: null,
+            id: "goal-1",
+            is_archived: true,
+            metric: {
+              decimal_places: 1,
+              id: "metric-1",
+              latest_entry: null,
+              metric_type: "number",
+              name: "Weight",
+              unit_label: "lbs",
+            },
+            start_date: "2026-04-11",
+            status: "active",
+            success_threshold_percent: null,
+            target_date: "2026-06-30",
+            target_value_date: null,
+            target_value_number: 220.5,
+            target_met: null,
+            time_progress_percent: null,
+            title: "Reach 220",
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      throw new Error(`Unexpected request: ${path}`);
+    });
+
+    await expect(fetchGoals(true, fetcher)).resolves.toMatchObject({
+      goals: [{ id: "goal-1", is_archived: true }],
+    });
+
+    await expect(updateGoal("goal-1", { archived: true }, fetcher)).resolves.toMatchObject({
+      id: "goal-1",
+      is_archived: true,
     });
   });
 

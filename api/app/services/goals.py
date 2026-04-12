@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import ROUND_HALF_UP, Decimal
 from uuid import uuid4
 
@@ -20,6 +20,10 @@ class GoalNotFoundError(Exception):
     pass
 
 
+def utcnow() -> datetime:
+    return datetime.now(UTC)
+
+
 build_goal_date_progress_points = goal_progress.build_goal_date_progress_points
 goal_current_progress_percent = goal_progress.goal_current_progress_percent
 goal_failure_risk_percent = goal_progress.goal_failure_risk_percent
@@ -28,7 +32,7 @@ goal_target_met = goal_progress.goal_target_met
 goal_time_completion_percent = goal_progress.goal_time_completion_percent
 
 
-def list_goals_for_user(db: Session, user: User) -> list[Goal]:
+def list_goals_for_user(db: Session, user: User, *, include_archived: bool = False) -> list[Goal]:
     statement = (
         select(Goal)
         .options(
@@ -39,6 +43,8 @@ def list_goals_for_user(db: Session, user: User) -> list[Goal]:
         .where(Goal.user_id == user.id)
         .order_by(Goal.created_at.desc())
     )
+    if not include_archived:
+        statement = statement.where(Goal.archived_at.is_(None))
     return list(db.scalars(statement))
 
 
@@ -164,3 +170,10 @@ def get_goal_for_user(db: Session, *, user: User, goal_id: str) -> Goal:
     if goal is None:
         raise GoalNotFoundError("Goal was not found.")
     return goal
+
+
+def set_goal_archived_state(db: Session, *, goal: Goal, archived: bool) -> Goal:
+    goal.archived_at = utcnow() if archived else None
+    goal.updated_at = utcnow()
+    db.flush()
+    return get_goal_for_user(db, user=goal.user, goal_id=goal.id)

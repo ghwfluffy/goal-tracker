@@ -93,7 +93,6 @@ function toggleProfileMenu(event: Event): void {
   <header class="app-header surface-panel-soft">
     <div class="brand-block">
       <h1 class="brand-title">Goal Tracker</h1>
-      <p class="brand-summary">Track goals, dashboards, and updates from one responsive app.</p>
     </div>
 
     <div class="header-actions">

@@ -81,6 +81,21 @@ const goalRowMenuItems = computed<MenuItem[]>(() => {
       label: "View metric history",
       command: () => emit("openMetricHistory", goal.metric.id),
     },
+    goal.is_archived
+      ? {
+          icon: "pi pi-refresh",
+          label: "Restore",
+          command: () => {
+            void setGoalArchived(goal.id, false);
+          },
+        }
+      : {
+          icon: "pi pi-box",
+          label: "Archive",
+          command: () => {
+            void setGoalArchived(goal.id, true);
+          },
+        },
   ];
 });
 
@@ -172,6 +187,14 @@ function formatGoalLatestMetricSummary(goal: (typeof goalsStore.goals)[number]):
   return goal.metric.unit_label === null ? formatted : `${formatted} ${goal.metric.unit_label}`;
 }
 
+function goalStatusTagValue(goal: (typeof goalsStore.goals)[number]): string {
+  return goal.is_archived ? "archived" : goal.status;
+}
+
+function goalStatusTagSeverity(goal: (typeof goalsStore.goals)[number]): "success" | "warning" {
+  return goal.is_archived ? "warning" : "success";
+}
+
 async function submitGoalForm(): Promise<void> {
   const created = await goalsStore.createGoal({
     description: goalDescriptionInput.value.trim() === "" ? null : goalDescriptionInput.value,
@@ -214,6 +237,15 @@ async function submitGoalForm(): Promise<void> {
   resetGoalForm();
   await metricsStore.loadMetrics();
 }
+
+async function setGoalArchived(goalId: string, archived: boolean): Promise<void> {
+  const updated = await goalsStore.setGoalArchived(goalId, archived);
+  if (!updated) {
+    return;
+  }
+
+  showSuccess(archived ? "Goal archived." : "Goal restored.", "Goals");
+}
 </script>
 
 <template>
@@ -226,7 +258,19 @@ async function submitGoalForm(): Promise<void> {
       primary-action-label="Add goal"
       :primary-action-loading="goalsStore.submissionState === 'submitting'"
       @add="openCreateDialog"
-    />
+    >
+      <template #leading-actions>
+        <label class="checkbox-row">
+          <Checkbox
+            v-model="goalsStore.includeArchived"
+            binary
+            input-id="include-archived-goals"
+            @change="goalsStore.loadGoals()"
+          />
+          <span>Include archived</span>
+        </label>
+      </template>
+    </ManagementToolbar>
 
     <div v-if="goalsStore.viewState === 'loading'" class="panel-card loading">
       <ProgressSpinner
@@ -275,7 +319,7 @@ async function submitGoalForm(): Promise<void> {
             <td>{{ formatGoalCurrentProgressSummary(goal) }}</td>
             <td>{{ goal.failure_risk_percent === null ? "n/a" : `${goal.failure_risk_percent}%` }}</td>
             <td>
-              <Tag :value="goal.status" severity="success" />
+              <Tag :value="goalStatusTagValue(goal)" :severity="goalStatusTagSeverity(goal)" />
             </td>
             <td class="table-kebab-cell">
               <Button
@@ -299,7 +343,7 @@ async function submitGoalForm(): Promise<void> {
             <p v-if="goal.description !== null">{{ goal.description }}</p>
           </div>
           <div class="card-header-actions">
-            <Tag :value="goal.status" severity="success" />
+            <Tag :value="goalStatusTagValue(goal)" :severity="goalStatusTagSeverity(goal)" />
             <Button
               icon="pi pi-ellipsis-v"
               text

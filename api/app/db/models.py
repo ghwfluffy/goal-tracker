@@ -222,6 +222,7 @@ class Goal(Base):
     title: Mapped[str] = mapped_column(String(120), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
     target_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     target_value_number: Mapped[float | None] = mapped_column(Numeric(18, 6), nullable=True)

@@ -149,6 +149,47 @@ def test_create_goal_with_existing_metric(client: TestClient) -> None:
     assert payload["target_value_number"] == 220.0
 
 
+def test_archived_goals_are_hidden_by_default_and_can_be_included(client: TestClient) -> None:
+    bootstrap_admin(client)
+
+    metric_response = client.post(
+        "/api/v1/metrics",
+        json={
+            "name": "Weight",
+            "metric_type": "number",
+            "decimal_places": 1,
+            "initial_number_value": 245.5,
+        },
+    )
+    assert metric_response.status_code == 201
+
+    goal_response = client.post(
+        "/api/v1/goals",
+        json={
+            "title": "Reach 220",
+            "start_date": "2026-04-11",
+            "target_date": "2026-06-30",
+            "target_value_number": 220.0,
+            "metric_id": metric_response.json()["id"],
+        },
+    )
+    assert goal_response.status_code == 201
+    goal_id = goal_response.json()["id"]
+
+    archive_response = client.patch(f"/api/v1/goals/{goal_id}", json={"archived": True})
+    assert archive_response.status_code == 200
+    assert archive_response.json()["is_archived"] is True
+
+    default_list_response = client.get("/api/v1/goals")
+    assert default_list_response.status_code == 200
+    assert default_list_response.json() == {"goals": []}
+
+    archived_list_response = client.get("/api/v1/goals?include_archived=true")
+    assert archived_list_response.status_code == 200
+    assert len(archived_list_response.json()["goals"]) == 1
+    assert archived_list_response.json()["goals"][0]["is_archived"] is True
+
+
 def test_metric_delete_requires_no_goal_or_widget_dependencies(client: TestClient) -> None:
     bootstrap_admin(client)
 

@@ -49,6 +49,7 @@ What already exists:
 - optional example-data account signup seeded with starter metrics, realistic history, goals, and a dashboard that exercises multiple widget types, with revision-based upgrades for existing example accounts at server startup and during auth traffic
 - reusable metrics with quick number/date updates
 - metric archiving, with archived metrics hidden by default
+- goal archiving, with archived goals hidden by default
 - goal creation backed by existing or newly created metrics, including date-based compliance goals with exception dates and success thresholds
 - saved dashboards with reusable metric and goal widgets, including target-date goal charts with selectable forecast algorithms plus completion, success, and risk widgets
 - a default dashboard per user, plus an edit mode for arranging widgets

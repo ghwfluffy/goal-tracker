@@ -126,11 +126,13 @@ export interface GoalMetricSummary {
 }
 
 export interface GoalSummary {
+  archived_at: string | null;
   current_progress_percent: number | null;
   description: string | null;
   exception_dates: string[];
   failure_risk_percent: number | null;
   id: string;
+  is_archived: boolean;
   metric: GoalMetricSummary;
   start_date: string;
   status: string;
@@ -160,6 +162,10 @@ export interface CreateGoalPayload {
   target_value_date: string | null;
   target_value_number: number | null;
   title: string;
+}
+
+export interface UpdateGoalPayload {
+  archived: boolean;
 }
 
 export interface DashboardMetricReference {
@@ -603,8 +609,16 @@ export function deleteMetric(metricId: string, fetcher: Fetcher = fetch): Promis
   );
 }
 
-export function fetchGoals(fetcher: Fetcher = fetch): Promise<GoalListResponse> {
-  return requestJson<GoalListResponse>("/goals", undefined, fetcher);
+export function fetchGoals(
+  includeArchivedOrFetcher: boolean | Fetcher = false,
+  fetcher: Fetcher = fetch,
+): Promise<GoalListResponse> {
+  const includeArchived =
+    typeof includeArchivedOrFetcher === "boolean" ? includeArchivedOrFetcher : false;
+  const resolvedFetcher =
+    typeof includeArchivedOrFetcher === "function" ? includeArchivedOrFetcher : fetcher;
+  const suffix = includeArchived ? "?include_archived=true" : "";
+  return requestJson<GoalListResponse>(`/goals${suffix}`, undefined, resolvedFetcher);
 }
 
 export function createGoal(
@@ -616,6 +630,21 @@ export function createGoal(
     {
       body: JSON.stringify(payload),
       method: "POST",
+    },
+    fetcher,
+  );
+}
+
+export function updateGoal(
+  goalId: string,
+  payload: UpdateGoalPayload,
+  fetcher: Fetcher = fetch,
+): Promise<GoalSummary> {
+  return requestJson<GoalSummary>(
+    `/goals/${goalId}`,
+    {
+      body: JSON.stringify(payload),
+      method: "PATCH",
     },
     fetcher,
   );

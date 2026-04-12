@@ -4,7 +4,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, Literal, cast
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.orm import Session
 
@@ -12,12 +12,15 @@ from app.api.routes.auth import get_current_user
 from app.db import Goal, Metric, MetricEntry, User, get_db
 from app.services.goals import (
     GoalError,
+    GoalNotFoundError,
     create_goal,
+    get_goal_for_user,
     goal_current_progress_percent,
     goal_failure_risk_percent,
     goal_target_met,
     goal_time_completion_percent,
     list_goals_for_user,
+    set_goal_archived_state,
 )
 from app.services.metrics import (
     MetricError,
@@ -48,7 +51,9 @@ class GoalMetricSummary(BaseModel):
 
 
 class GoalSummary(BaseModel):
+    archived_at: str | None
     id: str
+    is_archived: bool
     title: str
     description: str | None
     status: str
@@ -100,6 +105,10 @@ class CreateGoalRequest(BaseModel):
         return self
 
 
+class UpdateGoalRequest(BaseModel):
+    archived: bool
+
+
 def decimal_to_float(value: Decimal | float | None) -> float | None:
     if value is None:
         return None
@@ -129,7 +138,9 @@ def serialize_goal_metric(metric: Metric) -> GoalMetricSummary:
 
 def serialize_goal(goal: Goal) -> GoalSummary:
     return GoalSummary(
+        archived_at=goal.archived_at.isoformat() if goal.archived_at is not None else None,
         id=goal.id,
+        is_archived=goal.archived_at is not None,
         title=goal.title,
         description=goal.description,
         status=goal.status,
@@ -155,8 +166,13 @@ def serialize_goal(goal: Goal) -> GoalSummary:
 def get_goals(
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
+    include_archived: Annotated[bool, Query()] = False,
 ) -> GoalListResponse:
-    return GoalListResponse(goals=[serialize_goal(goal) for goal in list_goals_for_user(db, user)])
+    return GoalListResponse(
+        goals=[
+            serialize_goal(goal) for goal in list_goals_for_user(db, user, include_archived=include_archived)
+        ]
+    )
 
 
 @router.post("", response_model=GoalSummary, status_code=status.HTTP_201_CREATED)
@@ -214,3 +230,27 @@ def post_goal(
         ) from exc
 
     return serialize_goal(goal)
+
+
+@router.patch("/{goal_id}", response_model=GoalSummary)
+def patch_goal(
+    goal_id: str,
+    payload: UpdateGoalRequest,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> GoalSummary:
+    try:
+        goal = get_goal_for_user(db, user=user, goal_id=goal_id)
+        updated_goal = set_goal_archived_state(db, goal=goal, archived=payload.archived)
+        db.commit()
+    except GoalNotFoundError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except GoalError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(exc),
+        ) from exc
+
+    return serialize_goal(updated_goal)

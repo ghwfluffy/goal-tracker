@@ -94,6 +94,10 @@ const activeMetrics = computed(() => {
   return metricsStore.metrics.filter((metric) => !metric.is_archived);
 });
 
+const activeGoals = computed(() => {
+  return goalsStore.goals.filter((goal) => !goal.is_archived);
+});
+
 const widgetTypeOptions = [
   { label: "Metric summary", value: "metric_summary" },
   { label: "Metric history", value: "metric_history" },
@@ -290,7 +294,7 @@ function openCreateWidgetDialog(): void {
   widgetTitleInput.value = "";
   widgetTypeInput.value = "metric_summary";
   widgetMetricIdInput.value = availableWidgetMetrics.value[0]?.id ?? "";
-  widgetGoalIdInput.value = goalsStore.goals[0]?.id ?? "";
+  widgetGoalIdInput.value = activeGoals.value[0]?.id ?? "";
   widgetRollingWindowDaysInput.value = "30";
   widgetForecastAlgorithmInput.value = "simple";
   widgetDialogVisible.value = true;
@@ -539,7 +543,7 @@ watch(
       widgetMetricIdInput.value = availableWidgetMetrics.value[0]?.id ?? "";
     }
     if (!widgetUsesMetric.value && widgetGoalIdInput.value === "") {
-      widgetGoalIdInput.value = goalsStore.goals[0]?.id ?? "";
+      widgetGoalIdInput.value = activeGoals.value[0]?.id ?? "";
     }
     if (!widgetSupportsForecast.value) {
       widgetForecastAlgorithmInput.value = "simple";
@@ -562,9 +566,9 @@ watch(
 watch(
   () => goalsStore.goals,
   () => {
-    const goalIds = new Set(goalsStore.goals.map((goal) => goal.id));
+    const goalIds = new Set(activeGoals.value.map((goal) => goal.id));
     if (!goalIds.has(widgetGoalIdInput.value)) {
-      widgetGoalIdInput.value = goalsStore.goals[0]?.id ?? "";
+      widgetGoalIdInput.value = activeGoals.value[0]?.id ?? "";
     }
   },
   { deep: true, immediate: true },
@@ -824,7 +828,7 @@ onBeforeUnmount(() => {
             <span class="label">Goal</span>
             <Dropdown
               v-model="widgetGoalIdInput"
-              :options="goalsStore.goals.map((goal) => ({ label: goal.title, value: goal.id }))"
+              :options="activeGoals.map((goal) => ({ label: goal.title, value: goal.id }))"
               option-label="label"
               option-value="value"
               class="dialog-control"

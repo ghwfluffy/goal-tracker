@@ -52,13 +52,14 @@ Phase 0 now includes backend auth/session foundation endpoints:
 13. `POST /api/v1/metrics/{metric_id}/entries`
 14. `GET /api/v1/goals`
 15. `POST /api/v1/goals`
-16. `GET /api/v1/dashboards`
-17. `POST /api/v1/dashboards`
-18. `PATCH /api/v1/dashboards/{dashboard_id}`
-19. `DELETE /api/v1/dashboards/{dashboard_id}`
-20. `POST /api/v1/dashboards/{dashboard_id}/widgets`
-21. `PATCH /api/v1/dashboards/{dashboard_id}/widgets/{widget_id}`
-22. `DELETE /api/v1/dashboards/{dashboard_id}/widgets/{widget_id}`
+16. `PATCH /api/v1/goals/{goal_id}`
+17. `GET /api/v1/dashboards`
+18. `POST /api/v1/dashboards`
+19. `PATCH /api/v1/dashboards/{dashboard_id}`
+20. `DELETE /api/v1/dashboards/{dashboard_id}`
+21. `POST /api/v1/dashboards/{dashboard_id}/widgets`
+22. `PATCH /api/v1/dashboards/{dashboard_id}/widgets/{widget_id}`
+23. `DELETE /api/v1/dashboards/{dashboard_id}/widgets/{widget_id}`
 
 The first account bootstrap path creates the initial administrator and starts a server-side session using an HTTP-only cookie. After that, new users register through admin-managed invitation codes and can opt into example-data seeding at signup. Example-data accounts now receive a deterministic starter set of metrics, richer historical entries, goals, and a dashboard that exercises multiple widget types, and the app tracks applied seed revisions so existing flagged example accounts can be upgraded when new seed content is added. The example-data upgrader runs both at FastAPI startup and during auth flows so restarting the server is enough to backfill newly introduced seed revisions. Passwords are stored with bcrypt-backed hashes. Each user also has a persisted IANA timezone setting for day-boundary semantics, defaulting to `America/Chicago`, while timestamps remain stored in UTC.
 
@@ -74,8 +75,9 @@ The frontend home page now consumes that auth foundation and can:
 8. create reusable number/date metrics with configurable decimal places and add quick updates
 9. archive metrics so they are hidden by default, or permanently delete standalone metrics that are not used by goals or widgets
 10. create goals tied to an existing metric or a new inline metric, including date-based compliance goals with exception dates and success thresholds
-11. create dashboards, choose a default dashboard, and manage dashboard widgets in a dedicated edit mode, including target-date goal charts plus completion, success, and risk widgets
-12. render widget timestamps in the browser timezone while showing the saved profile timezone used for day-boundary logic
+11. archive goals so they are hidden by default and can be restored when needed
+12. create dashboards, choose a default dashboard, and manage dashboard widgets in a dedicated edit mode, including target-date goal charts plus completion, success, and risk widgets
+13. render widget timestamps in the browser timezone while showing the saved profile timezone used for day-boundary logic
 
 ## Local Run Commands
 

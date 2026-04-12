@@ -3,6 +3,7 @@ import { defineStore } from "pinia";
 import {
   createGoal,
   fetchGoals,
+  updateGoal,
   type CreateGoalPayload,
   type GoalSummary,
 } from "../lib/api";
@@ -12,6 +13,7 @@ type GoalsSubmissionState = "idle" | "submitting";
 
 interface GoalsStoreState {
   errorMessage: string;
+  includeArchived: boolean;
   goals: GoalSummary[];
   submissionState: GoalsSubmissionState;
   viewState: GoalsViewState;
@@ -20,6 +22,7 @@ interface GoalsStoreState {
 export const useGoalsStore = defineStore("goals", {
   state: (): GoalsStoreState => ({
     errorMessage: "",
+    includeArchived: false,
     goals: [],
     submissionState: "idle",
     viewState: "idle",
@@ -27,6 +30,7 @@ export const useGoalsStore = defineStore("goals", {
   actions: {
     reset(): void {
       this.errorMessage = "";
+      this.includeArchived = false;
       this.goals = [];
       this.submissionState = "idle";
       this.viewState = "idle";
@@ -36,7 +40,7 @@ export const useGoalsStore = defineStore("goals", {
       this.errorMessage = "";
 
       try {
-        const response = await fetchGoals();
+        const response = await fetchGoals(this.includeArchived);
         this.goals = response.goals;
         this.viewState = "ready";
       } catch (error: unknown) {
@@ -54,6 +58,22 @@ export const useGoalsStore = defineStore("goals", {
         return true;
       } catch (error: unknown) {
         this.errorMessage = error instanceof Error ? error.message : "Unable to create goal.";
+        return false;
+      } finally {
+        this.submissionState = "idle";
+      }
+    },
+    async setGoalArchived(goalId: string, archived: boolean): Promise<boolean> {
+      this.submissionState = "submitting";
+      this.errorMessage = "";
+
+      try {
+        await updateGoal(goalId, { archived });
+        await this.loadGoals();
+        return true;
+      } catch (error: unknown) {
+        this.errorMessage =
+          error instanceof Error ? error.message : "Unable to update goal archive state.";
         return false;
       } finally {
         this.submissionState = "idle";
