@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings, get_settings
 from app.db import AuthSession, User, get_db
 from app.services.auth import (
+    AccountLockedError,
     AuthenticationError,
     BootstrapError,
     RegistrationError,
@@ -192,6 +193,7 @@ def login(
             db,
             username=normalized_username(payload.username),
             password=payload.password,
+            settings=settings,
         )
         _, cookie_value = create_session(
             db,
@@ -201,8 +203,11 @@ def login(
             ip_address=request.client.host if request.client is not None else None,
         )
         db.commit()
+    except AccountLockedError as exc:
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=str(exc)) from exc
     except AuthenticationError as exc:
-        db.rollback()
+        db.commit()
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
 
     set_session_cookie(response, settings=settings, cookie_value=cookie_value)

@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     session_key_source: Literal["env", "default", "generated"] = "env"
     session_cookie_name: str = "goal_tracker_session"
     session_duration_minutes: int = 60
+    auth_max_failed_attempts: int = 5
+    auth_lockout_minutes: int = 15
     cors_origins: list[str] = [
         "http://127.0.0.1:8080",
         "http://127.0.0.1:8081",

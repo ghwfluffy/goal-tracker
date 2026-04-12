@@ -28,6 +28,10 @@ class AuthenticationError(Exception):
     pass
 
 
+class AccountLockedError(AuthenticationError):
+    pass
+
+
 class RegistrationError(Exception):
     pass
 
@@ -150,13 +154,59 @@ def register_user(
     return user
 
 
-def verify_user_credentials(db: Session, *, username: str, password: str) -> User:
+def clear_failed_login_state(user: User) -> None:
+    user.failed_login_attempt_count = 0
+    user.locked_until = None
+
+
+def is_user_locked(user: User, *, now: datetime) -> bool:
+    if user.locked_until is None:
+        return False
+    return normalize_utc_datetime(user.locked_until) > now
+
+
+def reset_expired_lockout(user: User, *, now: datetime) -> None:
+    if user.locked_until is None:
+        return
+    if normalize_utc_datetime(user.locked_until) <= now:
+        clear_failed_login_state(user)
+
+
+def record_failed_login_attempt(db: Session, *, user: User, settings: Settings, now: datetime) -> None:
+    user.failed_login_attempt_count += 1
+    if user.failed_login_attempt_count >= settings.auth_max_failed_attempts:
+        user.locked_until = now + timedelta(minutes=settings.auth_lockout_minutes)
+        user.failed_login_attempt_count = 0
+    db.flush()
+
+
+def verify_user_credentials(
+    db: Session,
+    *,
+    username: str,
+    password: str,
+    settings: Settings,
+) -> User:
+    now = utcnow()
     user = find_user_by_username(db, username)
-    if user is None or not verify_password(password, user.password_hash):
+    if user is None:
         raise AuthenticationError("Invalid username or password.")
+
+    reset_expired_lockout(user, now=now)
+    if is_user_locked(user, now=now):
+        raise AccountLockedError("Account is temporarily locked due to too many failed sign-in attempts.")
+
+    if not verify_password(password, user.password_hash):
+        record_failed_login_attempt(db, user=user, settings=settings, now=now)
+        if is_user_locked(user, now=now):
+            raise AccountLockedError("Account is temporarily locked due to too many failed sign-in attempts.")
+        raise AuthenticationError("Invalid username or password.")
+
+    if user.failed_login_attempt_count > 0 or user.locked_until is not None:
+        clear_failed_login_state(user)
     if password_hash_needs_upgrade(user.password_hash):
         user.password_hash = hash_password(password)
-        db.flush()
+    db.flush()
 
     return user
 

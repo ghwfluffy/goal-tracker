@@ -52,6 +52,8 @@ class User(Base):
         default="America/Chicago",
     )
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    failed_login_attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     is_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_example_data: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     invitation_code_id: Mapped[str | None] = mapped_column(
