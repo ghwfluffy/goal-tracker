@@ -214,15 +214,27 @@ export interface GoalMetricSummary {
   unit_label: string | null;
 }
 
+export interface GoalChecklistItemSummary {
+  completed_at: string | null;
+  display_order: number;
+  id: string;
+  is_completed: boolean;
+  title: string;
+}
+
 export interface GoalSummary {
   archived_at: string | null;
+  checklist_completed_count: number;
+  checklist_items: GoalChecklistItemSummary[];
+  checklist_total_count: number;
   current_progress_percent: number | null;
   description: string | null;
   exception_dates: string[];
   failure_risk_percent: number | null;
+  goal_type: "metric" | "checklist";
   id: string;
   is_archived: boolean;
-  metric: GoalMetricSummary;
+  metric: GoalMetricSummary | null;
   start_date: string;
   status: string;
   success_threshold_percent: number | null;
@@ -240,9 +252,16 @@ export interface GoalListResponse {
 
 export interface InlineMetricPayload extends CreateMetricPayload {}
 
+export interface ChecklistItemPayload {
+  id?: string | null;
+  title: string;
+}
+
 export interface CreateGoalPayload {
+  checklist_items: ChecklistItemPayload[];
   description: string | null;
   exception_dates: string[];
+  goal_type: "metric" | "checklist";
   metric_id: string | null;
   new_metric: InlineMetricPayload | null;
   success_threshold_percent: number | null;
@@ -255,6 +274,7 @@ export interface CreateGoalPayload {
 
 export interface UpdateGoalPayload {
   archived?: boolean;
+  checklist_items?: ChecklistItemPayload[];
   description?: string | null;
   exception_dates?: string[];
   start_date?: string;
@@ -275,9 +295,13 @@ export interface DashboardMetricReference {
 }
 
 export interface DashboardGoalReference {
+  checklist_completed_count: number;
+  checklist_items: GoalChecklistItemSummary[];
+  checklist_total_count: number;
   exception_dates: string[];
+  goal_type: "metric" | "checklist";
   id: string;
-  metric: DashboardMetricReference;
+  metric: DashboardMetricReference | null;
   success_threshold_percent: number | null;
   start_date: string;
   target_date: string | null;
@@ -324,6 +348,7 @@ export interface DashboardWidgetSummary {
     | "metric_summary"
     | "days_since"
     | "goal_progress"
+    | "goal_checklist"
     | "goal_summary"
     | "goal_completion_percent"
     | "goal_success_percent"
@@ -396,6 +421,7 @@ export interface CreateDashboardWidgetPayload {
     | "metric_summary"
     | "days_since"
     | "goal_progress"
+    | "goal_checklist"
     | "goal_summary"
     | "goal_completion_percent"
     | "goal_success_percent"
@@ -914,6 +940,22 @@ export function updateGoal(
     `/goals/${goalId}`,
     {
       body: JSON.stringify(payload),
+      method: "PATCH",
+    },
+    fetcher,
+  );
+}
+
+export function updateGoalChecklistItem(
+  goalId: string,
+  itemId: string,
+  completed: boolean,
+  fetcher: Fetcher = fetch,
+): Promise<GoalSummary> {
+  return requestJson<GoalSummary>(
+    `/goals/${goalId}/checklist-items/${itemId}`,
+    {
+      body: JSON.stringify({ completed }),
       method: "PATCH",
     },
     fetcher,

@@ -64,6 +64,7 @@ def _dashboard_loading_options() -> tuple[Any, ...]:
         selectinload(Dashboard.widgets).selectinload(DashboardWidget.metric).selectinload(Metric.entries),
         selectinload(Dashboard.widgets).selectinload(DashboardWidget.goal).selectinload(Goal.user),
         selectinload(Dashboard.widgets).selectinload(DashboardWidget.goal).selectinload(Goal.exception_dates),
+        selectinload(Dashboard.widgets).selectinload(DashboardWidget.goal).selectinload(Goal.checklist_items),
         selectinload(Dashboard.widgets)
         .selectinload(DashboardWidget.goal)
         .selectinload(Goal.metric)
@@ -76,6 +77,7 @@ def _widget_loading_options() -> tuple[Any, ...]:
         selectinload(DashboardWidget.metric).selectinload(Metric.entries),
         selectinload(DashboardWidget.goal).selectinload(Goal.user),
         selectinload(DashboardWidget.goal).selectinload(Goal.exception_dates),
+        selectinload(DashboardWidget.goal).selectinload(Goal.checklist_items),
         selectinload(DashboardWidget.goal).selectinload(Goal.metric).selectinload(Metric.entries),
     )
 

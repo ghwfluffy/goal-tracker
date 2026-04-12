@@ -691,8 +691,10 @@ describe("auth api helpers", () => {
     await expect(
       createGoal(
         {
+          checklist_items: [],
           description: "Cut steadily.",
           exception_dates: [],
+          goal_type: "metric",
           metric_id: "metric-1",
           new_metric: null,
           success_threshold_percent: null,

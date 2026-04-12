@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
+from typing import cast
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from app.db.models import Goal, MetricEntry, User
+from app.db.models import Goal, GoalChecklistItem, MetricEntry, User
 from app.services.metrics import METRIC_TYPE_DATE, METRIC_TYPE_NUMBER
+
+GOAL_TYPE_CHECKLIST = "checklist"
 
 
 @dataclass
@@ -71,6 +74,8 @@ def sort_metric_entries_ascending(entries: list[MetricEntry]) -> list[MetricEntr
 
 
 def metric_entry_numeric_value(goal: Goal, entry: MetricEntry) -> float | int | None:
+    if goal.metric is None:
+        return None
     if goal.metric.metric_type == METRIC_TYPE_NUMBER:
         return entry.number_value
     if entry.date_value is None:
@@ -79,6 +84,8 @@ def metric_entry_numeric_value(goal: Goal, entry: MetricEntry) -> float | int | 
 
 
 def goal_target_numeric_value(goal: Goal) -> float | int | None:
+    if goal.metric is None:
+        return None
     if goal.metric.metric_type == METRIC_TYPE_NUMBER:
         return goal.target_value_number
     if goal.target_value_date is None:
@@ -119,7 +126,10 @@ def calculate_progress_percent(
 
 
 def is_target_met(
-    *, baseline_value: float | int, target_value: float | int, current_value: float | int
+    *,
+    baseline_value: float | int,
+    target_value: float | int,
+    current_value: float | int,
 ) -> bool:
     if target_value == baseline_value:
         return current_value == target_value
@@ -128,8 +138,38 @@ def is_target_met(
     return current_value <= target_value
 
 
+def checklist_total_items(goal: Goal) -> int:
+    return len(goal.checklist_items)
+
+
+def checklist_completed_items(
+    goal: Goal,
+    *,
+    as_of: datetime | None = None,
+) -> list[GoalChecklistItem]:
+    cutoff = normalize_recorded_at(as_of) if as_of is not None else None
+    completed_items = [item for item in goal.checklist_items if item.completed_at is not None]
+    if cutoff is None:
+        return completed_items
+    return [
+        item for item in completed_items if normalize_recorded_at(cast(datetime, item.completed_at)) <= cutoff
+    ]
+
+
+def checklist_progress_percent(
+    goal: Goal,
+    *,
+    as_of: datetime | None = None,
+) -> float | None:
+    total_items = checklist_total_items(goal)
+    if total_items == 0:
+        return None
+    completed_count = len(checklist_completed_items(goal, as_of=as_of))
+    return round((completed_count / total_items) * 100.0, 2)
+
+
 def goal_progress_as_of_date(goal: Goal, *, as_of_date: date | None = None) -> float | None:
-    if goal.metric.metric_type != METRIC_TYPE_DATE:
+    if goal.metric is None or goal.metric.metric_type != METRIC_TYPE_DATE:
         return None
     if goal.target_date is None:
         return None
@@ -162,6 +202,11 @@ def goal_progress_as_of_date(goal: Goal, *, as_of_date: date | None = None) -> f
 
 
 def goal_current_progress_percent(goal: Goal) -> float | None:
+    if goal.goal_type == GOAL_TYPE_CHECKLIST:
+        return checklist_progress_percent(goal)
+
+    if goal.metric is None:
+        return None
     if goal.metric.metric_type == METRIC_TYPE_DATE:
         return goal_progress_as_of_date(goal)
 
@@ -199,6 +244,14 @@ def goal_current_progress_percent(goal: Goal) -> float | None:
 
 
 def goal_target_met(goal: Goal) -> bool | None:
+    if goal.goal_type == GOAL_TYPE_CHECKLIST:
+        current_progress = checklist_progress_percent(goal)
+        if current_progress is None:
+            return None
+        return current_progress >= 100.0
+
+    if goal.metric is None:
+        return None
     if goal.metric.metric_type == METRIC_TYPE_DATE:
         current_progress = goal_progress_as_of_date(goal)
         if current_progress is None or goal.success_threshold_percent is None:
@@ -267,7 +320,7 @@ def goal_failure_risk_percent(goal: Goal) -> float | None:
 
 
 def build_goal_date_progress_points(goal: Goal) -> list[GoalDateProgressPoint]:
-    if goal.metric.metric_type != METRIC_TYPE_DATE or goal.target_date is None:
+    if goal.metric is None or goal.metric.metric_type != METRIC_TYPE_DATE or goal.target_date is None:
         return []
 
     today = utcnow().astimezone(get_user_timezone(goal.user)).date()
@@ -290,8 +343,53 @@ def build_goal_date_progress_points(goal: Goal) -> list[GoalDateProgressPoint]:
     return points
 
 
+def build_checklist_progress_points(goal: Goal) -> list[GoalProgressPoint]:
+    total_items = checklist_total_items(goal)
+    if total_items == 0:
+        return []
+
+    points = [
+        GoalProgressPoint(
+            recorded_at=goal_start_datetime(goal),
+            number_value=None,
+            date_value=None,
+            progress_percent=0.0,
+        )
+    ]
+    completed_items = sorted(
+        checklist_completed_items(goal),
+        key=lambda item: normalize_recorded_at(cast(datetime, item.completed_at)),
+    )
+
+    for completed_count, item in enumerate(completed_items, start=1):
+        points.append(
+            GoalProgressPoint(
+                recorded_at=normalize_recorded_at(cast(datetime, item.completed_at)),
+                number_value=None,
+                date_value=None,
+                progress_percent=round((completed_count / total_items) * 100.0, 2),
+            )
+        )
+
+    return points
+
+
 def build_goal_progress_points(goal: Goal, *, rolling_window_days: int | None) -> list[GoalProgressPoint]:
     effective_window = None if goal.target_date is not None else rolling_window_days
+
+    if goal.goal_type == GOAL_TYPE_CHECKLIST:
+        checklist_points = build_checklist_progress_points(goal)
+        if effective_window is not None:
+            window_threshold = utcnow() - timedelta(days=effective_window)
+            checklist_points = [
+                point
+                for point in checklist_points
+                if normalize_recorded_at(point.recorded_at) >= window_threshold
+            ]
+        return checklist_points
+
+    if goal.metric is None:
+        return []
 
     if goal.metric.metric_type == METRIC_TYPE_DATE:
         date_points = build_goal_date_progress_points(goal)
@@ -327,42 +425,78 @@ def build_goal_progress_points(goal: Goal, *, rolling_window_days: int | None) -
         return []
 
     start_cutoff = goal_start_datetime(goal)
-    numeric_window_threshold: datetime | None = (
-        utcnow() - timedelta(days=effective_window) if effective_window is not None else None
-    )
+    points: list[GoalProgressPoint] = []
+    seeded_with_baseline = False
 
-    points: list[GoalProgressPoint] = [
-        GoalProgressPoint(
-            recorded_at=start_cutoff,
-            number_value=baseline_entry.number_value,
-            date_value=baseline_entry.date_value,
-            progress_percent=0.0,
-        )
-    ]
     for entry in ordered_entries:
-        recorded_at = normalize_recorded_at(entry.recorded_at)
-        if recorded_at < start_cutoff:
-            continue
-        if numeric_window_threshold is not None and recorded_at < numeric_window_threshold:
+        entry_recorded_at = normalize_recorded_at(entry.recorded_at)
+        if entry_recorded_at < start_cutoff:
             continue
 
-        current_value = metric_entry_numeric_value(goal, entry)
-        if current_value is None:
+        entry_value = metric_entry_numeric_value(goal, entry)
+        if entry_value is None:
             continue
-        if current_value == baseline_value and len(points) == 1:
-            continue
+
+        if not seeded_with_baseline:
+            if entry is baseline_entry:
+                points.append(
+                    GoalProgressPoint(
+                        recorded_at=entry_recorded_at,
+                        number_value=entry.number_value,
+                        date_value=entry.date_value,
+                        progress_percent=calculate_progress_percent(
+                            baseline_value=baseline_value,
+                            target_value=target_value,
+                            current_value=entry_value,
+                        ),
+                    )
+                )
+                seeded_with_baseline = True
+                continue
+
+            points.append(
+                GoalProgressPoint(
+                    recorded_at=normalize_recorded_at(baseline_entry.recorded_at),
+                    number_value=metric_entry_numeric_value(goal, baseline_entry),
+                    date_value=baseline_entry.date_value,
+                    progress_percent=calculate_progress_percent(
+                        baseline_value=baseline_value,
+                        target_value=target_value,
+                        current_value=baseline_value,
+                    ),
+                )
+            )
+            seeded_with_baseline = True
 
         points.append(
             GoalProgressPoint(
-                recorded_at=entry.recorded_at,
+                recorded_at=entry_recorded_at,
                 number_value=entry.number_value,
                 date_value=entry.date_value,
                 progress_percent=calculate_progress_percent(
                     baseline_value=baseline_value,
                     target_value=target_value,
-                    current_value=current_value,
+                    current_value=entry_value,
                 ),
             )
         )
+
+    if not seeded_with_baseline:
+        points.append(
+            GoalProgressPoint(
+                recorded_at=normalize_recorded_at(baseline_entry.recorded_at),
+                number_value=baseline_entry.number_value,
+                date_value=baseline_entry.date_value,
+                progress_percent=calculate_progress_percent(
+                    baseline_value=baseline_value,
+                    target_value=target_value,
+                    current_value=baseline_value,
+                ),
+            )
+        )
+
+    if effective_window is not None:
+        window_threshold = utcnow() - timedelta(days=effective_window)
+        points = [point for point in points if normalize_recorded_at(point.recorded_at) >= window_threshold]
 
     return points

@@ -42,6 +42,8 @@ def due_slots_for_metric(metric: Metric) -> list[tuple[int, time]]:
 
 
 def local_datetime(value: datetime, timezone: ZoneInfo) -> datetime:
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
     return value.astimezone(timezone)
 
 

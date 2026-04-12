@@ -64,7 +64,7 @@ const metricChartPoints = computed<ChartPoint[]>(() => {
 
 const goalMetricChartPoints = computed<ChartPoint[]>(() => {
   const goalMetric = props.widget.goal?.metric;
-  if (goalMetric === undefined) {
+  if (goalMetric === undefined || goalMetric === null) {
     return [];
   }
 
@@ -114,6 +114,9 @@ const goalTargetValue = computed(() => {
   if (goal === null || goal === undefined) {
     return null;
   }
+  if (goal.metric === null) {
+    return null;
+  }
 
   if (goal.metric.metric_type === "date") {
     return goal.target_value_date === null
@@ -148,7 +151,10 @@ const metricHistoryAxisBounds = computed(() => {
 });
 
 const goalMetricAxisBounds = computed(() => {
-  if (props.widget.goal?.metric.metric_type !== "number") {
+  if (props.widget.goal?.metric === null || props.widget.goal?.metric === undefined) {
+    return null;
+  }
+  if (props.widget.goal.metric.metric_type !== "number") {
     return null;
   }
 
@@ -171,8 +177,11 @@ function formatMetricAxisValue(value: number): string {
 }
 
 function formatGoalMetricAxisValue(value: number): string {
-  if (props.widget.goal?.metric.metric_type !== "date") {
-    return value.toFixed(props.widget.goal?.metric.decimal_places ?? 0);
+  if (props.widget.goal?.metric === null || props.widget.goal?.metric === undefined) {
+    return `${Math.round(value)}%`;
+  }
+  if (props.widget.goal.metric.metric_type !== "date") {
+    return value.toFixed(props.widget.goal.metric.decimal_places ?? 0);
   }
   return formatDateOnly(new Date(value).toISOString().slice(0, 10));
 }

@@ -6,6 +6,7 @@ import type { DashboardWidgetSummary } from "../lib/api";
 import { getDashboardWidgetValueText, isDashboardValueWidget } from "../lib/dashboardWidgets";
 import { DEFAULT_PROFILE_TIMEZONE } from "../lib/time";
 import { useAuthStore } from "../stores/auth";
+import DashboardChecklistWidget from "./DashboardChecklistWidget.vue";
 import DashboardWidgetChart from "./DashboardWidgetChart.vue";
 
 const props = defineProps<{
@@ -24,10 +25,12 @@ const profileTimezone = computed(() => {
 
 const displayValueText = computed(() => getDashboardWidgetValueText(props.widget, profileTimezone.value));
 const hasValue = computed(() => displayValueText.value !== "No value");
+const isChecklistWidget = computed(() => props.widget.widget_type === "goal_checklist");
 </script>
 
 <template>
-  <div v-if="isValueWidget" class="mobile-value-widget" :class="{ 'is-empty': !hasValue }">
+  <DashboardChecklistWidget v-if="isChecklistWidget" :widget="widget" />
+  <div v-else-if="isValueWidget" class="mobile-value-widget" :class="{ 'is-empty': !hasValue }">
     <div class="mobile-value-text">{{ hasValue ? displayValueText : "No value yet" }}</div>
   </div>
   <div v-else class="mobile-chart-widget">

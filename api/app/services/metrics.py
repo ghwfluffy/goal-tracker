@@ -192,6 +192,7 @@ def create_metric(
         unit_label=(unit_label.strip() if unit_label is not None and unit_label.strip() != "" else None),
         reminder_time_1=normalized_reminder_time_1,
         reminder_time_2=normalized_reminder_time_2,
+        created_at=utcnow(),
         updated_at=utcnow(),
     )
     db.add(metric)

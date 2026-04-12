@@ -9,6 +9,7 @@ import {
 export const DASHBOARD_VALUE_WIDGET_TYPES = new Set<DashboardWidgetSummary["widget_type"]>([
   "metric_summary",
   "days_since",
+  "goal_checklist",
   "goal_summary",
   "goal_completion_percent",
   "goal_success_percent",
@@ -18,6 +19,7 @@ export const DASHBOARD_VALUE_WIDGET_TYPES = new Set<DashboardWidgetSummary["widg
 export const DASHBOARD_MOBILE_COMPACT_WIDGET_TYPES = new Set<DashboardWidgetSummary["widget_type"]>([
   "metric_summary",
   "days_since",
+  "goal_checklist",
   "goal_summary",
   "goal_completion_percent",
   "goal_success_percent",
@@ -68,6 +70,18 @@ export function getDashboardWidgetValueText(
       return "0 days";
     }
     return daysSince === 1 ? "1 day" : `${daysSince} days`;
+  }
+
+  if (widget.widget_type === "goal_checklist") {
+    const goal = widget.goal;
+    if (goal === null) {
+      return "No value";
+    }
+    return `${goal.checklist_completed_count}/${goal.checklist_total_count} done`;
+  }
+
+  if (widget.widget_type === "goal_summary" && widget.goal?.goal_type === "checklist") {
+    return `${widget.goal.checklist_completed_count}/${widget.goal.checklist_total_count} done`;
   }
 
   const percentValue =

@@ -17,6 +17,7 @@ from app.services.goal_progress import (
 )
 
 MetricType = Literal["number", "date"]
+GoalType = Literal["metric", "checklist"]
 ForecastAlgorithm = Literal[
     "simple",
     "weighted_week_over_week",
@@ -28,6 +29,7 @@ WidgetType = Literal[
     "metric_summary",
     "days_since",
     "goal_progress",
+    "goal_checklist",
     "goal_summary",
     "goal_completion_percent",
     "goal_success_percent",
@@ -51,8 +53,17 @@ class MetricReferenceSummary(BaseModel):
     latest_entry: MetricEntrySummary | None
 
 
+class GoalChecklistItemReferenceSummary(BaseModel):
+    id: str
+    title: str
+    display_order: int
+    is_completed: bool
+    completed_at: str | None
+
+
 class GoalReferenceSummary(BaseModel):
     id: str
+    goal_type: GoalType
     title: str
     start_date: str
     target_date: str | None
@@ -60,7 +71,10 @@ class GoalReferenceSummary(BaseModel):
     target_value_date: str | None
     success_threshold_percent: float | None
     exception_dates: list[str]
-    metric: MetricReferenceSummary
+    checklist_items: list[GoalChecklistItemReferenceSummary]
+    checklist_total_count: int
+    checklist_completed_count: int
+    metric: MetricReferenceSummary | None
 
 
 class WidgetSeriesPoint(BaseModel):
@@ -179,8 +193,19 @@ def serialize_metric_reference(metric: Metric) -> MetricReferenceSummary:
 
 
 def serialize_goal_reference(goal: Goal) -> GoalReferenceSummary:
+    checklist_items = [
+        GoalChecklistItemReferenceSummary(
+            id=item.id,
+            title=item.title,
+            display_order=item.display_order,
+            is_completed=item.completed_at is not None,
+            completed_at=item.completed_at.isoformat() if item.completed_at is not None else None,
+        )
+        for item in goal.checklist_items
+    ]
     return GoalReferenceSummary(
         id=goal.id,
+        goal_type=cast(GoalType, goal.goal_type),
         title=goal.title,
         start_date=goal.start_date.isoformat(),
         target_date=goal.target_date.isoformat() if goal.target_date is not None else None,
@@ -192,7 +217,10 @@ def serialize_goal_reference(goal: Goal) -> GoalReferenceSummary:
         exception_dates=[
             exception_date.exception_date.isoformat() for exception_date in goal.exception_dates
         ],
-        metric=serialize_metric_reference(goal.metric),
+        checklist_items=checklist_items,
+        checklist_total_count=len(checklist_items),
+        checklist_completed_count=sum(1 for item in checklist_items if item.is_completed),
+        metric=serialize_metric_reference(goal.metric) if goal.metric is not None else None,
     )
 
 

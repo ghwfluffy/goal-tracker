@@ -30,9 +30,10 @@ Current implemented slice:
 - user-owned saved dashboards
 - one default dashboard per user
 - separate dashboard edit mode for adding and updating widgets
-- metric-history, metric-summary, goal-progress, and goal-summary widgets
+- metric-history, metric-summary, goal-progress, goal-summary, and goal-checklist widgets
 - date-metric `days since` summary widgets for streak-style dashboards
 - goal-progress series derived from metric history rather than stored separately
+- checklist widgets can render ordered goal subtasks as checkboxes and write completions back to the goal
 - user-managed share links for dashboards and widgets
 - read-only public dashboard pages
 - server-rendered widget preview PNGs for Discord, Teams, and other OG/Twitter consumers

@@ -24,7 +24,7 @@ from app.services.dashboard_layout import (
     WIDGET_TYPE_METRIC_SUMMARY,
 )
 from app.services.dashboards import create_dashboard, create_dashboard_widget
-from app.services.goals import create_goal
+from app.services.goals import GOAL_TYPE_METRIC, create_goal
 from app.services.metrics import (
     METRIC_TYPE_DATE,
     METRIC_TYPE_NUMBER,
@@ -184,6 +184,7 @@ def apply_initial_example_metrics_and_goals(db: Session, *, user: User) -> None:
         create_goal(
             db,
             user=user,
+            goal_type=GOAL_TYPE_METRIC,
             metric=weight_metric,
             title=EXAMPLE_WEIGHT_GOAL_TITLE,
             description="Example seeded goal tied to the example weight metric.",
@@ -212,6 +213,7 @@ def apply_initial_example_metrics_and_goals(db: Session, *, user: User) -> None:
         create_goal(
             db,
             user=user,
+            goal_type=GOAL_TYPE_METRIC,
             metric=last_drink_metric,
             title=EXAMPLE_LAST_DRINK_GOAL_TITLE,
             description="Example seeded goal tied to the example last-drink metric.",

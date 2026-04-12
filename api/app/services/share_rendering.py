@@ -36,6 +36,7 @@ WIDGET_TYPE_LABELS: dict[str, str] = {
     "metric_summary": "Metric summary",
     "days_since": "Days since",
     "goal_progress": "Goal progress",
+    "goal_checklist": "Checklist",
     "goal_summary": "Goal summary",
     "goal_completion_percent": "Goal completion",
     "goal_success_percent": "Goal success",
@@ -103,6 +104,8 @@ def _format_metric_entry(metric: MetricReferenceSummary, entry: MetricEntrySumma
 
 
 def _format_goal_target(goal: GoalReferenceSummary) -> str | None:
+    if goal.metric is None:
+        return None
     if goal.metric.metric_type == "number" and goal.target_value_number is not None:
         return _format_number(goal.target_value_number, goal.metric.decimal_places, goal.metric.unit_label)
     if goal.metric.metric_type == "date" and goal.target_value_date is not None:
@@ -138,6 +141,16 @@ def widget_primary_value_text(widget: WidgetSummary, *, profile_timezone: str) -
     if widget.widget_type == "goal_failure_risk":
         return "No value" if widget.failure_risk_percent is None else f"{round(widget.failure_risk_percent)}%"
 
+    if widget.widget_type == "goal_checklist" and widget.goal is not None:
+        return f"{widget.goal.checklist_completed_count}/{widget.goal.checklist_total_count} done"
+
+    if (
+        widget.widget_type == "goal_summary"
+        and widget.goal is not None
+        and widget.goal.goal_type == "checklist"
+    ):
+        return f"{widget.goal.checklist_completed_count}/{widget.goal.checklist_total_count} done"
+
     if widget.widget_type in {"goal_progress", "goal_summary", "goal_success_percent"}:
         return (
             "No value"
@@ -171,9 +184,14 @@ def widget_detail_text(widget: WidgetSummary, *, profile_timezone: str) -> str:
 
     if widget.goal is not None:
         parts: list[str] = []
-        latest_value = _format_metric_entry(widget.goal.metric, widget.goal.metric.latest_entry)
-        if latest_value != "No value":
-            parts.append(f"Latest {latest_value}")
+        if widget.goal.metric is not None:
+            latest_value = _format_metric_entry(widget.goal.metric, widget.goal.metric.latest_entry)
+            if latest_value != "No value":
+                parts.append(f"Latest {latest_value}")
+        elif widget.goal.goal_type == "checklist":
+            parts.append(
+                f"{widget.goal.checklist_completed_count} of {widget.goal.checklist_total_count} completed"
+            )
         target_value = _format_goal_target(widget.goal)
         if target_value is not None:
             parts.append(f"Target {target_value}")
@@ -214,6 +232,8 @@ def _widget_chart_mode(widget: WidgetSummary) -> str:
 
     if widget.goal is not None:
         goal_metric = widget.goal.metric
+        if goal_metric is None:
+            return "progress_percent"
         has_date_values = any(point.date_value is not None for point in widget.series)
         has_number_values = any(point.number_value is not None for point in widget.series)
         if goal_metric.metric_type == "date" and has_date_values:
@@ -399,6 +419,8 @@ def _format_chart_value(widget: WidgetSummary, value: float) -> str:
     if widget.metric is not None:
         return _format_number(value, widget.metric.decimal_places, widget.metric.unit_label)
     if widget.goal is not None:
+        if widget.goal.metric is None:
+            return f"{round(value)}%"
         return _format_number(value, widget.goal.metric.decimal_places, widget.goal.metric.unit_label)
     return f"{round(value)}"
 
@@ -932,6 +954,7 @@ def _widget_chart_bootstrap_script(widget: WidgetSummary) -> str:
   const VALUE_WIDGET_TYPES = new Set([
     "metric_summary",
     "days_since",
+    "goal_checklist",
     "goal_summary",
     "goal_completion_percent",
     "goal_success_percent",
@@ -1035,6 +1058,9 @@ def _widget_chart_bootstrap_script(widget: WidgetSummary) -> str:
     if (goal === null || goal === undefined) {{
       return null;
     }}
+    if (goal.metric === null || goal.metric === undefined) {{
+      return null;
+    }}
     if (goal.metric.metric_type === "date") {{
       return goal.target_value_date === null
         ? null
@@ -1051,8 +1077,11 @@ def _widget_chart_bootstrap_script(widget: WidgetSummary) -> str:
   }}
 
   function formatGoalMetricAxisValue(value) {{
-    if (widget.goal?.metric.metric_type !== "date") {{
-      return value.toFixed(widget.goal?.metric.decimal_places ?? 0);
+    if (widget.goal?.metric === null || widget.goal?.metric === undefined) {{
+      return `${{Math.round(value)}}%`;
+    }}
+    if (widget.goal.metric.metric_type !== "date") {{
+      return value.toFixed(widget.goal.metric.decimal_places ?? 0);
     }}
     return formatDateOnly(value);
   }}

@@ -3,6 +3,7 @@ import { defineStore } from "pinia";
 import {
   createGoal,
   fetchGoals,
+  updateGoalChecklistItem,
   updateGoal,
   type CreateGoalPayload,
   type GoalSummary,
@@ -90,6 +91,26 @@ export const useGoalsStore = defineStore("goals", {
       } catch (error: unknown) {
         this.errorMessage =
           error instanceof Error ? error.message : "Unable to update goal archive state.";
+        return false;
+      } finally {
+        this.submissionState = "idle";
+      }
+    },
+    async setChecklistItemCompleted(
+      goalId: string,
+      itemId: string,
+      completed: boolean,
+    ): Promise<boolean> {
+      this.submissionState = "submitting";
+      this.errorMessage = "";
+
+      try {
+        await updateGoalChecklistItem(goalId, itemId, completed);
+        await this.loadGoals();
+        return true;
+      } catch (error: unknown) {
+        this.errorMessage =
+          error instanceof Error ? error.message : "Unable to update checklist item.";
         return false;
       } finally {
         this.submissionState = "idle";

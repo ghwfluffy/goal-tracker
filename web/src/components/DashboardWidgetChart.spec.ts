@@ -22,7 +22,11 @@ function buildGoalWidget(
     failure_risk_percent: 12,
     forecast_algorithm: "simple",
     goal: {
+      checklist_completed_count: 0,
+      checklist_items: [],
+      checklist_total_count: 0,
       exception_dates: [],
+      goal_type: "metric",
       id: "goal-1",
       metric: {
         decimal_places: 1,
@@ -194,7 +198,11 @@ describe("DashboardWidgetChart", () => {
         widget: buildGoalWidget({
           current_progress_percent: 77.78,
           goal: {
+            checklist_completed_count: 0,
+            checklist_items: [],
+            checklist_total_count: 0,
             exception_dates: ["2026-04-03"],
+            goal_type: "metric",
             id: "goal-2",
             metric: {
               decimal_places: null,

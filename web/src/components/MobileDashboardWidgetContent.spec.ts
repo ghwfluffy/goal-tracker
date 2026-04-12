@@ -119,4 +119,51 @@ describe("MobileDashboardWidgetContent", () => {
     expect(wrapper.find(".mobile-chart-widget").exists()).toBe(true);
     expect(wrapper.find(".chart-stub").exists()).toBe(true);
   });
+
+  it("routes checklist widgets to the checklist renderer", () => {
+    const wrapper = mount(MobileDashboardWidgetContent, {
+      global: {
+        plugins: [pinia],
+        stubs: {
+          DashboardChecklistWidget: {
+            name: "DashboardChecklistWidget",
+            template: "<div class='checklist-stub'>checklist</div>",
+          },
+        },
+      },
+      props: {
+        widget: buildWidget({
+          goal: {
+            checklist_completed_count: 1,
+            checklist_items: [
+              {
+                completed_at: "2026-04-12T12:00:00Z",
+                display_order: 0,
+                id: "item-1",
+                is_completed: true,
+                title: "Mop floors",
+              },
+            ],
+            checklist_total_count: 2,
+            exception_dates: [],
+            goal_type: "checklist",
+            id: "goal-1",
+            metric: null,
+            start_date: "2026-04-11",
+            success_threshold_percent: null,
+            target_date: "2026-04-20",
+            target_value_date: null,
+            target_value_number: null,
+            title: "Clean house",
+          },
+          metric: null,
+          widget_type: "goal_checklist",
+        }),
+      },
+    });
+
+    expect(wrapper.find(".checklist-stub").exists()).toBe(true);
+    expect(wrapper.find(".mobile-value-widget").exists()).toBe(false);
+    expect(wrapper.find(".mobile-chart-widget").exists()).toBe(false);
+  });
 });

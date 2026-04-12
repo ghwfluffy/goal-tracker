@@ -274,10 +274,11 @@ class Goal(Base):
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
-    metric_id: Mapped[str] = mapped_column(
+    metric_id: Mapped[str | None] = mapped_column(
         ForeignKey("metrics.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
     )
+    goal_type: Mapped[str] = mapped_column(String(20), nullable=False, default="metric")
     title: Mapped[str] = mapped_column(String(120), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
@@ -299,12 +300,17 @@ class Goal(Base):
     )
 
     user: Mapped[User] = relationship(back_populates="goals")
-    metric: Mapped[Metric] = relationship(back_populates="goals")
+    metric: Mapped[Metric | None] = relationship(back_populates="goals")
     widgets: Mapped[list[DashboardWidget]] = relationship(back_populates="goal")
     exception_dates: Mapped[list[GoalExceptionDate]] = relationship(
         back_populates="goal",
         cascade="all, delete-orphan",
         order_by="GoalExceptionDate.exception_date",
+    )
+    checklist_items: Mapped[list[GoalChecklistItem]] = relationship(
+        back_populates="goal",
+        cascade="all, delete-orphan",
+        order_by=lambda: (GoalChecklistItem.display_order, GoalChecklistItem.created_at),
     )
 
 
@@ -328,6 +334,28 @@ class GoalExceptionDate(Base):
     )
 
     goal: Mapped[Goal] = relationship(back_populates="exception_dates")
+
+
+class GoalChecklistItem(Base):
+    __tablename__ = "goal_checklist_items"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    goal_id: Mapped[str] = mapped_column(ForeignKey("goals.id", ondelete="CASCADE"), nullable=False)
+    title: Mapped[str] = mapped_column(String(160), nullable=False)
+    display_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    goal: Mapped[Goal] = relationship(back_populates="checklist_items")
 
 
 class Dashboard(Base):

@@ -146,6 +146,13 @@ Expected rule options:
 
 Evaluate completion from explicit final status and optional subtasks.
 
+Current implemented slice:
+
+- checklist goals can store ordered subtasks directly on the goal
+- progress is derived from completed checklist items as a percent of total items
+- completion history can be graphed from checklist item completion timestamps
+- failure risk can be compared against target-date time progress for checklist goals the same way it is for other target-date goal patterns
+
 ### Rolling-window allowance
 
 Evaluate recent behavior over the last `N` days or occurrences and compute a compliance score.

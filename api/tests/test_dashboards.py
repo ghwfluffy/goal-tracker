@@ -588,3 +588,65 @@ def test_goal_time_completion_uses_profile_timezone_across_goals_and_dashboards(
     )
     assert widget_response.status_code == 201
     assert widget_response.json()["time_completion_percent"] == 25.0
+
+
+def test_checklist_goal_widgets_include_checkboxes_and_progress_series(client: TestClient) -> None:
+    bootstrap_admin(client)
+
+    goal_response = client.post(
+        "/api/v1/goals",
+        json={
+            "goal_type": "checklist",
+            "title": "Clean house",
+            "start_date": "2026-04-11",
+            "target_date": "2026-04-20",
+            "checklist_items": [
+                {"title": "Mop floors"},
+                {"title": "Do laundry"},
+            ],
+        },
+    )
+    assert goal_response.status_code == 201
+    goal_payload = goal_response.json()
+    goal_id = goal_payload["id"]
+    first_item_id = goal_payload["checklist_items"][0]["id"]
+
+    toggle_response = client.patch(
+        f"/api/v1/goals/{goal_id}/checklist-items/{first_item_id}",
+        json={"completed": True},
+    )
+    assert toggle_response.status_code == 200
+
+    dashboard_response = client.post("/api/v1/dashboards", json={"name": "Home"})
+    assert dashboard_response.status_code == 201
+    dashboard_id = dashboard_response.json()["id"]
+
+    checklist_widget_response = client.post(
+        f"/api/v1/dashboards/{dashboard_id}/widgets",
+        json={
+            "title": "House checklist",
+            "widget_type": "goal_checklist",
+            "goal_id": goal_id,
+        },
+    )
+    assert checklist_widget_response.status_code == 201
+    checklist_widget = checklist_widget_response.json()
+    assert checklist_widget["goal"]["goal_type"] == "checklist"
+    assert checklist_widget["goal"]["metric"] is None
+    assert checklist_widget["goal"]["checklist_completed_count"] == 1
+    assert checklist_widget["goal"]["checklist_total_count"] == 2
+    assert checklist_widget["current_progress_percent"] == 50.0
+    assert checklist_widget["widget_type"] == "goal_checklist"
+
+    progress_widget_response = client.post(
+        f"/api/v1/dashboards/{dashboard_id}/widgets",
+        json={
+            "title": "House progress",
+            "widget_type": "goal_progress",
+            "goal_id": goal_id,
+        },
+    )
+    assert progress_widget_response.status_code == 201
+    progress_widget = progress_widget_response.json()
+    assert [point["progress_percent"] for point in progress_widget["series"]] == [0.0, 50.0]
+    assert progress_widget["failure_risk_percent"] is not None

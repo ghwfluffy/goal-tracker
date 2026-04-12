@@ -15,6 +15,7 @@ import { useDashboardsStore } from "../stores/dashboards";
 import { useGoalsStore } from "../stores/goals";
 import { useMetricsStore } from "../stores/metrics";
 import { useShareLinksStore } from "../stores/shareLinks";
+import DashboardChecklistWidget from "./DashboardChecklistWidget.vue";
 import DashboardWidgetChart from "./DashboardWidgetChart.vue";
 import MobileDashboardWidgetContent from "./MobileDashboardWidgetContent.vue";
 
@@ -150,6 +151,7 @@ const widgetTypeOptions = [
   { label: "Metric history", value: "metric_history" },
   { label: "Days since", value: "days_since" },
   { label: "Goal progress", value: "goal_progress" },
+  { label: "Goal checklist", value: "goal_checklist" },
   { label: "Goal success percent", value: "goal_success_percent" },
   { label: "Goal completion percent", value: "goal_completion_percent" },
   { label: "Goal failure risk", value: "goal_failure_risk" },
@@ -174,6 +176,13 @@ const availableWidgetMetrics = computed(() => {
     return activeMetrics.value.filter((metric) => metric.metric_type === "date");
   }
   return activeMetrics.value;
+});
+
+const availableWidgetGoals = computed(() => {
+  if (widgetTypeInput.value === "goal_checklist") {
+    return activeGoals.value.filter((goal) => goal.goal_type === "checklist");
+  }
+  return activeGoals.value;
 });
 
 const columnWidth = computed(() => {
@@ -347,7 +356,7 @@ function openCreateWidgetDialog(): void {
   widgetTitleInput.value = "";
   widgetTypeInput.value = "metric_summary";
   widgetMetricIdInput.value = availableWidgetMetrics.value[0]?.id ?? "";
-  widgetGoalIdInput.value = activeGoals.value[0]?.id ?? "";
+  widgetGoalIdInput.value = availableWidgetGoals.value[0]?.id ?? "";
   widgetRollingWindowDaysInput.value = "30";
   widgetForecastAlgorithmInput.value = "simple";
   widgetDialogVisible.value = true;
@@ -370,7 +379,7 @@ const selectedWidgetGoal = computed(() => {
   if (widgetUsesMetric.value) {
     return null;
   }
-  return activeGoals.value.find((goal) => goal.id === widgetGoalIdInput.value) ?? null;
+  return availableWidgetGoals.value.find((goal) => goal.id === widgetGoalIdInput.value) ?? null;
 });
 
 const widgetUsesGoalTimeline = computed(() => {
@@ -380,6 +389,8 @@ const widgetUsesGoalTimeline = computed(() => {
 const widgetSupportsForecast = computed(() => {
   return (
     widgetTypeInput.value === "goal_progress" &&
+    selectedWidgetGoal.value?.metric !== null &&
+    selectedWidgetGoal.value?.metric !== undefined &&
     selectedWidgetGoal.value?.metric.metric_type === "number" &&
     selectedWidgetGoal.value?.target_value_number !== null
   );
@@ -700,7 +711,7 @@ watch(
       widgetMetricIdInput.value = availableWidgetMetrics.value[0]?.id ?? "";
     }
     if (!widgetUsesMetric.value && widgetGoalIdInput.value === "") {
-      widgetGoalIdInput.value = activeGoals.value[0]?.id ?? "";
+      widgetGoalIdInput.value = availableWidgetGoals.value[0]?.id ?? "";
     }
     if (!widgetSupportsForecast.value) {
       widgetForecastAlgorithmInput.value = "simple";
@@ -723,9 +734,9 @@ watch(
 watch(
   () => goalsStore.goals,
   () => {
-    const goalIds = new Set(activeGoals.value.map((goal) => goal.id));
+    const goalIds = new Set(availableWidgetGoals.value.map((goal) => goal.id));
     if (!goalIds.has(widgetGoalIdInput.value)) {
-      widgetGoalIdInput.value = activeGoals.value[0]?.id ?? "";
+      widgetGoalIdInput.value = availableWidgetGoals.value[0]?.id ?? "";
     }
   },
   { deep: true, immediate: true },
@@ -968,7 +979,8 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <DashboardWidgetChart :widget="widget" />
+          <DashboardChecklistWidget v-if="widget.widget_type === 'goal_checklist'" :widget="widget" />
+          <DashboardWidgetChart v-else :widget="widget" />
 
           <div v-if="editMode" class="widget-layout-meta">
             {{ layoutModeLabel }}: {{ getWidgetLayout(widget).grid_w }} x {{ getWidgetLayout(widget).grid_h }}
@@ -1090,7 +1102,7 @@ onBeforeUnmount(() => {
             <span class="label">Goal</span>
             <Dropdown
               v-model="widgetGoalIdInput"
-              :options="activeGoals.map((goal) => ({ label: goal.title, value: goal.id }))"
+              :options="availableWidgetGoals.map((goal) => ({ label: goal.title, value: goal.id }))"
               option-label="label"
               option-value="value"
               class="dialog-control"

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -256,6 +256,13 @@ def test_due_number_metric_notification_can_be_completed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     bootstrap_admin(client)
+    scheduled_at = datetime.now(UTC).replace(second=0, microsecond=0) + timedelta(minutes=1)
+    created_at = scheduled_at - timedelta(minutes=1)
+
+    monkeypatch.setattr(
+        "app.services.metrics.utcnow",
+        lambda: created_at,
+    )
 
     create_response = client.post(
         "/api/v1/metrics",
@@ -263,7 +270,7 @@ def test_due_number_metric_notification_can_be_completed(
             "name": "Weight",
             "metric_type": "number",
             "decimal_places": 1,
-            "reminder_time_1": "23:59",
+            "reminder_time_1": scheduled_at.strftime("%H:%M"),
         },
     )
     assert create_response.status_code == 201
@@ -271,7 +278,7 @@ def test_due_number_metric_notification_can_be_completed(
 
     monkeypatch.setattr(
         "app.services.notifications.utcnow",
-        lambda: datetime(2026, 4, 12, 23, 59, tzinfo=UTC),
+        lambda: scheduled_at,
     )
 
     notification_list_response = client.get("/api/v1/notifications?timezone=UTC")
@@ -285,7 +292,7 @@ def test_due_number_metric_notification_can_be_completed(
         f"/api/v1/notifications/{notification_id}/complete",
         json={
             "number_value": 244.4,
-            "recorded_at": "2026-04-12T23:59:00Z",
+            "recorded_at": scheduled_at.isoformat().replace("+00:00", "Z"),
             "timezone": "UTC",
         },
     )
@@ -305,20 +312,27 @@ def test_due_date_metric_notification_can_be_skipped(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     bootstrap_admin(client)
+    scheduled_at = datetime.now(UTC).replace(second=0, microsecond=0) + timedelta(minutes=1)
+    created_at = scheduled_at - timedelta(minutes=1)
+
+    monkeypatch.setattr(
+        "app.services.metrics.utcnow",
+        lambda: created_at,
+    )
 
     create_response = client.post(
         "/api/v1/metrics",
         json={
             "name": "Cardio Date",
             "metric_type": "date",
-            "reminder_time_1": "23:59",
+            "reminder_time_1": scheduled_at.strftime("%H:%M"),
         },
     )
     assert create_response.status_code == 201
 
     monkeypatch.setattr(
         "app.services.notifications.utcnow",
-        lambda: datetime(2026, 4, 12, 23, 59, tzinfo=UTC),
+        lambda: scheduled_at,
     )
 
     notification_list_response = client.get("/api/v1/notifications?timezone=UTC")
@@ -693,6 +707,100 @@ def test_number_metric_goal_includes_progress_and_failure_risk(client: TestClien
     assert payload["time_progress_percent"] is not None
     assert payload["failure_risk_percent"] is not None
     assert payload["target_met"] is False
+
+
+def test_checklist_goal_can_be_created_and_items_toggled(client: TestClient) -> None:
+    bootstrap_admin(client)
+
+    goal_response = client.post(
+        "/api/v1/goals",
+        json={
+            "goal_type": "checklist",
+            "title": "Clean house",
+            "start_date": "2026-04-11",
+            "target_date": "2026-04-20",
+            "checklist_items": [
+                {"title": "Mop floors"},
+                {"title": "Do laundry"},
+            ],
+        },
+    )
+    assert goal_response.status_code == 201
+    payload = goal_response.json()
+    assert payload["goal_type"] == "checklist"
+    assert payload["metric"] is None
+    assert payload["checklist_total_count"] == 2
+    assert payload["checklist_completed_count"] == 0
+    assert payload["current_progress_percent"] == 0.0
+    assert payload["target_met"] is False
+
+    first_item_id = payload["checklist_items"][0]["id"]
+    toggle_response = client.patch(
+        f"/api/v1/goals/{payload['id']}/checklist-items/{first_item_id}",
+        json={"completed": True},
+    )
+    assert toggle_response.status_code == 200
+    toggled_payload = toggle_response.json()
+    assert toggled_payload["checklist_completed_count"] == 1
+    assert toggled_payload["current_progress_percent"] == 50.0
+    assert toggled_payload["checklist_items"][0]["is_completed"] is True
+    assert toggled_payload["failure_risk_percent"] is not None
+
+    clear_response = client.patch(
+        f"/api/v1/goals/{payload['id']}/checklist-items/{first_item_id}",
+        json={"completed": False},
+    )
+    assert clear_response.status_code == 200
+    cleared_payload = clear_response.json()
+    assert cleared_payload["checklist_completed_count"] == 0
+    assert cleared_payload["current_progress_percent"] == 0.0
+    assert cleared_payload["checklist_items"][0]["is_completed"] is False
+
+
+def test_checklist_goal_updates_preserve_completed_items_by_id(client: TestClient) -> None:
+    bootstrap_admin(client)
+
+    goal_response = client.post(
+        "/api/v1/goals",
+        json={
+            "goal_type": "checklist",
+            "title": "Weekend reset",
+            "start_date": "2026-04-11",
+            "checklist_items": [
+                {"title": "Wash dishes"},
+                {"title": "Fold clothes"},
+            ],
+        },
+    )
+    assert goal_response.status_code == 201
+    payload = goal_response.json()
+    first_item_id = payload["checklist_items"][0]["id"]
+
+    toggle_response = client.patch(
+        f"/api/v1/goals/{payload['id']}/checklist-items/{first_item_id}",
+        json={"completed": True},
+    )
+    assert toggle_response.status_code == 200
+
+    update_response = client.patch(
+        f"/api/v1/goals/{payload['id']}",
+        json={
+            "checklist_items": [
+                {"id": first_item_id, "title": "Wash dishes and sink"},
+                {"title": "Vacuum rug"},
+            ],
+            "target_date": "2026-04-14",
+        },
+    )
+    assert update_response.status_code == 200
+    updated_payload = update_response.json()
+    assert [item["title"] for item in updated_payload["checklist_items"]] == [
+        "Wash dishes and sink",
+        "Vacuum rug",
+    ]
+    assert updated_payload["checklist_items"][0]["is_completed"] is True
+    assert updated_payload["current_progress_percent"] == 50.0
+    assert updated_payload["target_date"] == "2026-04-14"
 
 
 def test_goals_and_metrics_are_scoped_to_current_user(client: TestClient) -> None:

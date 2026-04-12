@@ -14,6 +14,8 @@ import { useGoalsStore } from "../../stores/goals";
 import { useMetricsStore } from "../../stores/metrics";
 import ManagementToolbar from "./ManagementToolbar.vue";
 
+type GoalType = "metric" | "checklist";
+
 const emit = defineEmits<{
   openMetricEntry: [metricId: string];
   openMetricHistory: [metricId: string];
@@ -30,6 +32,7 @@ const goalEditId = ref("");
 const viewMode = ref<"table" | "cards">("table");
 const { showSuccess } = useAppToast();
 
+const goalTypeInput = ref<GoalType>("metric");
 const goalTitleInput = ref("");
 const goalDescriptionInput = ref("");
 const goalStartDateInput = ref(new Date().toISOString().slice(0, 10));
@@ -38,6 +41,8 @@ const goalTargetNumberValueInput = ref("");
 const goalSuccessThresholdPercentInput = ref("100");
 const goalExceptionDateInput = ref("");
 const goalExceptionDates = ref<string[]>([]);
+const goalChecklistItemInput = ref("");
+const goalChecklistItems = ref<Array<{ id?: string | null; title: string }>>([]);
 const goalUseNewMetric = ref(false);
 const goalMetricIdInput = ref("");
 const goalNewMetricNameInput = ref("");
@@ -61,9 +66,19 @@ const selectedGoalMenuGoal = computed(() => {
   return goalsStore.goals.find((goal) => goal.id === activeGoalMenuId.value) ?? null;
 });
 
-const goalMetricType = computed(() => {
+const goalIsChecklist = computed(() => {
   if (goalDialogMode.value === "edit") {
-    return editingGoal.value?.metric.metric_type ?? "number";
+    return editingGoal.value?.goal_type === "checklist";
+  }
+  return goalTypeInput.value === "checklist";
+});
+
+const goalMetricType = computed(() => {
+  if (goalIsChecklist.value) {
+    return null;
+  }
+  if (goalDialogMode.value === "edit") {
+    return editingGoal.value?.metric?.metric_type ?? "number";
   }
   if (goalUseNewMetric.value) {
     return goalNewMetricTypeInput.value;
@@ -73,8 +88,11 @@ const goalMetricType = computed(() => {
 });
 
 const goalMetricDecimalPlaces = computed(() => {
+  if (goalIsChecklist.value) {
+    return 0;
+  }
   if (goalDialogMode.value === "edit") {
-    return editingGoal.value?.metric.decimal_places ?? 0;
+    return editingGoal.value?.metric?.decimal_places ?? 0;
   }
   if (goalUseNewMetric.value) {
     return parseDecimalPlaces(goalNewMetricDecimalPlacesInput.value);
@@ -88,22 +106,30 @@ const goalRowMenuItems = computed<MenuItem[]>(() => {
     return [];
   }
 
-  return [
+  const items: MenuItem[] = [
     {
       icon: "pi pi-pencil",
       label: "Edit",
       command: () => openEditDialog(goal),
     },
-    {
-      icon: "pi pi-plus-circle",
-      label: "Add metric update",
-      command: () => emit("openMetricEntry", goal.metric.id),
-    },
-    {
-      icon: "pi pi-chart-line",
-      label: "View metric history",
-      command: () => emit("openMetricHistory", goal.metric.id),
-    },
+  ];
+
+  if (goal.metric !== null) {
+    items.push(
+      {
+        icon: "pi pi-plus-circle",
+        label: "Add metric update",
+        command: () => emit("openMetricEntry", goal.metric!.id),
+      },
+      {
+        icon: "pi pi-chart-line",
+        label: "View metric history",
+        command: () => emit("openMetricHistory", goal.metric!.id),
+      },
+    );
+  }
+
+  items.push(
     goal.is_archived
       ? {
           icon: "pi pi-refresh",
@@ -119,10 +145,13 @@ const goalRowMenuItems = computed<MenuItem[]>(() => {
             void setGoalArchived(goal.id, true);
           },
         },
-  ];
+  );
+
+  return items;
 });
 
 function resetGoalForm(): void {
+  goalTypeInput.value = "metric";
   goalTitleInput.value = "";
   goalDescriptionInput.value = "";
   goalStartDateInput.value = new Date().toISOString().slice(0, 10);
@@ -131,6 +160,8 @@ function resetGoalForm(): void {
   goalSuccessThresholdPercentInput.value = "100";
   goalExceptionDateInput.value = "";
   goalExceptionDates.value = [];
+  goalChecklistItemInput.value = "";
+  goalChecklistItems.value = [];
   goalUseNewMetric.value = false;
   goalMetricIdInput.value = activeMetrics.value[0]?.id ?? "";
   goalNewMetricNameInput.value = "";
@@ -151,6 +182,7 @@ function openCreateDialog(): void {
 function openEditDialog(goal: (typeof goalsStore.goals)[number]): void {
   goalDialogMode.value = "edit";
   goalEditId.value = goal.id;
+  goalTypeInput.value = goal.goal_type;
   goalTitleInput.value = goal.title;
   goalDescriptionInput.value = goal.description ?? "";
   goalStartDateInput.value = goal.start_date;
@@ -161,12 +193,14 @@ function openEditDialog(goal: (typeof goalsStore.goals)[number]): void {
     goal.success_threshold_percent === null ? "100" : String(goal.success_threshold_percent);
   goalExceptionDateInput.value = "";
   goalExceptionDates.value = [...goal.exception_dates];
+  goalChecklistItemInput.value = "";
+  goalChecklistItems.value = goal.checklist_items.map((item) => ({ id: item.id, title: item.title }));
   goalUseNewMetric.value = false;
-  goalMetricIdInput.value = goal.metric.id;
+  goalMetricIdInput.value = goal.metric?.id ?? "";
   goalNewMetricNameInput.value = "";
-  goalNewMetricTypeInput.value = goal.metric.metric_type;
-  goalNewMetricDecimalPlacesInput.value = String(goal.metric.decimal_places ?? 0);
-  goalNewMetricUnitLabelInput.value = goal.metric.unit_label ?? "";
+  goalNewMetricTypeInput.value = goal.metric?.metric_type ?? "number";
+  goalNewMetricDecimalPlacesInput.value = String(goal.metric?.decimal_places ?? 0);
+  goalNewMetricUnitLabelInput.value = goal.metric?.unit_label ?? "";
   goalNewMetricInitialNumberValueInput.value = "";
   goalNewMetricInitialDateValueInput.value = "";
   goalDialogVisible.value = true;
@@ -187,17 +221,34 @@ function removeGoalExceptionDate(value: string): void {
   goalExceptionDates.value = goalExceptionDates.value.filter((candidate) => candidate !== value);
 }
 
+function addChecklistItem(): void {
+  const title = goalChecklistItemInput.value.trim();
+  if (title === "") {
+    return;
+  }
+  goalChecklistItems.value = [...goalChecklistItems.value, { title }];
+  goalChecklistItemInput.value = "";
+}
+
+function removeChecklistItem(index: number): void {
+  goalChecklistItems.value = goalChecklistItems.value.filter((_, itemIndex) => itemIndex !== index);
+}
+
 function toggleGoalRowMenu(event: Event, goalId: string): void {
   activeGoalMenuId.value = goalId;
   goalRowMenu.value?.toggle(event);
 }
 
 function isDateGoal(goal: (typeof goalsStore.goals)[number]): boolean {
-  return goal.metric.metric_type === "date";
+  return goal.metric?.metric_type === "date";
 }
 
 function formatGoalTargetSummary(goal: (typeof goalsStore.goals)[number]): string {
-  if (goal.metric.metric_type === "number" && goal.target_value_number !== null) {
+  if (goal.goal_type === "checklist") {
+    const itemLabel = goal.checklist_total_count === 1 ? "item" : "items";
+    return `${goal.checklist_total_count} ${itemLabel}`;
+  }
+  if (goal.metric?.metric_type === "number" && goal.target_value_number !== null) {
     return `${goal.target_value_number.toFixed(goal.metric.decimal_places ?? 0)}${
       goal.metric.unit_label !== null ? ` ${goal.metric.unit_label}` : ""
     }`;
@@ -210,7 +261,10 @@ function formatGoalTargetSummary(goal: (typeof goalsStore.goals)[number]): strin
 
 function formatGoalCurrentProgressSummary(goal: (typeof goalsStore.goals)[number]): string {
   if (goal.current_progress_percent === null) {
-    return "No progress yet";
+    return goal.goal_type === "checklist" ? "0 done" : "No progress yet";
+  }
+  if (goal.goal_type === "checklist") {
+    return `${goal.checklist_completed_count}/${goal.checklist_total_count} done (${goal.current_progress_percent}%)`;
   }
   if (isDateGoal(goal) && goal.target_met !== null) {
     return `${goal.current_progress_percent}% (${goal.target_met ? "on target" : "below target"})`;
@@ -218,8 +272,21 @@ function formatGoalCurrentProgressSummary(goal: (typeof goalsStore.goals)[number
   return `${goal.current_progress_percent}%`;
 }
 
+function formatGoalSubjectSummary(goal: (typeof goalsStore.goals)[number]): string {
+  if (goal.goal_type === "checklist") {
+    return "Checklist";
+  }
+  if (goal.metric === null) {
+    return "No metric";
+  }
+  return `${goal.metric.name} (${goal.metric.metric_type})`;
+}
+
 function formatGoalLatestMetricSummary(goal: (typeof goalsStore.goals)[number]): string {
-  if (goal.metric.latest_entry === null) {
+  if (goal.goal_type === "checklist") {
+    return `${goal.checklist_completed_count}/${goal.checklist_total_count} completed`;
+  }
+  if (goal.metric?.latest_entry === null || goal.metric === null) {
     return "No metric yet";
   }
 
@@ -245,36 +312,48 @@ function goalStatusTagSeverity(goal: (typeof goalsStore.goals)[number]): "succes
 }
 
 async function submitGoalForm(): Promise<void> {
+  const isChecklistGoal = goalIsChecklist.value;
   if (goalDialogMode.value === "create") {
     const created = await goalsStore.createGoal({
+      checklist_items: isChecklistGoal ? goalChecklistItems.value : [],
       description: goalDescriptionInput.value.trim() === "" ? null : goalDescriptionInput.value,
-      metric_id: goalUseNewMetric.value ? null : goalMetricIdInput.value || null,
-      new_metric: goalUseNewMetric.value
-        ? {
-            decimal_places:
-              goalNewMetricTypeInput.value === "number"
-                ? parseDecimalPlaces(goalNewMetricDecimalPlacesInput.value)
-                : null,
-            initial_date_value:
-              goalNewMetricTypeInput.value === "date" ? goalNewMetricInitialDateValueInput.value || null : null,
-            initial_number_value:
-              goalNewMetricTypeInput.value === "number"
-                ? parseOptionalNumber(goalNewMetricInitialNumberValueInput.value)
-                : null,
-            metric_type: goalNewMetricTypeInput.value,
-            name: goalNewMetricNameInput.value,
-            unit_label:
-              goalNewMetricUnitLabelInput.value.trim() === "" ? null : goalNewMetricUnitLabelInput.value,
-          }
-        : null,
-      exception_dates: goalMetricType.value === "date" ? goalExceptionDates.value : [],
+      exception_dates: !isChecklistGoal && goalMetricType.value === "date" ? goalExceptionDates.value : [],
+      goal_type: isChecklistGoal ? "checklist" : "metric",
+      metric_id: !isChecklistGoal && !goalUseNewMetric.value ? goalMetricIdInput.value || null : null,
+      new_metric:
+        !isChecklistGoal && goalUseNewMetric.value
+          ? {
+              decimal_places:
+                goalNewMetricTypeInput.value === "number"
+                  ? parseDecimalPlaces(goalNewMetricDecimalPlacesInput.value)
+                  : null,
+              initial_date_value:
+                goalNewMetricTypeInput.value === "date"
+                  ? goalNewMetricInitialDateValueInput.value || null
+                  : null,
+              initial_number_value:
+                goalNewMetricTypeInput.value === "number"
+                  ? parseOptionalNumber(goalNewMetricInitialNumberValueInput.value)
+                  : null,
+              metric_type: goalNewMetricTypeInput.value,
+              name: goalNewMetricNameInput.value,
+              unit_label:
+                goalNewMetricUnitLabelInput.value.trim() === ""
+                  ? null
+                  : goalNewMetricUnitLabelInput.value,
+            }
+          : null,
       start_date: goalStartDateInput.value,
       success_threshold_percent:
-        goalMetricType.value === "date" ? parseOptionalNumber(goalSuccessThresholdPercentInput.value) : null,
+        !isChecklistGoal && goalMetricType.value === "date"
+          ? parseOptionalNumber(goalSuccessThresholdPercentInput.value)
+          : null,
       target_date: goalTargetDateInput.value || null,
       target_value_date: null,
       target_value_number:
-        goalMetricType.value === "number" ? parseOptionalNumber(goalTargetNumberValueInput.value) : null,
+        !isChecklistGoal && goalMetricType.value === "number"
+          ? parseOptionalNumber(goalTargetNumberValueInput.value)
+          : null,
       title: goalTitleInput.value,
     });
 
@@ -285,7 +364,9 @@ async function submitGoalForm(): Promise<void> {
     showSuccess("Goal created.", "Goals");
     goalDialogVisible.value = false;
     resetGoalForm();
-    await metricsStore.loadMetrics();
+    if (!isChecklistGoal) {
+      await metricsStore.loadMetrics();
+    }
     return;
   }
 
@@ -294,15 +375,20 @@ async function submitGoalForm(): Promise<void> {
   }
 
   const updated = await goalsStore.updateGoalDetails(editingGoal.value.id, {
+    checklist_items: isChecklistGoal ? goalChecklistItems.value : undefined,
     description: goalDescriptionInput.value.trim() === "" ? null : goalDescriptionInput.value,
-    exception_dates: goalMetricType.value === "date" ? goalExceptionDates.value : [],
+    exception_dates: !isChecklistGoal && goalMetricType.value === "date" ? goalExceptionDates.value : [],
     start_date: goalStartDateInput.value,
     success_threshold_percent:
-      goalMetricType.value === "date" ? parseOptionalNumber(goalSuccessThresholdPercentInput.value) : null,
+      !isChecklistGoal && goalMetricType.value === "date"
+        ? parseOptionalNumber(goalSuccessThresholdPercentInput.value)
+        : null,
     target_date: goalTargetDateInput.value || null,
     target_value_date: null,
     target_value_number:
-      goalMetricType.value === "number" ? parseOptionalNumber(goalTargetNumberValueInput.value) : null,
+      !isChecklistGoal && goalMetricType.value === "number"
+        ? parseOptionalNumber(goalTargetNumberValueInput.value)
+        : null,
     title: goalTitleInput.value,
   });
   if (!updated) {
@@ -334,7 +420,7 @@ function toggleIncludeArchived(): void {
     <ManagementToolbar
       v-model:viewMode="viewMode"
       title="Manage goals"
-      description="Goals use the same management pattern as other backend records: table first, cards when you want a looser browse view."
+      description="Goals can be metric-driven targets or simple checklists with a target date, and both can be used on dashboards."
       primary-action-label="Add goal"
       :primary-action-loading="goalsStore.submissionState === 'submitting'"
       @add="openCreateDialog"
@@ -353,11 +439,7 @@ function toggleIncludeArchived(): void {
     </ManagementToolbar>
 
     <div v-if="goalsStore.viewState === 'loading'" class="panel-card loading">
-      <ProgressSpinner
-        strokeWidth="5"
-        style="width: 2rem; height: 2rem"
-        animationDuration=".8s"
-      />
+      <ProgressSpinner strokeWidth="5" style="width: 2rem; height: 2rem" animationDuration=".8s" />
       <span>Loading goals.</span>
     </div>
 
@@ -372,7 +454,7 @@ function toggleIncludeArchived(): void {
             <th>Title</th>
             <th>Progress</th>
             <th>Target</th>
-            <th class="mobile-hide-column">Metric</th>
+            <th class="mobile-hide-column">Subject</th>
             <th class="mobile-hide-column">Start</th>
             <th class="mobile-hide-column">Failure risk</th>
             <th class="mobile-hide-column">Status</th>
@@ -395,7 +477,7 @@ function toggleIncludeArchived(): void {
                 </span>
               </div>
             </td>
-            <td class="mobile-hide-column">{{ goal.metric.name }} ({{ goal.metric.metric_type }})</td>
+            <td class="mobile-hide-column">{{ formatGoalSubjectSummary(goal) }}</td>
             <td class="mobile-hide-column">{{ goal.start_date }}</td>
             <td class="mobile-hide-column">
               {{ goal.failure_risk_percent === null ? "n/a" : `${goal.failure_risk_percent}%` }}
@@ -438,8 +520,8 @@ function toggleIncludeArchived(): void {
 
         <div class="goal-meta-grid">
           <div class="history-row">
-            <strong>Metric</strong>
-            <span>{{ goal.metric.name }} ({{ goal.metric.metric_type }})</span>
+            <strong>Subject</strong>
+            <span>{{ formatGoalSubjectSummary(goal) }}</span>
           </div>
           <div class="history-row">
             <strong>Start</strong>
@@ -467,11 +549,23 @@ function toggleIncludeArchived(): void {
           </div>
           <div class="history-row" v-if="goal.exception_dates.length > 0">
             <strong>Exception dates</strong>
-            <span>{{ goal.exception_dates.join(', ') }}</span>
+            <span>{{ goal.exception_dates.join(", ") }}</span>
           </div>
           <div class="history-row">
-            <strong>Latest metric</strong>
+            <strong>{{ goal.goal_type === "checklist" ? "Checklist" : "Latest metric" }}</strong>
             <span>{{ formatGoalLatestMetricSummary(goal) }}</span>
+          </div>
+        </div>
+
+        <div v-if="goal.goal_type === 'checklist' && goal.checklist_items.length > 0" class="goal-checklist-preview">
+          <div
+            v-for="item in goal.checklist_items"
+            :key="item.id"
+            class="goal-checklist-preview-item"
+            :class="{ completed: item.is_completed }"
+          >
+            <i :class="item.is_completed ? 'pi pi-check-square' : 'pi pi-square'" />
+            <span>{{ item.title }}</span>
           </div>
         </div>
       </article>
@@ -491,14 +585,27 @@ function toggleIncludeArchived(): void {
           <div class="section-heading-text">
             <h3>{{ goalDialogMode === "create" ? "Create a goal" : "Edit goal" }}</h3>
             <p v-if="goalDialogMode === 'create'">
-              Goals reference a metric and define the time window or target you care about.
+              Use a metric goal for measured targets or a checklist goal for task-based work like cleaning the house.
             </p>
             <p v-else>
-              Update the goal details here. The linked metric stays the same after creation.
+              Update the goal details here. Goal type and any linked metric stay fixed after creation.
             </p>
           </div>
 
           <div class="form-stack">
+            <template v-if="goalDialogMode === 'create'">
+              <label class="field">
+                <span class="label">Goal type</span>
+                <select v-model="goalTypeInput" class="native-file-input">
+                  <option value="metric">Metric goal</option>
+                  <option value="checklist">Checklist goal</option>
+                </select>
+              </label>
+            </template>
+            <div v-else class="widget-dialog-note">
+              Type: {{ editingGoal?.goal_type === "checklist" ? "Checklist goal" : "Metric goal" }}
+            </div>
+
             <label class="field">
               <span class="label">Goal title</span>
               <InputText v-model="goalTitleInput" />
@@ -509,78 +616,98 @@ function toggleIncludeArchived(): void {
               <textarea v-model="goalDescriptionInput" class="native-textarea" rows="3" />
             </label>
 
-            <template v-if="goalDialogMode === 'create'">
-              <label class="checkbox-row">
-                <Checkbox v-model="goalUseNewMetric" binary input-id="goal-use-new-metric" />
-                <span>Create a new metric as part of this goal</span>
-              </label>
-
-              <template v-if="goalUseNewMetric">
-                <label class="field">
-                  <span class="label">Name</span>
-                  <InputText v-model="goalNewMetricNameInput" />
+            <template v-if="!goalIsChecklist">
+              <template v-if="goalDialogMode === 'create'">
+                <label class="checkbox-row">
+                  <input v-model="goalUseNewMetric" type="checkbox" />
+                  <span>Create a new metric as part of this goal</span>
                 </label>
 
-                <label class="field">
-                  <span class="label">New metric type</span>
-                  <select v-model="goalNewMetricTypeInput" class="native-file-input">
-                    <option value="number">Number</option>
-                    <option value="date">Date</option>
-                  </select>
-                </label>
+                <template v-if="goalUseNewMetric">
+                  <label class="field">
+                    <span class="label">Name</span>
+                    <InputText v-model="goalNewMetricNameInput" />
+                  </label>
 
-                <label v-if="goalNewMetricTypeInput === 'number'" class="field">
-                  <span class="label">Decimal places</span>
-                  <input
-                    v-model="goalNewMetricDecimalPlacesInput"
-                    class="native-file-input"
-                    type="number"
-                    min="0"
-                    max="6"
-                    step="1"
-                  />
-                </label>
+                  <label class="field">
+                    <span class="label">New metric type</span>
+                    <select v-model="goalNewMetricTypeInput" class="native-file-input">
+                      <option value="number">Number</option>
+                      <option value="date">Date</option>
+                    </select>
+                  </label>
 
-                <label class="field">
-                  <span class="label">Unit label</span>
-                  <InputText
-                    v-model="goalNewMetricUnitLabelInput"
-                    placeholder="Optional, like lbs"
-                  />
-                </label>
+                  <label v-if="goalNewMetricTypeInput === 'number'" class="field">
+                    <span class="label">Decimal places</span>
+                    <input
+                      v-model="goalNewMetricDecimalPlacesInput"
+                      class="native-file-input"
+                      type="number"
+                      min="0"
+                      max="6"
+                      step="1"
+                    />
+                  </label>
 
-                <label v-if="goalNewMetricTypeInput === 'number'" class="field">
-                  <span class="label">Initial metric value</span>
-                  <input
-                    v-model="goalNewMetricInitialNumberValueInput"
-                    class="native-file-input"
-                    type="number"
-                    :step="numberInputStep(parseDecimalPlaces(goalNewMetricDecimalPlacesInput))"
-                  />
-                </label>
+                  <label class="field">
+                    <span class="label">Unit label</span>
+                    <InputText v-model="goalNewMetricUnitLabelInput" placeholder="Optional, like lbs" />
+                  </label>
+
+                  <label v-if="goalNewMetricTypeInput === 'number'" class="field">
+                    <span class="label">Initial metric value</span>
+                    <input
+                      v-model="goalNewMetricInitialNumberValueInput"
+                      class="native-file-input"
+                      type="number"
+                      :step="numberInputStep(parseDecimalPlaces(goalNewMetricDecimalPlacesInput))"
+                    />
+                  </label>
+
+                  <label v-else class="field">
+                    <span class="label">Initial metric value</span>
+                    <input v-model="goalNewMetricInitialDateValueInput" class="native-file-input" type="date" />
+                  </label>
+                </template>
 
                 <label v-else class="field">
-                  <span class="label">Initial metric value</span>
-                  <input
-                    v-model="goalNewMetricInitialDateValueInput"
-                    class="native-file-input"
-                    type="date"
-                  />
+                  <span class="label">Metric</span>
+                  <select v-model="goalMetricIdInput" class="native-file-input">
+                    <option v-for="metric in activeMetrics" :key="metric.id" :value="metric.id">
+                      {{ metric.name }} ({{ metric.metric_type }})
+                    </option>
+                  </select>
                 </label>
               </template>
-
-              <label v-else class="field">
-                <span class="label">Metric</span>
-                <select v-model="goalMetricIdInput" class="native-file-input">
-                  <option v-for="metric in activeMetrics" :key="metric.id" :value="metric.id">
-                    {{ metric.name }} ({{ metric.metric_type }})
-                  </option>
-                </select>
-              </label>
+              <div v-else class="widget-dialog-note">
+                Metric: {{ editingGoal?.metric?.name }} ({{ editingGoal?.metric?.metric_type }})
+              </div>
             </template>
-            <div v-else class="widget-dialog-note">
-              Metric: {{ editingGoal?.metric.name }} ({{ editingGoal?.metric.metric_type }})
-            </div>
+
+            <template v-else>
+              <div class="field">
+                <span class="label">Checklist items</span>
+                <div class="checklist-item-row">
+                  <InputText v-model="goalChecklistItemInput" placeholder="Add an item like Mop floors" />
+                  <Button label="Add item" icon="pi pi-plus" severity="secondary" type="button" @click="addChecklistItem" />
+                </div>
+                <div v-if="goalChecklistItems.length > 0" class="checklist-item-list">
+                  <button
+                    v-for="(item, index) in goalChecklistItems"
+                    :key="item.id ?? `${item.title}-${index}`"
+                    class="exception-date-chip checklist-item-chip"
+                    type="button"
+                    @click="removeChecklistItem(index)"
+                  >
+                    <span>{{ item.title }}</span>
+                    <i class="pi pi-times" />
+                  </button>
+                </div>
+                <div v-else class="widget-dialog-note">
+                  Checklist goals need at least one item.
+                </div>
+              </div>
+            </template>
 
             <div class="date-grid">
               <label class="field">
@@ -594,17 +721,17 @@ function toggleIncludeArchived(): void {
               </label>
             </div>
 
-            <label v-if="goalMetricType === 'number'" class="field">
+            <label v-if="!goalIsChecklist && goalMetricType === 'number'" class="field">
               <span class="label">Target metric value</span>
-                <input
-                  v-model="goalTargetNumberValueInput"
-                  class="native-file-input"
-                  type="number"
-                  :step="numberInputStep(goalMetricDecimalPlaces)"
-                />
-              </label>
+              <input
+                v-model="goalTargetNumberValueInput"
+                class="native-file-input"
+                type="number"
+                :step="numberInputStep(goalMetricDecimalPlaces)"
+              />
+            </label>
 
-            <template v-else>
+            <template v-if="!goalIsChecklist && goalMetricType === 'date'">
               <label class="field">
                 <span class="label">Success threshold percent</span>
                 <input
@@ -620,18 +747,8 @@ function toggleIncludeArchived(): void {
               <div class="field">
                 <span class="label">Exception dates</span>
                 <div class="exception-date-row">
-                  <input
-                    v-model="goalExceptionDateInput"
-                    class="native-file-input"
-                    type="date"
-                  />
-                  <Button
-                    label="Add"
-                    icon="pi pi-plus"
-                    severity="secondary"
-                    type="button"
-                    @click="addGoalExceptionDate"
-                  />
+                  <input v-model="goalExceptionDateInput" class="native-file-input" type="date" />
+                  <Button label="Add" icon="pi pi-plus" severity="secondary" type="button" @click="addGoalExceptionDate" />
                 </div>
                 <div v-if="goalExceptionDates.length > 0" class="exception-date-list">
                   <button
@@ -650,12 +767,7 @@ function toggleIncludeArchived(): void {
           </div>
 
           <div class="dialog-actions-row">
-            <Button
-              label="Cancel"
-              severity="secondary"
-              text
-              @click="goalDialogVisible = false"
-            />
+            <Button label="Cancel" severity="secondary" text @click="goalDialogVisible = false" />
             <Button
               :label="goalDialogMode === 'create' ? 'Create goal' : 'Save goal'"
               icon="pi pi-flag"
@@ -677,16 +789,26 @@ function toggleIncludeArchived(): void {
   gap: 1rem;
 }
 
+.checkbox-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  color: var(--color-text-subtle);
+}
+
+.checklist-item-row,
 .exception-date-row {
   display: flex;
   align-items: center;
   gap: 0.75rem;
 }
 
+.checklist-item-row :deep(.p-inputtext),
 .exception-date-row .native-file-input {
   flex: 1 1 auto;
 }
 
+.checklist-item-list,
 .exception-date-list {
   display: flex;
   flex-wrap: wrap;
@@ -711,11 +833,32 @@ function toggleIncludeArchived(): void {
   color: var(--color-text-danger);
 }
 
+.goal-checklist-preview {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.goal-checklist-preview-item {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  color: var(--color-text-subtle);
+}
+
+.goal-checklist-preview-item.completed {
+  color: var(--color-text-faint);
+}
+
+.goal-checklist-preview-item.completed span {
+  text-decoration: line-through;
+}
+
 @media (max-width: 720px) {
   .toolbar-filter-button :deep(.p-button-label) {
     display: none;
   }
 
+  .checklist-item-row,
   .exception-date-row {
     align-items: flex-start;
     flex-direction: column;

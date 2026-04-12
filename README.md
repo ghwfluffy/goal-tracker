@@ -55,7 +55,9 @@ What already exists:
 - a notification bell for due metric updates, including stacked missed reminders and quick submit/skip flows
 - goal archiving, with archived goals hidden by default
 - goal creation and editing backed by existing or newly created metrics, including date-based compliance goals with exception dates and success thresholds
+- checklist-style goals with ordered subtasks, target dates, and dashboard-ready completion progress
 - saved dashboards with reusable metric and goal widgets, including target-date goal charts with selectable forecast algorithms plus completion, success, and risk widgets, plus separate mobile and desktop widget layouts
+- saved dashboards with interactive checklist widgets for quick checkbox-style completion from the dashboard itself
 - user-managed share links for widgets and dashboards, including Discord/Teams-friendly widget preview images and read-only shared dashboard pages
 - a default dashboard per user, plus an edit mode for arranging widgets
 - browser-local timestamp rendering with profile-configured day-boundary timezone semantics

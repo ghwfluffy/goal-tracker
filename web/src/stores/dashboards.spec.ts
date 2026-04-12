@@ -31,6 +31,7 @@ function buildWidget(overrides: Partial<DashboardWidgetSummary> = {}): Dashboard
   return {
     current_progress_percent: null,
     display_order: 1,
+    failure_risk_percent: null,
     forecast_algorithm: null,
     goal: null,
     grid_h: 3,
@@ -46,6 +47,7 @@ function buildWidget(overrides: Partial<DashboardWidgetSummary> = {}): Dashboard
     rolling_window_days: 30,
     series: [],
     target_met: null,
+    time_completion_percent: null,
     title: "Weight trend",
     widget_type: "metric_history",
     ...overrides,
