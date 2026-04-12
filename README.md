@@ -56,6 +56,7 @@ What already exists:
 - goal archiving, with archived goals hidden by default
 - goal creation and editing backed by existing or newly created metrics, including date-based compliance goals with exception dates and success thresholds
 - saved dashboards with reusable metric and goal widgets, including target-date goal charts with selectable forecast algorithms plus completion, success, and risk widgets, plus separate mobile and desktop widget layouts
+- user-managed share links for widgets and dashboards, including Discord/Teams-friendly widget preview images and read-only shared dashboard pages
 - a default dashboard per user, plus an edit mode for arranging widgets
 - browser-local timestamp rendering with profile-configured day-boundary timezone semantics
 - a backend API foundation
@@ -64,8 +65,7 @@ What already exists:
 
 What comes next:
 
- - reminders, richer forecast explanations, and richer progress views
-- sharing dashboards and widgets outside the app
+- reminders, richer forecast explanations, and richer progress views
 
 ## Why This Project Exists
 

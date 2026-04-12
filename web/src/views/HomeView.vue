@@ -20,6 +20,7 @@ import { useDashboardsStore } from "../stores/dashboards";
 import { useGoalsStore } from "../stores/goals";
 import { useMetricsStore } from "../stores/metrics";
 import { useNotificationsStore } from "../stores/notifications";
+import { useShareLinksStore } from "../stores/shareLinks";
 import { useStatusStore } from "../stores/status";
 
 const authStore = useAuthStore();
@@ -28,6 +29,7 @@ const dashboardsStore = useDashboardsStore();
 const goalsStore = useGoalsStore();
 const metricsStore = useMetricsStore();
 const notificationsStore = useNotificationsStore();
+const shareLinksStore = useShareLinksStore();
 const statusStore = useStatusStore();
 
 const activeTabIndex = ref(0);
@@ -36,6 +38,7 @@ const passwordVisible = ref(false);
 const deleteAccountVisible = ref(false);
 const backupsVisible = ref(false);
 const invitationCodesVisible = ref(false);
+const sharedLinksVisible = ref(false);
 const notificationsVisible = ref(false);
 const notificationEntryVisible = ref(false);
 const notificationEntryId = ref("");
@@ -88,6 +91,7 @@ watchToastError(() => dashboardsStore.errorMessage, "Dashboards");
 watchToastError(() => goalsStore.errorMessage, "Goals");
 watchToastError(() => metricsStore.errorMessage, "Metrics");
 watchToastError(() => notificationsStore.errorMessage, "Notifications");
+watchToastError(() => shareLinksStore.errorMessage, "Shared links");
 
 async function loadTrackingData(): Promise<void> {
   await Promise.all([
@@ -148,11 +152,13 @@ watch(
     metricsStore.reset();
     goalsStore.reset();
     notificationsStore.reset();
+    shareLinksStore.reset();
     profileVisible.value = false;
     passwordVisible.value = false;
     deleteAccountVisible.value = false;
     backupsVisible.value = false;
     invitationCodesVisible.value = false;
+    sharedLinksVisible.value = false;
     notificationsVisible.value = false;
     notificationEntryVisible.value = false;
     metricHistoryVisible.value = false;
@@ -243,6 +249,7 @@ onBeforeUnmount(() => {
         @open-notifications="notificationsVisible = true"
         @open-profile="profileVisible = true"
         @open-password="passwordVisible = true"
+        @open-shared-links="sharedLinksVisible = true"
         @open-backups="backupsVisible = true"
         @open-invitation-codes="invitationCodesVisible = true"
         @delete-account="deleteAccountVisible = true"
@@ -293,6 +300,7 @@ onBeforeUnmount(() => {
         v-model:deleteAccountVisible="deleteAccountVisible"
         v-model:backupsVisible="backupsVisible"
         v-model:invitationCodesVisible="invitationCodesVisible"
+        v-model:sharedLinksVisible="sharedLinksVisible"
       />
     </section>
 

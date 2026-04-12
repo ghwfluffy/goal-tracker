@@ -64,6 +64,11 @@ Phase 0 now includes backend auth/session foundation endpoints:
 25. `GET /api/v1/admin/backups`
 26. `POST /api/v1/admin/backups`
 27. `POST /api/v1/admin/backups/{backup_id}/restore`
+28. `GET /api/v1/share-links`
+29. `POST /api/v1/share-links`
+30. `DELETE /api/v1/share-links/{share_link_id}`
+31. `GET /api/v1/shares/{token}`
+32. `GET /api/v1/shares/{token}/preview.png`
 
 The first account bootstrap path creates the initial administrator and starts a server-side session using an HTTP-only cookie. After that, new users register through admin-managed invitation codes and can opt into example-data seeding at signup. Example-data accounts now receive a deterministic starter set of metrics, richer historical entries, goals, and a dashboard that exercises multiple widget types, and the app tracks applied seed revisions so existing flagged example accounts can be upgraded when new seed content is added. The example-data upgrader runs both at FastAPI startup and during auth flows so restarting the server is enough to backfill newly introduced seed revisions. Passwords are stored with bcrypt-backed hashes. Each user also has a persisted IANA timezone setting for day-boundary semantics, defaulting to `America/Chicago`, while timestamps remain stored in UTC.
 
@@ -83,7 +88,8 @@ The frontend home page now consumes that auth foundation and can:
 12. create dashboards, choose a default dashboard, and manage dashboard widgets in a dedicated edit mode, including target-date goal charts plus completion, success, and risk widgets
 13. surface due metric reminders through a notification bell with quick entry and skip actions
 14. render widget timestamps in the browser timezone while showing the saved profile timezone used for day-boundary logic
-15. let administrators review backup inventory, create an on-demand backup, and restore a selected backup after explicit confirmation
+15. create, copy, review, and revoke share links for dashboards and widgets from the profile menu, including cache-busting copy links and OG/Twitter widget preview images
+16. let administrators review backup inventory, create an on-demand backup, and restore a selected backup after explicit confirmation
 
 ## Local Run Commands
 

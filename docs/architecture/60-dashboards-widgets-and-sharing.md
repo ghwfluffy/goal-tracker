@@ -33,6 +33,9 @@ Current implemented slice:
 - metric-history, metric-summary, goal-progress, and goal-summary widgets
 - date-metric `days since` summary widgets for streak-style dashboards
 - goal-progress series derived from metric history rather than stored separately
+- user-managed share links for dashboards and widgets
+- read-only public dashboard pages
+- server-rendered widget preview PNGs for Discord, Teams, and other OG/Twitter consumers
 
 Important design direction:
 
@@ -76,33 +79,35 @@ Current time semantics:
 
 Sharing is an explicit, user-managed feature.
 
-Current planned design:
+Current implemented direction:
 
-- share links use UUID-style public identifiers
-- each link targets a widget or dashboard
-- each link may expire at a chosen time or never expire
+- share links use random token-based public identifiers
+- each link targets either one widget or one dashboard
+- links default to a 30-day expiration and can instead be created with no expiration
 - links can be revoked independently without deleting the widget or dashboard
+- copied links append an ignored `?t=` timestamp query purely to force fresh preview fetches
 
 ## Share-Link Management
 
 Users should be able to manage share links from profile/settings UI.
 
-Expected capabilities:
+Current implemented capabilities:
 
 - create a link
-- choose expiration
-- view active links
+- choose the default 30-day expiration or unlimited expiration
+- view active, expired, and revoked links
 - revoke a link
 - inspect target and creation details
+- quick-copy a fresh cache-busted URL
 
 ## Rendering Direction
 
-The product should eventually support image-style sharing for widgets.
+Current implemented direction:
 
-Current direction:
-
-- render widgets in-app first
-- support server-side PNG rendering in a later phase
+- public share pages are server-rendered so preview crawlers do not depend on client-side JavaScript
+- shared widget pages render the actual widget graph inline from the saved series rather than showing only the OG preview image
+- widgets have a simplified server-side PNG renderer focused on the main value and uncluttered trend context
+- dashboards render as read-only public HTML rather than editable app chrome
 - avoid exposing internal database identifiers in public URLs
 - support widgets that can explain why a scheduled day is excluded, such as exception dates rendered as `skipped`
 
@@ -116,4 +121,4 @@ Defaults:
 
 ## Open Design Item
 
-The detailed rules for whether full dashboards should be shareable in the same way as individual widgets still need final approval when the schema and permissions model are proposed.
+Share-link access auditing is still only partially addressed. Public access works through explicit tokens, but detailed access-event capture is still a later improvement.

@@ -22,6 +22,7 @@ const emit = defineEmits<{
   openInvitationCodes: [];
   openPassword: [];
   openProfile: [];
+  openSharedLinks: [];
 }>();
 
 const profileMenu = ref<InstanceType<typeof Menu> | null>(null);
@@ -62,6 +63,11 @@ const profileMenuItems = computed<MenuItem[]>(() => {
       icon: "pi pi-key",
       label: "Change password",
       command: () => emit("openPassword"),
+    },
+    {
+      icon: "pi pi-share-alt",
+      label: "Shared links",
+      command: () => emit("openSharedLinks"),
     },
   ];
 

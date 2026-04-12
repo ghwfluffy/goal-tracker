@@ -9,10 +9,12 @@ import Tag from "primevue/tag";
 
 import type { DashboardForecastAlgorithm, DashboardWidgetSummary } from "../lib/api";
 import { isDashboardMobileCompactWidget } from "../lib/dashboardWidgets";
+import { copyCacheBustedShareLink } from "../lib/shareLinks";
 import { useAppToast } from "../lib/toast";
 import { useDashboardsStore } from "../stores/dashboards";
 import { useGoalsStore } from "../stores/goals";
 import { useMetricsStore } from "../stores/metrics";
+import { useShareLinksStore } from "../stores/shareLinks";
 import DashboardWidgetChart from "./DashboardWidgetChart.vue";
 import MobileDashboardWidgetContent from "./MobileDashboardWidgetContent.vue";
 
@@ -43,7 +45,8 @@ const MOBILE_COMPACT_WIDGET_HEIGHT = 1;
 const dashboardsStore = useDashboardsStore();
 const metricsStore = useMetricsStore();
 const goalsStore = useGoalsStore();
-const { showSuccess } = useAppToast();
+const shareLinksStore = useShareLinksStore();
+const { showError, showSuccess } = useAppToast();
 
 const selectedDashboardId = ref("");
 const editMode = ref(false);
@@ -434,6 +437,56 @@ async function removeWidget(widgetId: string): Promise<void> {
   }
 }
 
+async function copyDashboardShareLink(): Promise<void> {
+  if (selectedDashboard.value === null) {
+    return;
+  }
+
+  const createdShareLink = await shareLinksStore.createShareLink({
+    target_id: selectedDashboard.value.id,
+    target_type: "dashboard",
+  });
+  if (createdShareLink === null) {
+    return;
+  }
+
+  try {
+    await copyCacheBustedShareLink(
+      createdShareLink.public_path,
+      window.location.origin,
+    );
+    showSuccess("Dashboard share link copied.", "Shared links");
+  } catch {
+    showError(
+      "Dashboard share link was created, but clipboard access failed.",
+      "Shared links",
+    );
+  }
+}
+
+async function copyWidgetShareLink(widget: DashboardWidgetSummary): Promise<void> {
+  const createdShareLink = await shareLinksStore.createShareLink({
+    target_id: widget.id,
+    target_type: "widget",
+  });
+  if (createdShareLink === null) {
+    return;
+  }
+
+  try {
+    await copyCacheBustedShareLink(
+      createdShareLink.public_path,
+      window.location.origin,
+    );
+    showSuccess("Widget share link copied.", "Shared links");
+  } catch {
+    showError(
+      "Widget share link was created, but clipboard access failed.",
+      "Shared links",
+    );
+  }
+}
+
 function layoutsOverlap(first: WidgetLayoutDraft, second: WidgetLayoutDraft): boolean {
   return !(
     first.grid_x + first.grid_w <= second.grid_x ||
@@ -733,6 +786,14 @@ onBeforeUnmount(() => {
             />
             <Button
               v-if="selectedDashboard !== null"
+              label="Share dashboard"
+              icon="pi pi-share-alt"
+              severity="secondary"
+              outlined
+              @click="void copyDashboardShareLink()"
+            />
+            <Button
+              v-if="selectedDashboard !== null"
               label="Edit info"
               icon="pi pi-file-edit"
               severity="secondary"
@@ -800,6 +861,14 @@ onBeforeUnmount(() => {
             <h4>{{ widget.title }}</h4>
 
             <div class="widget-card-actions">
+              <button
+                class="widget-icon-button"
+                type="button"
+                title="Share widget"
+                @click="void copyWidgetShareLink(widget)"
+              >
+                <i class="pi pi-share-alt" />
+              </button>
               <template v-if="editMode">
                 <button
                   class="widget-icon-button"
@@ -861,6 +930,14 @@ onBeforeUnmount(() => {
             <h4>{{ widget.title }}</h4>
 
             <div class="widget-card-actions">
+              <button
+                class="widget-icon-button"
+                type="button"
+                title="Share widget"
+                @click="void copyWidgetShareLink(widget)"
+              >
+                <i class="pi pi-share-alt" />
+              </button>
               <button
                 v-if="editMode"
                 class="widget-icon-button widget-move-handle"

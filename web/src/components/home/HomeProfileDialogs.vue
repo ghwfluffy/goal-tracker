@@ -10,11 +10,14 @@ import ProgressSpinner from "primevue/progressspinner";
 import Tag from "primevue/tag";
 
 import { DEFAULT_PROFILE_TIMEZONE } from "../../lib/time";
+import { buildShareLinkUrl, copyCacheBustedShareLink } from "../../lib/shareLinks";
 import { formatDateTime } from "../../lib/tracking";
 import { useAppToast, watchToastError } from "../../lib/toast";
 import { useAuthStore } from "../../stores/auth";
 import { useBackupsStore } from "../../stores/backups";
+import { useDashboardsStore } from "../../stores/dashboards";
 import { useInvitationCodesStore } from "../../stores/invitationCodes";
+import { useShareLinksStore } from "../../stores/shareLinks";
 
 const props = defineProps<{
   backupsVisible: boolean;
@@ -22,6 +25,7 @@ const props = defineProps<{
   invitationCodesVisible: boolean;
   passwordVisible: boolean;
   profileVisible: boolean;
+  sharedLinksVisible: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -30,11 +34,14 @@ const emit = defineEmits<{
   "update:invitationCodesVisible": [value: boolean];
   "update:passwordVisible": [value: boolean];
   "update:profileVisible": [value: boolean];
+  "update:sharedLinksVisible": [value: boolean];
 }>();
 
 const authStore = useAuthStore();
 const backupsStore = useBackupsStore();
+const dashboardsStore = useDashboardsStore();
 const invitationCodesStore = useInvitationCodesStore();
+const shareLinksStore = useShareLinksStore();
 const { showError, showSuccess } = useAppToast();
 
 const displayNameInput = ref("");
@@ -45,6 +52,9 @@ const deletePasswordInput = ref("");
 const createInvitationCodeExpiresAt = ref("");
 const invitationCodeExpiresAtInputs = ref<Record<string, string>>({});
 const restoreConfirmationInputs = ref<Record<string, string>>({});
+const shareTargetTypeInput = ref<"widget" | "dashboard">("widget");
+const shareTargetIdInput = ref("");
+const shareExpirationInput = ref<"30_days" | "never">("30_days");
 
 const timezoneOptions = computed(() => {
   const intlWithSupportedValues = Intl as typeof Intl & {
@@ -98,6 +108,38 @@ const avatarUrl = computed(() => {
   }
 
   return `/api/v1/users/me/avatar?v=${encodeURIComponent(version)}`;
+});
+
+const shareTargetTypeOptions = [
+  { label: "Widget", value: "widget" },
+  { label: "Dashboard", value: "dashboard" },
+] as const;
+
+const shareExpirationOptions = [
+  { label: "30 days", value: "30_days" },
+  { label: "Never expires", value: "never" },
+] as const;
+
+const widgetShareTargetOptions = computed(() => {
+  return dashboardsStore.dashboards.flatMap((dashboard) =>
+    dashboard.widgets.map((widget) => ({
+      label: `${widget.title} • ${dashboard.name}`,
+      value: widget.id,
+    })),
+  );
+});
+
+const dashboardShareTargetOptions = computed(() => {
+  return dashboardsStore.dashboards.map((dashboard) => ({
+    label: dashboard.name,
+    value: dashboard.id,
+  }));
+});
+
+const activeShareTargetOptions = computed(() => {
+  return shareTargetTypeInput.value === "widget"
+    ? widgetShareTargetOptions.value
+    : dashboardShareTargetOptions.value;
 });
 
 function syncProfileInputs(): void {
@@ -161,6 +203,40 @@ function syncRestoreInputs(): void {
   );
 }
 
+function syncShareTargetInput(): void {
+  const widgetOptions = widgetShareTargetOptions.value;
+  const dashboardOptions = dashboardShareTargetOptions.value;
+  const selectedOptions =
+    shareTargetTypeInput.value === "widget" ? widgetOptions : dashboardOptions;
+
+  if (selectedOptions.length === 0) {
+    if (shareTargetTypeInput.value === "widget" && dashboardOptions.length > 0) {
+      shareTargetTypeInput.value = "dashboard";
+      shareTargetIdInput.value = dashboardOptions[0]?.value ?? "";
+      return;
+    }
+    if (shareTargetTypeInput.value === "dashboard" && widgetOptions.length > 0) {
+      shareTargetTypeInput.value = "widget";
+      shareTargetIdInput.value = widgetOptions[0]?.value ?? "";
+      return;
+    }
+    shareTargetIdInput.value = "";
+    return;
+  }
+
+  const optionValues = new Set(selectedOptions.map((option) => option.value));
+  if (!optionValues.has(shareTargetIdInput.value)) {
+    shareTargetIdInput.value = selectedOptions[0]?.value ?? "";
+  }
+}
+
+function resetShareLinkInputs(): void {
+  shareTargetTypeInput.value =
+    widgetShareTargetOptions.value.length > 0 ? "widget" : "dashboard";
+  shareExpirationInput.value = "30_days";
+  syncShareTargetInput();
+}
+
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) {
     return `${bytes} B`;
@@ -176,6 +252,55 @@ function formatFileSize(bytes: number): string {
 
 watchToastError(() => invitationCodesStore.errorMessage, "Invitation codes");
 watchToastError(() => backupsStore.errorMessage, "Backups");
+
+function shareLinkStatusLabel(status: "active" | "expired" | "revoked"): string {
+  if (status === "expired") {
+    return "Expired";
+  }
+  if (status === "revoked") {
+    return "Revoked";
+  }
+  return "Active";
+}
+
+function shareLinkStatusSeverity(
+  status: "active" | "expired" | "revoked",
+): "success" | "warning" | "danger" {
+  if (status === "expired") {
+    return "warning";
+  }
+  if (status === "revoked") {
+    return "danger";
+  }
+  return "success";
+}
+
+function shareLinkTargetLabel(shareLink: {
+  target_type: "dashboard" | "widget";
+  widget_type: string | null;
+}): string {
+  if (shareLink.target_type === "dashboard") {
+    return "Dashboard";
+  }
+
+  const widgetTypeLabel = shareLink.widget_type
+    ?.replaceAll("_", " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+  return widgetTypeLabel === undefined ? "Widget" : `Widget • ${widgetTypeLabel}`;
+}
+
+function shareLinkExpirationText(shareLink: {
+  expires_at: string | null;
+  revoked_at: string | null;
+}): string {
+  if (shareLink.revoked_at !== null) {
+    return `Revoked ${formatDateTime(shareLink.revoked_at)}`;
+  }
+  if (shareLink.expires_at === null) {
+    return "Never expires";
+  }
+  return `Expires ${formatDateTime(shareLink.expires_at)}`;
+}
 
 async function saveProfile(): Promise<void> {
   const updated = await authStore.updateProfile({
@@ -300,6 +425,60 @@ async function restoreBackupEntry(backupId: string): Promise<void> {
   }
 }
 
+async function createNewShareLink(): Promise<void> {
+  if (shareTargetIdInput.value === "") {
+    showError("Choose a dashboard or widget to share.", "Shared links");
+    return;
+  }
+
+  const createdShareLink = await shareLinksStore.createShareLink({
+    expires_in_days: shareExpirationInput.value === "never" ? null : 30,
+    target_id: shareTargetIdInput.value,
+    target_type: shareTargetTypeInput.value,
+  });
+
+  if (createdShareLink === null) {
+    return;
+  }
+
+  try {
+    await copyCacheBustedShareLink(
+      createdShareLink.public_path,
+      window.location.origin,
+    );
+    showSuccess("Share link copied.", "Shared links");
+  } catch {
+    showError(
+      "Share link was created, but clipboard access failed. Use the copy button below.",
+      "Shared links",
+    );
+  }
+}
+
+async function copyShareLinkEntry(publicPath: string): Promise<void> {
+  try {
+    await copyCacheBustedShareLink(publicPath, window.location.origin);
+    showSuccess("Share link copied.", "Shared links");
+  } catch {
+    showError("Clipboard access failed.", "Shared links");
+  }
+}
+
+function openShareLinkEntry(publicPath: string): void {
+  window.open(
+    buildShareLinkUrl(publicPath, window.location.origin),
+    "_blank",
+    "noopener,noreferrer",
+  );
+}
+
+async function revokeShareLinkEntry(shareLinkId: string): Promise<void> {
+  const revoked = await shareLinksStore.revokeShareLink(shareLinkId);
+  if (revoked) {
+    showSuccess("Share link revoked.", "Shared links");
+  }
+}
+
 watch(
   () => authStore.currentUser,
   () => {
@@ -327,6 +506,21 @@ watch(
 );
 
 watch(
+  () => dashboardsStore.dashboards,
+  () => {
+    syncShareTargetInput();
+  },
+  { deep: true, immediate: true },
+);
+
+watch(
+  () => shareTargetTypeInput.value,
+  () => {
+    syncShareTargetInput();
+  },
+);
+
+watch(
   () => props.invitationCodesVisible,
   async (visible) => {
     if (!visible) {
@@ -346,6 +540,17 @@ watch(
     }
     await backupsStore.loadBackupInventory();
     syncRestoreInputs();
+  },
+);
+
+watch(
+  () => props.sharedLinksVisible,
+  async (visible) => {
+    if (!visible) {
+      return;
+    }
+    resetShareLinkInputs();
+    await shareLinksStore.loadShareLinks();
   },
 );
 </script>
@@ -663,6 +868,159 @@ watch(
   </Dialog>
 
   <Dialog
+    :visible="sharedLinksVisible"
+    modal
+    header="Shared links"
+    class="profile-dialog"
+    :style="{ width: 'min(64rem, 96vw)' }"
+    @update:visible="(value) => emit('update:sharedLinksVisible', value)"
+  >
+    <div class="dialog-stack">
+      <div
+        v-if="shareLinksStore.viewState === 'loading'"
+        class="loading shell-center"
+      >
+        <ProgressSpinner
+          strokeWidth="5"
+          style="width: 2.5rem; height: 2.5rem"
+          animationDuration=".8s"
+        />
+        <span>Loading share links.</span>
+      </div>
+
+      <template v-else>
+        <section class="dialog-section">
+          <div class="section-heading-text">
+            <h3>Create share link</h3>
+            <p>
+              Links default to 30 days, can be unlimited, and copy with an
+              unused `?t=` cache-busting suffix for fresh embeds.
+            </p>
+          </div>
+
+          <div class="invitation-code-actions shared-link-create-grid">
+            <label class="field">
+              <span class="label">Target type</span>
+              <Dropdown
+                v-model="shareTargetTypeInput"
+                :options="shareTargetTypeOptions"
+                option-label="label"
+                option-value="value"
+                class="full-width-dropdown"
+              />
+            </label>
+
+            <label class="field">
+              <span class="label">Target</span>
+              <Dropdown
+                v-model="shareTargetIdInput"
+                :options="activeShareTargetOptions"
+                option-label="label"
+                option-value="value"
+                class="full-width-dropdown"
+                placeholder="Choose a target"
+                :disabled="activeShareTargetOptions.length === 0"
+              />
+            </label>
+
+            <label class="field">
+              <span class="label">Expiration</span>
+              <Dropdown
+                v-model="shareExpirationInput"
+                :options="shareExpirationOptions"
+                option-label="label"
+                option-value="value"
+                class="full-width-dropdown"
+              />
+            </label>
+
+            <div class="invitation-code-buttons">
+              <Button
+                label="Create and copy link"
+                icon="pi pi-copy"
+                :disabled="shareTargetIdInput === ''"
+                :loading="shareLinksStore.submissionState === 'submitting'"
+                @click="createNewShareLink"
+              />
+            </div>
+          </div>
+        </section>
+
+        <section class="dialog-section">
+          <div class="section-heading-text">
+            <h3>Managed links</h3>
+            <p>
+              Revoke links centrally here and copy fresh URLs whenever Discord,
+              Teams, or other previews need to refresh.
+            </p>
+          </div>
+
+          <div
+            v-if="shareLinksStore.shareLinks.length === 0"
+            class="panel-card empty-invitation-state"
+          >
+            <p>No share links yet.</p>
+          </div>
+
+          <article
+            v-for="shareLink in shareLinksStore.shareLinks"
+            :key="shareLink.id"
+            class="invitation-code-card"
+          >
+            <div class="invitation-code-header">
+              <div class="invitation-code-copy">
+                <p class="code-label">
+                  {{ shareLinkTargetLabel(shareLink) }}
+                </p>
+                <code>{{ shareLink.public_path }}</code>
+              </div>
+              <Tag
+                :value="shareLinkStatusLabel(shareLink.status)"
+                :severity="shareLinkStatusSeverity(shareLink.status)"
+              />
+            </div>
+
+            <div class="invitation-code-meta">
+              <span>{{ shareLink.target_name }}</span>
+              <span v-if="shareLink.dashboard_name !== null">
+                Dashboard {{ shareLink.dashboard_name }}
+              </span>
+              <span>Created {{ formatDateTime(shareLink.created_at) }}</span>
+              <span>{{ shareLinkExpirationText(shareLink) }}</span>
+            </div>
+
+            <div class="invitation-code-buttons">
+              <Button
+                label="Copy link"
+                icon="pi pi-copy"
+                severity="secondary"
+                :disabled="shareLink.status !== 'active'"
+                @click="void copyShareLinkEntry(shareLink.public_path)"
+              />
+              <Button
+                label="Open"
+                icon="pi pi-external-link"
+                severity="secondary"
+                outlined
+                :disabled="shareLink.status !== 'active'"
+                @click="openShareLinkEntry(shareLink.public_path)"
+              />
+              <Button
+                label="Revoke"
+                icon="pi pi-ban"
+                severity="danger"
+                :disabled="shareLink.status !== 'active'"
+                :loading="shareLinksStore.submissionState === 'submitting'"
+                @click="void revokeShareLinkEntry(shareLink.id)"
+              />
+            </div>
+          </article>
+        </section>
+      </template>
+    </div>
+  </Dialog>
+
+  <Dialog
     :visible="invitationCodesVisible"
     modal
     header="Invitation codes"
@@ -816,6 +1174,7 @@ watch(
 
 <style scoped>
 .invitation-code-actions,
+.shared-link-create-grid,
 .invitation-code-users,
 .invitation-code-user-list {
   display: grid;
@@ -911,6 +1270,10 @@ watch(
 
 .invitation-code-user-list {
   grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+}
+
+.shared-link-create-grid {
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
 }
 
 .invitation-code-user {

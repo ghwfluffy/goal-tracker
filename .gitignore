@@ -14,3 +14,4 @@ web/.node-deps.sha256
 api/.venv-requirements.sha256
 __pycache__/
 outfile.tmp
+backups

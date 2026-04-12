@@ -17,6 +17,7 @@ from app.main import create_app
 @pytest.fixture
 def client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
     monkeypatch.setenv("APP_ENV", "test")
+    monkeypatch.setenv("PUBLIC_URL", "http://testserver")
     monkeypatch.setenv("SESSION_KEY", "test-session-key")
     get_settings.cache_clear()
 

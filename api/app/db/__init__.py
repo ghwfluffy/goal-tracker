@@ -13,6 +13,7 @@ from app.db.models import (
     MetricEntry,
     MetricNotification,
     RestoreOperation,
+    ShareLink,
     User,
 )
 from app.db.session import get_db, get_engine, get_session_factory
@@ -32,6 +33,7 @@ __all__ = [
     "MetricEntry",
     "MetricNotification",
     "RestoreOperation",
+    "ShareLink",
     "User",
     "get_db",
     "get_engine",

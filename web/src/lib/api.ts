@@ -342,6 +342,33 @@ export interface DashboardListResponse {
   dashboards: DashboardSummary[];
 }
 
+export type ShareLinkTargetType = "dashboard" | "widget";
+export type ShareLinkStatus = "active" | "expired" | "revoked";
+
+export interface ShareLinkSummary {
+  created_at: string;
+  dashboard_name: string | null;
+  expires_at: string | null;
+  id: string;
+  preview_image_path: string;
+  public_path: string;
+  revoked_at: string | null;
+  status: ShareLinkStatus;
+  target_name: string;
+  target_type: ShareLinkTargetType;
+  widget_type: DashboardWidgetSummary["widget_type"] | null;
+}
+
+export interface ShareLinkListResponse {
+  share_links: ShareLinkSummary[];
+}
+
+export interface CreateShareLinkPayload {
+  expires_in_days?: number | null;
+  target_id: string;
+  target_type: ShareLinkTargetType;
+}
+
 export interface CreateDashboardPayload {
   description: string | null;
   make_default: boolean;
@@ -979,6 +1006,39 @@ export function deleteDashboardWidget(
 ): Promise<void> {
   return requestNoContent(
     `/dashboards/${dashboardId}/widgets/${widgetId}`,
+    {
+      method: "DELETE",
+    },
+    fetcher,
+  );
+}
+
+export function fetchShareLinks(
+  fetcher: Fetcher = fetch,
+): Promise<ShareLinkListResponse> {
+  return requestJson<ShareLinkListResponse>("/share-links", undefined, fetcher);
+}
+
+export function createShareLink(
+  payload: CreateShareLinkPayload,
+  fetcher: Fetcher = fetch,
+): Promise<ShareLinkSummary> {
+  return requestJson<ShareLinkSummary>(
+    "/share-links",
+    {
+      body: JSON.stringify(payload),
+      method: "POST",
+    },
+    fetcher,
+  );
+}
+
+export function revokeShareLink(
+  shareLinkId: string,
+  fetcher: Fetcher = fetch,
+): Promise<void> {
+  return requestNoContent(
+    `/share-links/${shareLinkId}`,
     {
       method: "DELETE",
     },

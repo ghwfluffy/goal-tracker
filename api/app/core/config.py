@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     app_env: str = "development"
     app_version: str = __version__
     api_v1_prefix: str = "/api/v1"
+    public_url: str = "http://localhost:8081"
     postgres_user: str = "ghw"
     postgres_password: str = "supersecure"
     postgres_db: str = "goals"
@@ -55,6 +56,10 @@ class Settings(BaseSettings):
             f"{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
+
+    @property
+    def public_origin(self) -> str:
+        return self.public_url.rstrip("/")
 
     @property
     def session_cookie_secure(self) -> bool:

@@ -4,6 +4,7 @@ from datetime import date, datetime, time
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     Date,
     DateTime,
     ForeignKey,
@@ -108,6 +109,11 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
         foreign_keys="DashboardWidget.user_id",
+    )
+    share_links: Mapped[list[ShareLink]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        foreign_keys="ShareLink.user_id",
     )
     backup_records: Mapped[list[BackupRecord]] = relationship(
         back_populates="created_by_user",
@@ -354,6 +360,11 @@ class Dashboard(Base):
         cascade="all, delete-orphan",
         order_by="DashboardWidget.display_order",
     )
+    share_links: Mapped[list[ShareLink]] = relationship(
+        back_populates="dashboard",
+        cascade="all, delete-orphan",
+        foreign_keys="ShareLink.dashboard_id",
+    )
 
 
 class DashboardWidget(Base):
@@ -407,6 +418,60 @@ class DashboardWidget(Base):
     dashboard: Mapped[Dashboard] = relationship(back_populates="widgets")
     metric: Mapped[Metric | None] = relationship(back_populates="widgets")
     goal: Mapped[Goal | None] = relationship(back_populates="widgets")
+    share_links: Mapped[list[ShareLink]] = relationship(
+        back_populates="widget",
+        cascade="all, delete-orphan",
+        foreign_keys="ShareLink.widget_id",
+    )
+
+
+class ShareLink(Base):
+    __tablename__ = "share_links"
+    __table_args__ = (
+        CheckConstraint(
+            "(dashboard_id IS NOT NULL AND widget_id IS NULL) "
+            "OR (dashboard_id IS NULL AND widget_id IS NOT NULL)",
+            name="ck_share_links_single_target",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    dashboard_id: Mapped[str | None] = mapped_column(
+        ForeignKey("dashboards.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    widget_id: Mapped[str | None] = mapped_column(
+        ForeignKey("dashboard_widgets.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    token: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    target_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    user: Mapped[User] = relationship(
+        back_populates="share_links",
+        foreign_keys=[user_id],
+    )
+    dashboard: Mapped[Dashboard | None] = relationship(
+        back_populates="share_links",
+        foreign_keys=[dashboard_id],
+    )
+    widget: Mapped[DashboardWidget | None] = relationship(
+        back_populates="share_links",
+        foreign_keys=[widget_id],
+    )
 
 
 class BackupRecord(Base):

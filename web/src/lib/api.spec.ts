@@ -10,6 +10,7 @@ import {
   createGoal,
   createInvitationCode,
   createMetric,
+  createShareLink,
   deleteDashboard,
   deleteDashboardWidget,
   deleteInvitationCode,
@@ -21,9 +22,11 @@ import {
   fetchGoals,
   fetchInvitationCodes,
   fetchMetrics,
+  fetchShareLinks,
   fetchStatus,
   loginWithPassword,
   registerWithInvitationCode,
+  revokeShareLink,
   restoreBackup,
   skipNotification,
   updateDashboard,
@@ -1269,5 +1272,95 @@ describe("auth api helpers", () => {
     await expect(
       deleteDashboardWidget("dashboard-1", "widget-1", fetcher),
     ).resolves.toBeUndefined();
+  });
+
+  it("supports share link helpers", async () => {
+    const fetcher = vi.fn(async (input, init) => {
+      const path = String(input);
+
+      if (path.endsWith("/share-links") && init?.method === undefined) {
+        return new Response(
+          JSON.stringify({
+            share_links: [
+              {
+                created_at: "2026-04-12T18:00:00Z",
+                dashboard_name: "Main",
+                expires_at: "2026-05-12T18:00:00Z",
+                id: "share-1",
+                preview_image_path: "/api/v1/shares/token-1/preview.png",
+                public_path: "/api/v1/shares/token-1",
+                revoked_at: null,
+                status: "active",
+                target_name: "Weight Trend",
+                target_type: "widget",
+                widget_type: "metric_history",
+              },
+            ],
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      if (path.endsWith("/share-links") && init?.method === "POST") {
+        return new Response(
+          JSON.stringify({
+            created_at: "2026-04-12T18:10:00Z",
+            dashboard_name: "Main",
+            expires_at: null,
+            id: "share-2",
+            preview_image_path: "/api/v1/shares/token-2/preview.png",
+            public_path: "/api/v1/shares/token-2",
+            revoked_at: null,
+            status: "active",
+            target_name: "Main",
+            target_type: "dashboard",
+            widget_type: null,
+          }),
+          {
+            status: 201,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      return new Response(null, { status: 204 });
+    });
+
+    await expect(fetchShareLinks(fetcher)).resolves.toEqual({
+      share_links: [
+        {
+          created_at: "2026-04-12T18:00:00Z",
+          dashboard_name: "Main",
+          expires_at: "2026-05-12T18:00:00Z",
+          id: "share-1",
+          preview_image_path: "/api/v1/shares/token-1/preview.png",
+          public_path: "/api/v1/shares/token-1",
+          revoked_at: null,
+          status: "active",
+          target_name: "Weight Trend",
+          target_type: "widget",
+          widget_type: "metric_history",
+        },
+      ],
+    });
+
+    await expect(
+      createShareLink(
+        {
+          expires_in_days: null,
+          target_id: "dashboard-1",
+          target_type: "dashboard",
+        },
+        fetcher,
+      ),
+    ).resolves.toMatchObject({
+      id: "share-2",
+      target_type: "dashboard",
+    });
+
+    await expect(revokeShareLink("share-1", fetcher)).resolves.toBeUndefined();
   });
 });
