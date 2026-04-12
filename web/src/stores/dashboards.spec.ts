@@ -31,6 +31,7 @@ function buildWidget(overrides: Partial<DashboardWidgetSummary> = {}): Dashboard
   return {
     current_progress_percent: null,
     display_order: 1,
+    forecast_algorithm: null,
     goal: null,
     grid_h: 3,
     grid_w: 6,

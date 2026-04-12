@@ -35,9 +35,15 @@ from app.services.metrics import MetricNotFoundError, get_metric_for_user
 router = APIRouter(prefix="/dashboards")
 
 MetricType = Literal["number", "date"]
+ForecastAlgorithm = Literal[
+    "simple",
+    "weighted_week_over_week",
+    "weighted_day_over_day",
+]
 WidgetType = Literal[
     "metric_history",
     "metric_summary",
+    "days_since",
     "goal_progress",
     "goal_summary",
     "goal_completion_percent",
@@ -91,6 +97,7 @@ class WidgetSummary(BaseModel):
     grid_w: int
     grid_h: int
     rolling_window_days: int | None
+    forecast_algorithm: ForecastAlgorithm | None
     metric: MetricReferenceSummary | None
     goal: GoalReferenceSummary | None
     current_progress_percent: float | None
@@ -130,6 +137,7 @@ class CreateWidgetRequest(BaseModel):
     metric_id: str | None = None
     goal_id: str | None = None
     rolling_window_days: int | None = Field(default=None, ge=1, le=3650)
+    forecast_algorithm: ForecastAlgorithm | None = None
     grid_x: int | None = Field(default=None, ge=0, le=11)
     grid_y: int | None = Field(default=None, ge=0, le=10000)
     grid_w: int | None = Field(default=None, ge=1, le=12)
@@ -137,7 +145,7 @@ class CreateWidgetRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_subject(self) -> CreateWidgetRequest:
-        is_metric_widget = self.widget_type in {"metric_history", "metric_summary"}
+        is_metric_widget = self.widget_type in {"metric_history", "metric_summary", "days_since"}
         if is_metric_widget and (self.metric_id is None or self.goal_id is not None):
             raise ValueError("Metric widgets require metric_id and cannot include goal_id.")
         if not is_metric_widget and (self.goal_id is None or self.metric_id is not None):
@@ -148,6 +156,7 @@ class CreateWidgetRequest(BaseModel):
 class UpdateWidgetRequest(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=120)
     rolling_window_days: int | None = Field(default=None, ge=1, le=3650)
+    forecast_algorithm: ForecastAlgorithm | None = None
     grid_x: int | None = Field(default=None, ge=0, le=11)
     grid_y: int | None = Field(default=None, ge=0, le=10000)
     grid_w: int | None = Field(default=None, ge=1, le=12)
@@ -244,6 +253,7 @@ def serialize_widget(widget: DashboardWidget) -> WidgetSummary:
         grid_w=widget.grid_w,
         grid_h=widget.grid_h,
         rolling_window_days=widget.rolling_window_days,
+        forecast_algorithm=cast(ForecastAlgorithm | None, widget.forecast_algorithm),
         metric=serialize_metric_reference(widget.metric) if widget.metric is not None else None,
         goal=serialize_goal_reference(widget.goal) if widget.goal is not None else None,
         current_progress_percent=(
@@ -396,6 +406,7 @@ def post_dashboard_widget(
             metric=metric,
             goal=goal,
             rolling_window_days=payload.rolling_window_days,
+            forecast_algorithm=payload.forecast_algorithm,
             grid_x=payload.grid_x,
             grid_y=payload.grid_y,
             grid_w=payload.grid_w,
@@ -444,6 +455,7 @@ def patch_dashboard_widget(
             user=user,
             title=payload.title,
             rolling_window_days=payload.rolling_window_days,
+            forecast_algorithm=payload.forecast_algorithm,
             grid_x=payload.grid_x,
             grid_y=payload.grid_y,
             grid_w=payload.grid_w,

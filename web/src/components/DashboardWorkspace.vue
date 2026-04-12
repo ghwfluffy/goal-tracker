@@ -8,7 +8,7 @@ import Message from "primevue/message";
 import ProgressSpinner from "primevue/progressspinner";
 import Tag from "primevue/tag";
 
-import type { DashboardWidgetSummary } from "../lib/api";
+import type { DashboardForecastAlgorithm, DashboardWidgetSummary } from "../lib/api";
 import { useDashboardsStore } from "../stores/dashboards";
 import { useGoalsStore } from "../stores/goals";
 import { useMetricsStore } from "../stores/metrics";
@@ -56,6 +56,7 @@ const widgetTypeInput = ref<WidgetType>("metric_summary");
 const widgetMetricIdInput = ref("");
 const widgetGoalIdInput = ref("");
 const widgetRollingWindowDaysInput = ref("30");
+const widgetForecastAlgorithmInput = ref<DashboardForecastAlgorithm>("simple");
 
 const gridHost = ref<HTMLElement | null>(null);
 const gridWidth = ref(0);
@@ -96,14 +97,32 @@ const activeMetrics = computed(() => {
 const widgetTypeOptions = [
   { label: "Metric summary", value: "metric_summary" },
   { label: "Metric history", value: "metric_history" },
+  { label: "Days since", value: "days_since" },
   { label: "Goal progress", value: "goal_progress" },
   { label: "Goal success percent", value: "goal_success_percent" },
   { label: "Goal completion percent", value: "goal_completion_percent" },
   { label: "Goal failure risk", value: "goal_failure_risk" },
 ] satisfies Array<{ label: string; value: WidgetType }>;
 
+const widgetForecastAlgorithmOptions = [
+  { label: "Simple", value: "simple" },
+  { label: "Weighted week-over-week", value: "weighted_week_over_week" },
+  { label: "Weighted day-over-day", value: "weighted_day_over_day" },
+] satisfies Array<{ label: string; value: DashboardForecastAlgorithm }>;
+
 const widgetUsesMetric = computed(() => {
-  return widgetTypeInput.value === "metric_history" || widgetTypeInput.value === "metric_summary";
+  return (
+    widgetTypeInput.value === "metric_history" ||
+    widgetTypeInput.value === "metric_summary" ||
+    widgetTypeInput.value === "days_since"
+  );
+});
+
+const availableWidgetMetrics = computed(() => {
+  if (widgetTypeInput.value === "days_since") {
+    return activeMetrics.value.filter((metric) => metric.metric_type === "date");
+  }
+  return activeMetrics.value;
 });
 
 const columnWidth = computed(() => {
@@ -281,9 +300,10 @@ function openCreateWidgetDialog(): void {
   widgetEditId.value = "";
   widgetTitleInput.value = "";
   widgetTypeInput.value = "metric_summary";
-  widgetMetricIdInput.value = activeMetrics.value[0]?.id ?? "";
+  widgetMetricIdInput.value = availableWidgetMetrics.value[0]?.id ?? "";
   widgetGoalIdInput.value = goalsStore.goals[0]?.id ?? "";
   widgetRollingWindowDaysInput.value = "30";
+  widgetForecastAlgorithmInput.value = "simple";
   widgetDialogVisible.value = true;
 }
 
@@ -297,6 +317,7 @@ function openEditWidgetDialog(widget: DashboardWidgetSummary): void {
   widgetGoalIdInput.value = widget.goal?.id ?? "";
   widgetRollingWindowDaysInput.value =
     widget.rolling_window_days === null ? "" : String(widget.rolling_window_days);
+  widgetForecastAlgorithmInput.value = widget.forecast_algorithm ?? "simple";
   widgetDialogVisible.value = true;
 }
 
@@ -311,6 +332,14 @@ const widgetUsesGoalTimeline = computed(() => {
   return !widgetUsesMetric.value && selectedWidgetGoal.value?.target_date !== null;
 });
 
+const widgetSupportsForecast = computed(() => {
+  return (
+    widgetTypeInput.value === "goal_progress" &&
+    selectedWidgetGoal.value?.metric.metric_type === "number" &&
+    selectedWidgetGoal.value?.target_value_number !== null
+  );
+});
+
 async function submitWidgetDialog(): Promise<void> {
   if (selectedDashboard.value === null) {
     return;
@@ -320,6 +349,7 @@ async function submitWidgetDialog(): Promise<void> {
   if (widgetDialogMode.value === "create") {
     const created = await dashboardsStore.createWidget(selectedDashboard.value.id, {
       goal_id: widgetUsesMetric.value ? null : widgetGoalIdInput.value || null,
+      forecast_algorithm: widgetSupportsForecast.value ? widgetForecastAlgorithmInput.value : null,
       metric_id: widgetUsesMetric.value ? widgetMetricIdInput.value || null : null,
       rolling_window_days: widgetUsesGoalTimeline.value ? null : parseRollingWindow(widgetRollingWindowDaysInput.value),
       title: widgetTitleInput.value,
@@ -334,6 +364,7 @@ async function submitWidgetDialog(): Promise<void> {
   }
 
   const updated = await dashboardsStore.updateWidget(selectedDashboard.value.id, widgetEditId.value, {
+    forecast_algorithm: widgetSupportsForecast.value ? widgetForecastAlgorithmInput.value : null,
     rolling_window_days: widgetUsesGoalTimeline.value ? null : parseRollingWindow(widgetRollingWindowDaysInput.value),
     title: widgetTitleInput.value,
   });
@@ -520,10 +551,13 @@ watch(
   () => widgetTypeInput.value,
   () => {
     if (widgetUsesMetric.value && widgetMetricIdInput.value === "") {
-      widgetMetricIdInput.value = activeMetrics.value[0]?.id ?? "";
+      widgetMetricIdInput.value = availableWidgetMetrics.value[0]?.id ?? "";
     }
     if (!widgetUsesMetric.value && widgetGoalIdInput.value === "") {
       widgetGoalIdInput.value = goalsStore.goals[0]?.id ?? "";
+    }
+    if (!widgetSupportsForecast.value) {
+      widgetForecastAlgorithmInput.value = "simple";
     }
   },
   { immediate: true },
@@ -532,9 +566,9 @@ watch(
 watch(
   () => metricsStore.metrics,
   () => {
-    const activeMetricIds = new Set(activeMetrics.value.map((metric) => metric.id));
+    const activeMetricIds = new Set(availableWidgetMetrics.value.map((metric) => metric.id));
     if (!activeMetricIds.has(widgetMetricIdInput.value)) {
-      widgetMetricIdInput.value = activeMetrics.value[0]?.id ?? "";
+      widgetMetricIdInput.value = availableWidgetMetrics.value[0]?.id ?? "";
     }
   },
   { deep: true, immediate: true },
@@ -732,21 +766,31 @@ onBeforeUnmount(() => {
       :header="dashboardDialogMode === 'create' ? 'Create dashboard' : 'Edit dashboard info'"
       :style="{ width: 'min(34rem, calc(100vw - 2rem))' }"
     >
-      <div class="dialog-form">
-        <label class="field">
+      <div class="dialog-form dashboard-dialog-form">
+        <label class="field dialog-field">
           <span class="label">Name</span>
-          <InputText v-model="dashboardNameInput" placeholder="Morning check-in" />
+          <InputText
+            v-model="dashboardNameInput"
+            class="dialog-control"
+            placeholder="Morning check-in"
+          />
         </label>
-        <label class="field">
+        <label class="field dialog-field">
           <span class="label">Description</span>
           <textarea
             v-model="dashboardDescriptionInput"
-            class="native-textarea"
+            class="native-textarea dialog-control dashboard-description-input"
             rows="4"
             placeholder="Optional summary for this dashboard"
           />
         </label>
-        <div class="dialog-actions">
+        <div class="dialog-actions dashboard-dialog-actions">
+          <Button
+            label="Cancel"
+            severity="secondary"
+            text
+            @click="dashboardDialogVisible = false"
+          />
           <Button
             :label="dashboardDialogMode === 'create' ? 'Create dashboard' : 'Save dashboard'"
             icon="pi pi-save"
@@ -786,13 +830,16 @@ onBeforeUnmount(() => {
             <span class="label">Metric</span>
             <Dropdown
               v-model="widgetMetricIdInput"
-              :options="activeMetrics.map((metric) => ({ label: `${metric.name} (${metric.metric_type})`, value: metric.id }))"
+              :options="availableWidgetMetrics.map((metric) => ({ label: `${metric.name} (${metric.metric_type})`, value: metric.id }))"
               option-label="label"
               option-value="value"
               class="dialog-control"
               placeholder="Choose a metric"
               :disabled="widgetDialogMode === 'edit'"
             />
+            <span v-if="widgetTypeInput === 'days_since'" class="field-hint">
+              Uses the latest metric date value and today in your profile timezone.
+            </span>
           </label>
 
           <label v-else class="field widget-field">
@@ -807,6 +854,26 @@ onBeforeUnmount(() => {
               :disabled="widgetDialogMode === 'edit'"
             />
           </label>
+        </div>
+
+        <label v-if="widgetSupportsForecast" class="field widget-field">
+          <span class="label">Forecast algorithm</span>
+          <Dropdown
+            v-model="widgetForecastAlgorithmInput"
+            :options="widgetForecastAlgorithmOptions"
+            option-label="label"
+            option-value="value"
+            class="dialog-control"
+          />
+          <span class="field-hint">
+            Historical data stays green, the projected now segment is blue, and the future forecast is red.
+          </span>
+        </label>
+        <div
+          v-else-if="widgetTypeInput === 'goal_progress' && !widgetUsesMetric && selectedWidgetGoal !== null"
+          class="widget-dialog-note"
+        >
+          Forecast algorithms are available on numeric goal-progress widgets with a target value.
         </div>
 
         <label v-if="!widgetUsesGoalTimeline" class="field widget-field">
@@ -995,8 +1062,20 @@ onBeforeUnmount(() => {
   gap: 1rem;
 }
 
+.dashboard-dialog-form,
 .widget-dialog-form {
   gap: 1rem;
+}
+
+.dialog-field,
+.widget-field {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.dialog-form :deep(.p-inputtext),
+.dialog-form :deep(.p-dropdown) {
+  width: 100%;
 }
 
 .field-hint,
@@ -1017,13 +1096,13 @@ onBeforeUnmount(() => {
   gap: 1rem;
 }
 
-.widget-field {
-  display: grid;
-  gap: 0.45rem;
-}
-
 .dialog-control {
   width: 100%;
+}
+
+.dashboard-description-input {
+  min-height: 7.5rem;
+  line-height: 1.5;
 }
 
 .native-number-input {
@@ -1034,6 +1113,7 @@ onBeforeUnmount(() => {
   background: #fff;
 }
 
+.dashboard-dialog-actions,
 .widget-dialog-actions {
   justify-content: space-between;
   align-items: center;
@@ -1043,6 +1123,7 @@ onBeforeUnmount(() => {
 .dialog-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 0.75rem;
 }
 
 .loading-panel,

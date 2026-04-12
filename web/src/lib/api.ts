@@ -190,10 +190,16 @@ export interface DashboardWidgetSeriesPoint {
   recorded_at: string;
 }
 
+export type DashboardForecastAlgorithm =
+  | "simple"
+  | "weighted_week_over_week"
+  | "weighted_day_over_day";
+
 export interface DashboardWidgetSummary {
   current_progress_percent: number | null;
   display_order: number;
   failure_risk_percent: number | null;
+  forecast_algorithm: DashboardForecastAlgorithm | null;
   grid_h: number;
   grid_w: number;
   grid_x: number;
@@ -209,6 +215,7 @@ export interface DashboardWidgetSummary {
   widget_type:
     | "metric_history"
     | "metric_summary"
+    | "days_since"
     | "goal_progress"
     | "goal_summary"
     | "goal_completion_percent"
@@ -241,6 +248,7 @@ export interface UpdateDashboardPayload {
 }
 
 export interface CreateDashboardWidgetPayload {
+  forecast_algorithm?: DashboardForecastAlgorithm | null;
   goal_id: string | null;
   grid_h?: number | null;
   grid_w?: number | null;
@@ -252,6 +260,7 @@ export interface CreateDashboardWidgetPayload {
   widget_type:
     | "metric_history"
     | "metric_summary"
+    | "days_since"
     | "goal_progress"
     | "goal_summary"
     | "goal_completion_percent"
@@ -260,6 +269,7 @@ export interface CreateDashboardWidgetPayload {
 }
 
 export interface UpdateDashboardWidgetPayload {
+  forecast_algorithm?: DashboardForecastAlgorithm | null;
   grid_h?: number | null;
   grid_w?: number | null;
   grid_x?: number | null;

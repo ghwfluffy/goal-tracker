@@ -22,3 +22,42 @@ body {
 a {
   color: inherit;
 }
+
+.panel-card,
+.status-card {
+  border-radius: 1.35rem;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.06);
+  background: rgba(255, 255, 255, 0.84);
+  padding: 1.4rem;
+}
+
+.field,
+.dialog-stack,
+.dialog-section,
+.form-stack,
+.list-stack {
+  display: grid;
+  gap: 1rem;
+}
+
+.label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+}
+
+.native-file-input,
+.native-textarea {
+  padding: 0.8rem 0.9rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.85rem;
+  background: #fff;
+  font: inherit;
+}
+
+.native-textarea {
+  resize: vertical;
+}

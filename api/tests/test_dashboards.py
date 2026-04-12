@@ -112,6 +112,7 @@ def test_dashboard_widgets_include_metric_and_goal_series(client: TestClient) ->
         "grid_h": 4,
     }
     assert [point["number_value"] for point in metric_widget["series"]] == [250.0, 238.0]
+    assert metric_widget["forecast_algorithm"] is None
 
     goal_widget_response = client.post(
         f"/api/v1/dashboards/{dashboard_id}/widgets",
@@ -120,6 +121,7 @@ def test_dashboard_widgets_include_metric_and_goal_series(client: TestClient) ->
             "widget_type": "goal_progress",
             "goal_id": goal_id,
             "rolling_window_days": 365,
+            "forecast_algorithm": "weighted_week_over_week",
         },
     )
     assert goal_widget_response.status_code == 201
@@ -140,6 +142,7 @@ def test_dashboard_widgets_include_metric_and_goal_series(client: TestClient) ->
     }
     assert [point["progress_percent"] for point in goal_widget["series"]] == [0.0, 40.0]
     assert goal_widget["rolling_window_days"] is None
+    assert goal_widget["forecast_algorithm"] == "weighted_week_over_week"
     assert goal_widget["time_completion_percent"] is not None
     assert goal_widget["failure_risk_percent"] is not None
 
@@ -223,6 +226,7 @@ def test_date_goal_progress_widget_uses_compliance_percent(client: TestClient) -
     goal_widget = goal_widget_response.json()
     assert goal_widget["current_progress_percent"] == 77.78
     assert goal_widget["target_met"] is False
+    assert goal_widget["forecast_algorithm"] == "simple"
     assert goal_widget["goal"]["success_threshold_percent"] == 80.0
     assert goal_widget["goal"]["exception_dates"] == ["2026-04-03"]
     assert goal_widget["series"][0]["progress_percent"] == 100.0
@@ -230,6 +234,84 @@ def test_date_goal_progress_widget_uses_compliance_percent(client: TestClient) -
     assert goal_widget["rolling_window_days"] is None
     assert goal_widget["time_completion_percent"] is not None
     assert goal_widget["failure_risk_percent"] is not None
+
+
+def test_days_since_widget_requires_date_metric(client: TestClient) -> None:
+    bootstrap_admin(client)
+
+    metric_response = client.post(
+        "/api/v1/metrics",
+        json={
+            "name": "Weight",
+            "metric_type": "number",
+            "decimal_places": 1,
+            "initial_number_value": 200.0,
+            "recorded_at": "2026-04-01T12:00:00Z",
+        },
+    )
+    assert metric_response.status_code == 201
+    metric_id = metric_response.json()["id"]
+
+    dashboard_response = client.post("/api/v1/dashboards", json={"name": "Main"})
+    assert dashboard_response.status_code == 201
+    dashboard_id = dashboard_response.json()["id"]
+
+    widget_response = client.post(
+        f"/api/v1/dashboards/{dashboard_id}/widgets",
+        json={
+            "title": "Days since weigh-in",
+            "widget_type": "days_since",
+            "metric_id": metric_id,
+        },
+    )
+    assert widget_response.status_code == 422
+    assert widget_response.json()["detail"] == "Days since widgets require a date metric."
+
+
+def test_days_since_widget_can_be_created_for_date_metric(client: TestClient) -> None:
+    bootstrap_admin(client)
+
+    metric_response = client.post(
+        "/api/v1/metrics",
+        json={
+            "name": "Last drink",
+            "metric_type": "date",
+            "initial_date_value": "2026-04-02",
+            "recorded_at": "2026-04-02T20:00:00Z",
+        },
+    )
+    assert metric_response.status_code == 201
+    metric_id = metric_response.json()["id"]
+
+    dashboard_response = client.post("/api/v1/dashboards", json={"name": "Recovery"})
+    assert dashboard_response.status_code == 201
+    dashboard_id = dashboard_response.json()["id"]
+
+    widget_response = client.post(
+        f"/api/v1/dashboards/{dashboard_id}/widgets",
+        json={
+            "title": "Days since drink",
+            "widget_type": "days_since",
+            "metric_id": metric_id,
+        },
+    )
+    assert widget_response.status_code == 201
+    widget = widget_response.json()
+    assert widget["widget_type"] == "days_since"
+    assert widget["metric"]["metric_type"] == "date"
+    assert widget["metric"]["latest_entry"]["date_value"] == "2026-04-02"
+    assert widget["series"][0]["date_value"] == "2026-04-02"
+    assert {
+        "grid_x": widget["grid_x"],
+        "grid_y": widget["grid_y"],
+        "grid_w": widget["grid_w"],
+        "grid_h": widget["grid_h"],
+    } == {
+        "grid_x": 0,
+        "grid_y": 0,
+        "grid_w": 4,
+        "grid_h": 3,
+    }
 
 
 def test_goal_percent_widgets_return_schedule_and_risk_fields(client: TestClient) -> None:
@@ -313,3 +395,4 @@ def test_goal_percent_widgets_return_schedule_and_risk_fields(client: TestClient
     assert risk_widget_response.status_code == 201
     risk_widget = risk_widget_response.json()
     assert risk_widget["failure_risk_percent"] is not None
+    assert risk_widget["forecast_algorithm"] is None

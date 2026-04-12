@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { mount } from "@vue/test-utils";
+import { createPinia, setActivePinia } from "pinia";
 import { nextTick } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -19,6 +20,7 @@ function buildGoalWidget(
     current_progress_percent: 40,
     display_order: 1,
     failure_risk_percent: 12,
+    forecast_algorithm: "simple",
     goal: {
       exception_dates: [],
       id: "goal-1",
@@ -57,6 +59,7 @@ describe("DashboardWidgetChart", () => {
   const setOptionMock = vi.fn();
   const resizeMock = vi.fn();
   const disposeMock = vi.fn();
+  let pinia: ReturnType<typeof createPinia>;
   const globalWindow = globalThis as typeof globalThis & {
     echarts?: {
       init: ReturnType<typeof vi.fn>;
@@ -64,6 +67,8 @@ describe("DashboardWidgetChart", () => {
   };
 
   beforeEach(() => {
+    pinia = createPinia();
+    setActivePinia(pinia);
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-11T17:00:00Z"));
 
@@ -90,6 +95,9 @@ describe("DashboardWidgetChart", () => {
   it("plots numeric goal progress with metric values and target forecast", async () => {
     mount(DashboardWidgetChart, {
       attachTo: document.body,
+      global: {
+        plugins: [pinia],
+      },
       props: {
         widget: buildGoalWidget({
           series: [
@@ -122,15 +130,65 @@ describe("DashboardWidgetChart", () => {
       [new Date("2026-04-01T05:00:00Z").getTime(), 250],
       [new Date("2026-04-05T12:00:00Z").getTime(), 238],
     ]);
-    expect(option.series[2]?.data.at(-1)).toEqual([
-      new Date("2026-06-01T23:59:59").getTime(),
-      220,
-    ]);
+    expect(option.series[1]?.data.at(-1)?.[0]).toBe(new Date("2026-04-11T17:00:00Z").getTime());
+    expect(option.series[1]?.data.at(-1)?.[1]).toBeCloseTo(220.64, 2);
+    expect(option.series[3]?.data.at(-1)?.[0]).toBeGreaterThan(
+      new Date("2026-04-11T17:00:00Z").getTime(),
+    );
+    expect(option.series[3]?.data.at(-1)?.[1]).toBe(220);
+  });
+
+  it("plots weighted week-over-week numeric forecasts to the projected target hit date", async () => {
+    mount(DashboardWidgetChart, {
+      attachTo: document.body,
+      global: {
+        plugins: [pinia],
+      },
+      props: {
+        widget: buildGoalWidget({
+          forecast_algorithm: "weighted_week_over_week",
+          series: [
+            {
+              date_value: null,
+              number_value: 250,
+              progress_percent: 0,
+              recorded_at: "2026-04-01T12:00:00Z",
+            },
+            {
+              date_value: null,
+              number_value: 246,
+              progress_percent: 13.33,
+              recorded_at: "2026-04-08T12:00:00Z",
+            },
+            {
+              date_value: null,
+              number_value: 241,
+              progress_percent: 30,
+              recorded_at: "2026-04-15T12:00:00Z",
+            },
+          ],
+        }),
+      },
+    });
+
+    await nextTick();
+
+    const option = setOptionMock.mock.calls[0]?.[0] as {
+      series: Array<{ data: Array<[number, number]> }>;
+    };
+
+    expect(option.series[3]?.data.at(-1)?.[1]).toBe(220);
+    expect(option.series[3]?.data.at(-1)?.[0]).toBeGreaterThan(
+      new Date("2026-04-11T17:00:00Z").getTime(),
+    );
   });
 
   it("falls back to percentage progress when the series has no metric values", async () => {
     mount(DashboardWidgetChart, {
       attachTo: document.body,
+      global: {
+        plugins: [pinia],
+      },
       props: {
         widget: buildGoalWidget({
           current_progress_percent: 77.78,
@@ -186,6 +244,56 @@ describe("DashboardWidgetChart", () => {
       new Date("2026-04-10T23:59:59").getTime(),
       100,
     ]);
-    expect(option.series[2]?.data).toEqual([]);
+    expect(option.series[2]?.data.at(-1)).toEqual([
+      new Date("2026-04-10T23:59:59").getTime(),
+      100,
+    ]);
+    expect(option.series[3]?.data).toEqual([]);
+  });
+
+  it("renders days-since widgets from the latest date metric entry", async () => {
+    const wrapper = mount(DashboardWidgetChart, {
+      global: {
+        plugins: [pinia],
+      },
+      props: {
+        widget: buildGoalWidget({
+          current_progress_percent: null,
+          failure_risk_percent: null,
+          forecast_algorithm: null,
+          goal: null,
+          metric: {
+            decimal_places: null,
+            id: "metric-date-1",
+            latest_entry: {
+              date_value: "2026-04-08",
+              id: "entry-1",
+              number_value: null,
+              recorded_at: "2026-04-08T09:00:00Z",
+            },
+            metric_type: "date",
+            name: "Last drink",
+            unit_label: null,
+          },
+          series: [
+            {
+              date_value: "2026-04-08",
+              number_value: null,
+              progress_percent: null,
+              recorded_at: "2026-04-08T09:00:00Z",
+            },
+          ],
+          target_met: null,
+          time_completion_percent: null,
+          title: "Days since drink",
+          widget_type: "days_since",
+        }),
+      },
+    });
+
+    await nextTick();
+
+    expect(wrapper.text()).toContain("3 days");
+    expect(setOptionMock).not.toHaveBeenCalled();
   });
 });

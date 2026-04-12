@@ -31,6 +31,7 @@ Current implemented slice:
 - one default dashboard per user
 - separate dashboard edit mode for adding and updating widgets
 - metric-history, metric-summary, goal-progress, and goal-summary widgets
+- date-metric `days since` summary widgets for streak-style dashboards
 - goal-progress series derived from metric history rather than stored separately
 
 Important design direction:
@@ -60,6 +61,7 @@ Examples:
 - rolling average of `weight`
 - `cardio_minutes` history over the last 90 days
 - summary card for latest metric value and trend
+- summary card for `days since last drink`, `days since injury`, or similar date metrics
 - performance-attempt chart such as 2km row times across all attempts
 
 This is useful because metrics can persist longer than any one goal and may remain valuable to view between goal cycles.

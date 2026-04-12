@@ -1,8 +1,14 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { getActivePinia } from "pinia";
 
 import type { DashboardWidgetSummary } from "../lib/api";
-import { formatDateOnly } from "../lib/time";
+import {
+  buildGoalForecastSeries,
+  type ForecastChartPoint as ChartPoint,
+} from "../lib/goalForecast";
+import { DEFAULT_PROFILE_TIMEZONE, daysBetweenDateOnly, formatDateOnly, getCurrentDateInTimezone } from "../lib/time";
+import { useAuthStore } from "../stores/auth";
 
 interface EChartsInstance {
   dispose(): void;
@@ -12,11 +18,6 @@ interface EChartsInstance {
 
 interface EChartsModule {
   init(element: HTMLElement): EChartsInstance;
-}
-
-interface ChartPoint {
-  timestamp: number;
-  value: number;
 }
 
 declare global {
@@ -35,6 +36,7 @@ let resizeObserver: ResizeObserver | null = null;
 
 const valueWidgetTypes = new Set([
   "metric_summary",
+  "days_since",
   "goal_summary",
   "goal_completion_percent",
   "goal_success_percent",
@@ -42,6 +44,14 @@ const valueWidgetTypes = new Set([
 ]);
 
 const isValueWidget = computed(() => valueWidgetTypes.has(props.widget.widget_type));
+
+const profileTimezone = computed(() => {
+  const pinia = getActivePinia();
+  if (pinia === undefined) {
+    return DEFAULT_PROFILE_TIMEZONE;
+  }
+  return useAuthStore(pinia).currentUser?.timezone ?? DEFAULT_PROFILE_TIMEZONE;
+});
 
 const metricChartPoints = computed<ChartPoint[]>(() => {
   return props.widget.series.map((point) => {
@@ -144,6 +154,20 @@ const displayValueText = computed(() => {
     return formatDateOnly(latestEntry.date_value);
   }
 
+  if (props.widget.widget_type === "days_since") {
+    const latestEntry = props.widget.metric?.latest_entry;
+    if (props.widget.metric?.metric_type !== "date" || latestEntry?.date_value === null || latestEntry === null) {
+      return "No value";
+    }
+
+    const today = getCurrentDateInTimezone(profileTimezone.value);
+    const daysSince = daysBetweenDateOnly(latestEntry.date_value, today);
+    if (daysSince < 0) {
+      return "0 days";
+    }
+    return daysSince === 1 ? "1 day" : `${daysSince} days`;
+  }
+
   const percentValue =
     props.widget.widget_type === "goal_completion_percent"
       ? props.widget.time_completion_percent
@@ -216,76 +240,20 @@ function createMetricHistoryOption(): object {
   };
 }
 
-function forecastValueAtTimestamp(
-  timestamp: number,
-  {
-    lastActualTimestamp,
-    lastActualValue,
-    targetEndTimestamp,
-    targetValue,
-  }: {
-    lastActualTimestamp: number;
-    lastActualValue: number;
-    targetEndTimestamp: number;
-    targetValue: number;
-  },
-): number {
-  if (targetEndTimestamp <= lastActualTimestamp) {
-    return targetValue;
-  }
-
-  const progressRatio =
-    (timestamp - lastActualTimestamp) / (targetEndTimestamp - lastActualTimestamp);
-  const projectedValue = lastActualValue + (targetValue - lastActualValue) * progressRatio;
-  const lowerBound = Math.min(lastActualValue, targetValue);
-  const upperBound = Math.max(lastActualValue, targetValue);
-  return Math.max(lowerBound, Math.min(projectedValue, upperBound));
-}
-
 function createGoalMetricProgressOption(): object {
   const actualPoints = goalMetricChartPoints.value.map((point) => [point.timestamp, point.value]);
-  const lastActualPoint = goalMetricChartPoints.value.at(-1) ?? null;
-  const targetEndTimestamp = goalTargetEndTimestamp.value;
   const targetValue = goalTargetValue.value;
   const nowTimestamp = Date.now();
 
-  const bridgeSeries: Array<[number, number]> = [];
-  const futureSeries: Array<[number, number]> = [];
-
-  if (
-    lastActualPoint !== null &&
-    targetEndTimestamp !== null &&
-    targetValue !== null &&
-    targetEndTimestamp > lastActualPoint.timestamp
-  ) {
-    const bridgeEndTimestamp = Math.min(nowTimestamp, targetEndTimestamp);
-    if (bridgeEndTimestamp > lastActualPoint.timestamp) {
-      bridgeSeries.push([lastActualPoint.timestamp, lastActualPoint.value]);
-      bridgeSeries.push([
-        bridgeEndTimestamp,
-        forecastValueAtTimestamp(bridgeEndTimestamp, {
-          lastActualTimestamp: lastActualPoint.timestamp,
-          lastActualValue: lastActualPoint.value,
-          targetEndTimestamp,
+  const forecast =
+    targetValue === null
+      ? { bridgeSeries: [], futureSeries: [], nowPoint: null }
+      : buildGoalForecastSeries({
+          actualPoints: goalMetricChartPoints.value,
+          algorithm: props.widget.forecast_algorithm ?? "simple",
+          nowTimestamp,
           targetValue,
-        }),
-      ]);
-    }
-
-    if (targetEndTimestamp > nowTimestamp) {
-      const futureStartTimestamp = Math.max(nowTimestamp, lastActualPoint.timestamp);
-      futureSeries.push([
-        futureStartTimestamp,
-        forecastValueAtTimestamp(futureStartTimestamp, {
-          lastActualTimestamp: lastActualPoint.timestamp,
-          lastActualValue: lastActualPoint.value,
-          targetEndTimestamp,
-          targetValue,
-        }),
-      ]);
-      futureSeries.push([targetEndTimestamp, targetValue]);
-    }
-  }
+        });
 
   return {
     animation: false,
@@ -317,22 +285,56 @@ function createGoalMetricProgressOption(): object {
       },
       {
         type: "line",
-        smooth: true,
+        smooth: false,
         symbol: "none",
-        data: bridgeSeries,
+        data: forecast.bridgeSeries,
         tooltip: { show: false },
         lineStyle: { color: "#2563eb", width: 3 },
       },
       {
+        type: "scatter",
+        symbol: "circle",
+        symbolSize: 9,
+        data: forecast.nowPoint === null ? [] : [forecast.nowPoint],
+        tooltip: { show: false },
+        itemStyle: { color: "#2563eb" },
+      },
+      {
         type: "line",
-        smooth: true,
+        smooth: false,
         symbol: "none",
-        data: futureSeries,
+        data: forecast.futureSeries,
         tooltip: { show: false },
         lineStyle: { color: "#dc2626", width: 3 },
       },
     ],
   };
+}
+
+function forecastValueAtTimestamp(
+  timestamp: number,
+  {
+    lastActualTimestamp,
+    lastActualValue,
+    targetEndTimestamp,
+    targetValue,
+  }: {
+    lastActualTimestamp: number;
+    lastActualValue: number;
+    targetEndTimestamp: number;
+    targetValue: number;
+  },
+): number {
+  if (targetEndTimestamp <= lastActualTimestamp) {
+    return targetValue;
+  }
+
+  const progressRatio =
+    (timestamp - lastActualTimestamp) / (targetEndTimestamp - lastActualTimestamp);
+  const projectedValue = lastActualValue + (targetValue - lastActualValue) * progressRatio;
+  const lowerBound = Math.min(lastActualValue, targetValue);
+  const upperBound = Math.max(lastActualValue, targetValue);
+  return Math.max(lowerBound, Math.min(projectedValue, upperBound));
 }
 
 function createGoalPercentProgressOption(): object {
@@ -407,6 +409,14 @@ function createGoalPercentProgressOption(): object {
         data: bridgeSeries,
         tooltip: { show: false },
         lineStyle: { color: "#2563eb", width: 3 },
+      },
+      {
+        type: "scatter",
+        symbol: "circle",
+        symbolSize: 9,
+        data: bridgeSeries.length === 0 ? [] : [bridgeSeries[bridgeSeries.length - 1]!],
+        tooltip: { show: false },
+        itemStyle: { color: "#2563eb" },
       },
       {
         type: "line",

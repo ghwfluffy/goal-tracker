@@ -17,15 +17,27 @@ from app.services.goals import (
 
 WIDGET_TYPE_METRIC_HISTORY = "metric_history"
 WIDGET_TYPE_METRIC_SUMMARY = "metric_summary"
+WIDGET_TYPE_DAYS_SINCE = "days_since"
 WIDGET_TYPE_GOAL_PROGRESS = "goal_progress"
 WIDGET_TYPE_GOAL_SUMMARY = "goal_summary"
 WIDGET_TYPE_GOAL_COMPLETION_PERCENT = "goal_completion_percent"
 WIDGET_TYPE_GOAL_SUCCESS_PERCENT = "goal_success_percent"
 WIDGET_TYPE_GOAL_FAILURE_RISK = "goal_failure_risk"
 
+FORECAST_ALGORITHM_SIMPLE = "simple"
+FORECAST_ALGORITHM_WEIGHTED_WEEK_OVER_WEEK = "weighted_week_over_week"
+FORECAST_ALGORITHM_WEIGHTED_DAY_OVER_DAY = "weighted_day_over_day"
+
+SUPPORTED_FORECAST_ALGORITHMS = {
+    FORECAST_ALGORITHM_SIMPLE,
+    FORECAST_ALGORITHM_WEIGHTED_WEEK_OVER_WEEK,
+    FORECAST_ALGORITHM_WEIGHTED_DAY_OVER_DAY,
+}
+
 SUPPORTED_WIDGET_TYPES = {
     WIDGET_TYPE_METRIC_HISTORY,
     WIDGET_TYPE_METRIC_SUMMARY,
+    WIDGET_TYPE_DAYS_SINCE,
     WIDGET_TYPE_GOAL_PROGRESS,
     WIDGET_TYPE_GOAL_SUMMARY,
     WIDGET_TYPE_GOAL_COMPLETION_PERCENT,
@@ -44,6 +56,7 @@ GOAL_WIDGET_TYPES = {
 METRIC_WIDGET_TYPES = {
     WIDGET_TYPE_METRIC_HISTORY,
     WIDGET_TYPE_METRIC_SUMMARY,
+    WIDGET_TYPE_DAYS_SINCE,
 }
 
 GRID_COLUMN_COUNT = 12
@@ -116,9 +129,29 @@ def normalize_rolling_window_days(rolling_window_days: int | None) -> int | None
     return rolling_window_days
 
 
+def normalize_forecast_algorithm(
+    *,
+    widget_type: str,
+    forecast_algorithm: str | None,
+) -> str | None:
+    if widget_type != WIDGET_TYPE_GOAL_PROGRESS:
+        if forecast_algorithm is not None:
+            raise DashboardError("Only goal progress widgets can set a forecast algorithm.")
+        return None
+
+    if forecast_algorithm is None:
+        return FORECAST_ALGORITHM_SIMPLE
+
+    normalized = forecast_algorithm.strip().lower()
+    if normalized not in SUPPORTED_FORECAST_ALGORITHMS:
+        raise DashboardError("Unsupported forecast algorithm.")
+    return normalized
+
+
 def default_widget_dimensions(widget_type: str) -> tuple[int, int]:
     if widget_type in {
         WIDGET_TYPE_METRIC_SUMMARY,
+        WIDGET_TYPE_DAYS_SINCE,
         WIDGET_TYPE_GOAL_SUMMARY,
         WIDGET_TYPE_GOAL_COMPLETION_PERCENT,
         WIDGET_TYPE_GOAL_SUCCESS_PERCENT,
@@ -403,6 +436,7 @@ def create_dashboard_widget(
     metric: Metric | None = None,
     goal: Goal | None = None,
     rolling_window_days: int | None = None,
+    forecast_algorithm: str | None = None,
     grid_x: int | None = None,
     grid_y: int | None = None,
     grid_w: int | None = None,
@@ -410,6 +444,10 @@ def create_dashboard_widget(
 ) -> DashboardWidget:
     normalized_widget_type = normalize_widget_type(widget_type)
     normalized_window = normalize_rolling_window_days(rolling_window_days)
+    normalized_forecast_algorithm = normalize_forecast_algorithm(
+        widget_type=normalized_widget_type,
+        forecast_algorithm=forecast_algorithm,
+    )
 
     if normalized_widget_type in METRIC_WIDGET_TYPES:
         if metric is None or goal is not None:
@@ -421,6 +459,10 @@ def create_dashboard_widget(
         raise DashboardError("Widgets can only reference your own metrics.")
     if goal is not None and goal.user_id != user.id:
         raise DashboardError("Widgets can only reference your own goals.")
+    if normalized_widget_type == WIDGET_TYPE_DAYS_SINCE and (
+        metric is None or metric.metric_type != "date"
+    ):
+        raise DashboardError("Days since widgets require a date metric.")
     if goal is not None and goal.target_date is not None:
         normalized_window = None
 
@@ -473,6 +515,7 @@ def create_dashboard_widget(
         title=normalize_name(title, field_name="Widget title", max_length=120),
         widget_type=normalized_widget_type,
         rolling_window_days=normalized_window,
+        forecast_algorithm=normalized_forecast_algorithm,
         grid_x=normalized_x,
         grid_y=normalized_y,
         grid_w=normalized_width,
@@ -498,6 +541,7 @@ def update_dashboard_widget(
     user: User,
     title: str | None = None,
     rolling_window_days: int | None = None,
+    forecast_algorithm: str | None = None,
     grid_x: int | None = None,
     grid_y: int | None = None,
     grid_w: int | None = None,
@@ -505,6 +549,11 @@ def update_dashboard_widget(
 ) -> DashboardWidget:
     if title is not None:
         widget.title = normalize_name(title, field_name="Widget title", max_length=120)
+    if forecast_algorithm is not None or widget.forecast_algorithm is not None:
+        widget.forecast_algorithm = normalize_forecast_algorithm(
+            widget_type=widget.widget_type,
+            forecast_algorithm=forecast_algorithm,
+        )
     if widget.goal is not None and widget.goal.target_date is not None:
         widget.rolling_window_days = None
     elif rolling_window_days is not None or widget.rolling_window_days is not None:
