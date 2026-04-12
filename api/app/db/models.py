@@ -109,6 +109,14 @@ class User(Base):
         cascade="all, delete-orphan",
         foreign_keys="DashboardWidget.user_id",
     )
+    backup_records: Mapped[list[BackupRecord]] = relationship(
+        back_populates="created_by_user",
+        foreign_keys="BackupRecord.created_by_user_id",
+    )
+    requested_restore_operations: Mapped[list[RestoreOperation]] = relationship(
+        back_populates="requested_by_user",
+        foreign_keys="RestoreOperation.requested_by_user_id",
+    )
     example_seed_applications: Mapped[list[ExampleSeedApplication]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
@@ -399,6 +407,63 @@ class DashboardWidget(Base):
     dashboard: Mapped[Dashboard] = relationship(back_populates="widgets")
     metric: Mapped[Metric | None] = relationship(back_populates="widgets")
     goal: Mapped[Goal | None] = relationship(back_populates="widgets")
+
+
+class BackupRecord(Base):
+    __tablename__ = "backup_records"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    storage_key: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    filename: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    relative_path: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_by_user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    trigger_source: Mapped[str] = mapped_column(String(20), nullable=False)
+    file_size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    created_by_user: Mapped[User | None] = relationship(
+        back_populates="backup_records",
+        foreign_keys=[created_by_user_id],
+    )
+
+
+class RestoreOperation(Base):
+    __tablename__ = "restore_operations"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    requested_by_user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    backup_record_id: Mapped[str | None] = mapped_column(
+        ForeignKey("backup_records.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    pre_restore_backup_id: Mapped[str | None] = mapped_column(
+        ForeignKey("backup_records.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    requested_by_user: Mapped[User | None] = relationship(
+        back_populates="requested_restore_operations",
+        foreign_keys=[requested_by_user_id],
+    )
+    backup_record: Mapped[BackupRecord | None] = relationship(foreign_keys=[backup_record_id])
+    pre_restore_backup: Mapped[BackupRecord | None] = relationship(foreign_keys=[pre_restore_backup_id])
 
 
 class ExampleSeedApplication(Base):

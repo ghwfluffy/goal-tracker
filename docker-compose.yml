@@ -42,6 +42,26 @@ services:
     ports:
       - "8000:8000"
 
+  db-backup:
+    image: postgres:18
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      BACKUP_DIR: /backups
+      BACKUP_UID: ${BACKUP_UID}
+      BACKUP_GID: ${BACKUP_GID}
+      BACKUP_INTERVAL_MINUTES: ${BACKUP_INTERVAL_MINUTES:-360}
+    command: ["/bin/sh", "/opt/backup/backup-loop.sh"]
+    volumes:
+      - ./db:/opt/backup:ro
+      - ./backups:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+
   web:
     build:
       context: .

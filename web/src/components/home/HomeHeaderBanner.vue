@@ -17,6 +17,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   deleteAccount: [];
   logout: [];
+  openBackups: [];
   openNotifications: [];
   openInvitationCodes: [];
   openPassword: [];
@@ -25,7 +26,9 @@ const emit = defineEmits<{
 
 const profileMenu = ref<InstanceType<typeof Menu> | null>(null);
 
-const currentDisplayName = computed(() => props.user.display_name || props.user.username);
+const currentDisplayName = computed(
+  () => props.user.display_name || props.user.username,
+);
 
 const avatarLabel = computed(() => {
   const source = currentDisplayName.value.trim();
@@ -63,6 +66,11 @@ const profileMenuItems = computed<MenuItem[]>(() => {
   ];
 
   if (props.user.is_admin) {
+    items.push({
+      icon: "pi pi-database",
+      label: "Backups",
+      command: () => emit("openBackups"),
+    });
     items.push({
       icon: "pi pi-ticket",
       label: "Invitation codes",
@@ -108,10 +116,17 @@ function toggleProfileMenu(event: Event): void {
       >
         <span class="notification-button-content">
           <i class="pi pi-bell" />
-          <span v-if="notificationCount > 0" class="notification-badge">{{ notificationCount }}</span>
+          <span v-if="notificationCount > 0" class="notification-badge">{{
+            notificationCount
+          }}</span>
         </span>
       </Button>
-      <Button class="profile-button" severity="secondary" text @click="toggleProfileMenu">
+      <Button
+        class="profile-button"
+        severity="secondary"
+        text
+        @click="toggleProfileMenu"
+      >
         <span class="profile-button-content">
           <Avatar
             :image="avatarUrl ?? undefined"

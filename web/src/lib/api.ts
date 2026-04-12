@@ -73,6 +73,45 @@ export interface InvitationCodePayload {
   expires_at: string;
 }
 
+export interface BackupUserSummary {
+  display_name: string | null;
+  id: string;
+  username: string;
+}
+
+export interface BackupSummary {
+  created_at: string;
+  created_by_user: BackupUserSummary | null;
+  file_size_bytes: number;
+  filename: string;
+  id: string;
+  relative_path: string;
+  sha256: string;
+  storage_key: string;
+  trigger_source: string;
+}
+
+export interface RestoreOperationSummary {
+  backup: BackupSummary | null;
+  completed_at: string | null;
+  error_message: string | null;
+  id: string;
+  pre_restore_backup: BackupSummary | null;
+  requested_at: string;
+  requested_by_user: BackupUserSummary | null;
+  started_at: string | null;
+  status: string;
+}
+
+export interface BackupInventoryResponse {
+  backups: BackupSummary[];
+  restores: RestoreOperationSummary[];
+}
+
+export interface RestoreBackupPayload {
+  confirmation_text: string;
+}
+
 export interface MetricEntrySummary {
   date_value: string | null;
   id: string;
@@ -347,9 +386,15 @@ export interface UpdateDashboardWidgetPayload {
   title?: string | null;
 }
 
-type Fetcher = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+type Fetcher = (
+  input: RequestInfo | URL,
+  init?: RequestInit,
+) => Promise<Response>;
 
-const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? "/api/v1").replace(/\/$/, "");
+const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? "/api/v1").replace(
+  /\/$/,
+  "",
+);
 
 export class ApiError extends Error {
   status: number;
@@ -372,7 +417,8 @@ function formatValidationError(detail: ValidationErrorItem[]): string {
       const locationParts = (item.loc ?? [])
         .filter((part) => part !== "body")
         .map((part) => String(part));
-      const location = locationParts.length > 0 ? `${locationParts.join(".")}: ` : "";
+      const location =
+        locationParts.length > 0 ? `${locationParts.join(".")}: ` : "";
       return `${location}${item.msg ?? "Invalid input."}`;
     })
     .join(" ");
@@ -401,9 +447,14 @@ async function parseError(response: Response): Promise<ApiError> {
   const fallbackMessage = `Request failed with ${response.status}`;
 
   try {
-    const payload = (await response.json()) as { detail?: string | ValidationErrorItem[] };
+    const payload = (await response.json()) as {
+      detail?: string | ValidationErrorItem[];
+    };
     if (Array.isArray(payload.detail)) {
-      return new ApiError(response.status, formatValidationError(payload.detail));
+      return new ApiError(
+        response.status,
+        formatValidationError(payload.detail),
+      );
     }
 
     return new ApiError(response.status, payload.detail ?? fallbackMessage);
@@ -417,7 +468,10 @@ async function requestJson<T>(
   init?: RequestInit,
   fetcher: Fetcher = fetch,
 ): Promise<T> {
-  const response = await fetcher(`${apiBaseUrl}${path}`, buildRequestInit(init));
+  const response = await fetcher(
+    `${apiBaseUrl}${path}`,
+    buildRequestInit(init),
+  );
 
   if (!response.ok) {
     throw await parseError(response);
@@ -431,7 +485,10 @@ async function requestNoContent(
   init?: RequestInit,
   fetcher: Fetcher = fetch,
 ): Promise<void> {
-  const response = await fetcher(`${apiBaseUrl}${path}`, buildRequestInit(init));
+  const response = await fetcher(
+    `${apiBaseUrl}${path}`,
+    buildRequestInit(init),
+  );
 
   if (!response.ok) {
     throw await parseError(response);
@@ -442,11 +499,19 @@ export function fetchStatus(fetcher: Fetcher = fetch): Promise<StatusResponse> {
   return requestJson<StatusResponse>("/status", undefined, fetcher);
 }
 
-export function fetchBootstrapStatus(fetcher: Fetcher = fetch): Promise<BootstrapStatusResponse> {
-  return requestJson<BootstrapStatusResponse>("/auth/bootstrap-status", undefined, fetcher);
+export function fetchBootstrapStatus(
+  fetcher: Fetcher = fetch,
+): Promise<BootstrapStatusResponse> {
+  return requestJson<BootstrapStatusResponse>(
+    "/auth/bootstrap-status",
+    undefined,
+    fetcher,
+  );
 }
 
-export function fetchCurrentSession(fetcher: Fetcher = fetch): Promise<SessionResponse> {
+export function fetchCurrentSession(
+  fetcher: Fetcher = fetch,
+): Promise<SessionResponse> {
   return requestJson<SessionResponse>("/auth/me", undefined, fetcher);
 }
 
@@ -516,7 +581,10 @@ export function updateCurrentProfile(
   );
 }
 
-export function uploadCurrentAvatar(file: File, fetcher: Fetcher = fetch): Promise<UserSummary> {
+export function uploadCurrentAvatar(
+  file: File,
+  fetcher: Fetcher = fetch,
+): Promise<UserSummary> {
   const formData = new FormData();
   formData.append("avatar", file);
 
@@ -561,7 +629,11 @@ export function deleteCurrentAccount(
 export function fetchInvitationCodes(
   fetcher: Fetcher = fetch,
 ): Promise<InvitationCodeListResponse> {
-  return requestJson<InvitationCodeListResponse>("/invitation-codes", undefined, fetcher);
+  return requestJson<InvitationCodeListResponse>(
+    "/invitation-codes",
+    undefined,
+    fetcher,
+  );
 }
 
 export function createInvitationCode(
@@ -606,16 +678,59 @@ export function deleteInvitationCode(
   );
 }
 
+export function fetchBackupInventory(
+  fetcher: Fetcher = fetch,
+): Promise<BackupInventoryResponse> {
+  return requestJson<BackupInventoryResponse>(
+    "/admin/backups",
+    undefined,
+    fetcher,
+  );
+}
+
+export function createBackup(fetcher: Fetcher = fetch): Promise<BackupSummary> {
+  return requestJson<BackupSummary>(
+    "/admin/backups",
+    {
+      method: "POST",
+    },
+    fetcher,
+  );
+}
+
+export function restoreBackup(
+  backupId: string,
+  payload: RestoreBackupPayload,
+  fetcher: Fetcher = fetch,
+): Promise<RestoreOperationSummary> {
+  return requestJson<RestoreOperationSummary>(
+    `/admin/backups/${backupId}/restore`,
+    {
+      body: JSON.stringify(payload),
+      method: "POST",
+    },
+    fetcher,
+  );
+}
+
 export function fetchMetrics(
   includeArchivedOrFetcher: boolean | Fetcher = false,
   fetcher: Fetcher = fetch,
 ): Promise<MetricListResponse> {
   const includeArchived =
-    typeof includeArchivedOrFetcher === "boolean" ? includeArchivedOrFetcher : false;
+    typeof includeArchivedOrFetcher === "boolean"
+      ? includeArchivedOrFetcher
+      : false;
   const resolvedFetcher =
-    typeof includeArchivedOrFetcher === "function" ? includeArchivedOrFetcher : fetcher;
+    typeof includeArchivedOrFetcher === "function"
+      ? includeArchivedOrFetcher
+      : fetcher;
   const suffix = includeArchived ? "?include_archived=true" : "";
-  return requestJson<MetricListResponse>(`/metrics${suffix}`, undefined, resolvedFetcher);
+  return requestJson<MetricListResponse>(
+    `/metrics${suffix}`,
+    undefined,
+    resolvedFetcher,
+  );
 }
 
 export function createMetric(
@@ -716,7 +831,10 @@ export function skipNotification(
   );
 }
 
-export function deleteMetric(metricId: string, fetcher: Fetcher = fetch): Promise<void> {
+export function deleteMetric(
+  metricId: string,
+  fetcher: Fetcher = fetch,
+): Promise<void> {
   return requestNoContent(
     `/metrics/${metricId}`,
     {
@@ -731,11 +849,19 @@ export function fetchGoals(
   fetcher: Fetcher = fetch,
 ): Promise<GoalListResponse> {
   const includeArchived =
-    typeof includeArchivedOrFetcher === "boolean" ? includeArchivedOrFetcher : false;
+    typeof includeArchivedOrFetcher === "boolean"
+      ? includeArchivedOrFetcher
+      : false;
   const resolvedFetcher =
-    typeof includeArchivedOrFetcher === "function" ? includeArchivedOrFetcher : fetcher;
+    typeof includeArchivedOrFetcher === "function"
+      ? includeArchivedOrFetcher
+      : fetcher;
   const suffix = includeArchived ? "?include_archived=true" : "";
-  return requestJson<GoalListResponse>(`/goals${suffix}`, undefined, resolvedFetcher);
+  return requestJson<GoalListResponse>(
+    `/goals${suffix}`,
+    undefined,
+    resolvedFetcher,
+  );
 }
 
 export function createGoal(
@@ -767,7 +893,9 @@ export function updateGoal(
   );
 }
 
-export function fetchDashboards(fetcher: Fetcher = fetch): Promise<DashboardListResponse> {
+export function fetchDashboards(
+  fetcher: Fetcher = fetch,
+): Promise<DashboardListResponse> {
   return requestJson<DashboardListResponse>("/dashboards", undefined, fetcher);
 }
 

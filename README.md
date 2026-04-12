@@ -46,6 +46,7 @@ What already exists:
 - first-account bootstrap, invited sign-up, and sign-in flow
 - a signed-in app shell with session restoration
 - admin-managed invitation codes for creating additional accounts
+- automatic backups into `./backups`, plus admin backup inventory and manual backup/restore controls
 - optional example-data account signup seeded with starter metrics, realistic history, goals, and a dashboard that exercises multiple widget types, with revision-based upgrades for existing example accounts at server startup and during auth traffic
 - reusable metrics with quick number/date updates
 - reusable metrics with paste-import for timestamped CSV or tab-delimited history

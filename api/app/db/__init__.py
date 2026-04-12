@@ -1,6 +1,7 @@
 from app.db.models import (
     AppConfig,
     AuthSession,
+    BackupRecord,
     Base,
     Dashboard,
     DashboardWidget,
@@ -11,6 +12,7 @@ from app.db.models import (
     Metric,
     MetricEntry,
     MetricNotification,
+    RestoreOperation,
     User,
 )
 from app.db.session import get_db, get_engine, get_session_factory
@@ -19,6 +21,7 @@ __all__ = [
     "AppConfig",
     "AuthSession",
     "Base",
+    "BackupRecord",
     "Dashboard",
     "DashboardWidget",
     "ExampleSeedApplication",
@@ -28,6 +31,7 @@ __all__ = [
     "Metric",
     "MetricEntry",
     "MetricNotification",
+    "RestoreOperation",
     "User",
     "get_db",
     "get_engine",

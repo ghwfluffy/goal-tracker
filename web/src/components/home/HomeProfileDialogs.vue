@@ -13,9 +13,11 @@ import { DEFAULT_PROFILE_TIMEZONE } from "../../lib/time";
 import { formatDateTime } from "../../lib/tracking";
 import { useAppToast, watchToastError } from "../../lib/toast";
 import { useAuthStore } from "../../stores/auth";
+import { useBackupsStore } from "../../stores/backups";
 import { useInvitationCodesStore } from "../../stores/invitationCodes";
 
 const props = defineProps<{
+  backupsVisible: boolean;
   deleteAccountVisible: boolean;
   invitationCodesVisible: boolean;
   passwordVisible: boolean;
@@ -23,6 +25,7 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
+  "update:backupsVisible": [value: boolean];
   "update:deleteAccountVisible": [value: boolean];
   "update:invitationCodesVisible": [value: boolean];
   "update:passwordVisible": [value: boolean];
@@ -30,6 +33,7 @@ const emit = defineEmits<{
 }>();
 
 const authStore = useAuthStore();
+const backupsStore = useBackupsStore();
 const invitationCodesStore = useInvitationCodesStore();
 const { showError, showSuccess } = useAppToast();
 
@@ -40,21 +44,29 @@ const newPasswordInput = ref("");
 const deletePasswordInput = ref("");
 const createInvitationCodeExpiresAt = ref("");
 const invitationCodeExpiresAtInputs = ref<Record<string, string>>({});
+const restoreConfirmationInputs = ref<Record<string, string>>({});
 
 const timezoneOptions = computed(() => {
   const intlWithSupportedValues = Intl as typeof Intl & {
     supportedValuesOf?: (key: string) => string[];
   };
-  const supportedTimezones = intlWithSupportedValues.supportedValuesOf?.("timeZone") ?? [
+  const supportedTimezones = intlWithSupportedValues.supportedValuesOf?.(
+    "timeZone",
+  ) ?? [
     "America/Chicago",
     "America/Los_Angeles",
     "America/New_York",
     "America/Denver",
     "UTC",
   ];
-  const currentTimezone = authStore.currentUser?.timezone ?? timezoneInput.value;
+  const currentTimezone =
+    authStore.currentUser?.timezone ?? timezoneInput.value;
   return Array.from(
-    new Set([currentTimezone, DEFAULT_PROFILE_TIMEZONE, ...supportedTimezones].filter(Boolean)),
+    new Set(
+      [currentTimezone, DEFAULT_PROFILE_TIMEZONE, ...supportedTimezones].filter(
+        Boolean,
+      ),
+    ),
   ).sort((left, right) => left.localeCompare(right));
 });
 
@@ -90,7 +102,8 @@ const avatarUrl = computed(() => {
 
 function syncProfileInputs(): void {
   displayNameInput.value = authStore.currentUser?.display_name ?? "";
-  timezoneInput.value = authStore.currentUser?.timezone ?? DEFAULT_PROFILE_TIMEZONE;
+  timezoneInput.value =
+    authStore.currentUser?.timezone ?? DEFAULT_PROFILE_TIMEZONE;
 }
 
 function resetPasswordInputs(): void {
@@ -109,11 +122,15 @@ function toDateTimeLocalValue(value: string): string {
   }
 
   const timezoneOffset = date.getTimezoneOffset();
-  return new Date(date.getTime() - timezoneOffset * 60_000).toISOString().slice(0, 16);
+  return new Date(date.getTime() - timezoneOffset * 60_000)
+    .toISOString()
+    .slice(0, 16);
 }
 
 function defaultInvitationCodeExpiration(): string {
-  return toDateTimeLocalValue(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString());
+  return toDateTimeLocalValue(
+    new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+  );
 }
 
 function toIsoDateTime(value: string): string | null {
@@ -138,11 +155,32 @@ function syncInvitationCodeInputs(): void {
   );
 }
 
+function syncRestoreInputs(): void {
+  restoreConfirmationInputs.value = Object.fromEntries(
+    backupsStore.backups.map((backup) => [backup.id, ""]),
+  );
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+  if (bytes < 1024 * 1024 * 1024) {
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+}
+
 watchToastError(() => invitationCodesStore.errorMessage, "Invitation codes");
+watchToastError(() => backupsStore.errorMessage, "Backups");
 
 async function saveProfile(): Promise<void> {
   const updated = await authStore.updateProfile({
-    display_name: displayNameInput.value.trim() === "" ? null : displayNameInput.value,
+    display_name:
+      displayNameInput.value.trim() === "" ? null : displayNameInput.value,
     timezone: timezoneInput.value.trim() === "" ? null : timezoneInput.value,
   });
 
@@ -196,7 +234,9 @@ async function createNewInvitationCode(): Promise<void> {
     return;
   }
 
-  const created = await invitationCodesStore.createInvitationCode({ expires_at: expiresAt });
+  const created = await invitationCodesStore.createInvitationCode({
+    expires_at: expiresAt,
+  });
   syncInvitationCodeInputs();
 
   if (created) {
@@ -206,15 +246,20 @@ async function createNewInvitationCode(): Promise<void> {
 }
 
 async function saveInvitationCode(invitationCodeId: string): Promise<void> {
-  const expiresAt = toIsoDateTime(invitationCodeExpiresAtInputs.value[invitationCodeId] ?? "");
+  const expiresAt = toIsoDateTime(
+    invitationCodeExpiresAtInputs.value[invitationCodeId] ?? "",
+  );
   if (expiresAt === null) {
     showError("Choose a valid expiration date.", "Invitation codes");
     return;
   }
 
-  const updated = await invitationCodesStore.updateInvitationCode(invitationCodeId, {
-    expires_at: expiresAt,
-  });
+  const updated = await invitationCodesStore.updateInvitationCode(
+    invitationCodeId,
+    {
+      expires_at: expiresAt,
+    },
+  );
   syncInvitationCodeInputs();
 
   if (updated) {
@@ -222,12 +267,36 @@ async function saveInvitationCode(invitationCodeId: string): Promise<void> {
   }
 }
 
-async function deleteInvitationCodeEntry(invitationCodeId: string): Promise<void> {
-  const deleted = await invitationCodesStore.deleteInvitationCode(invitationCodeId);
+async function deleteInvitationCodeEntry(
+  invitationCodeId: string,
+): Promise<void> {
+  const deleted =
+    await invitationCodesStore.deleteInvitationCode(invitationCodeId);
   syncInvitationCodeInputs();
 
   if (deleted) {
     showSuccess("Invitation code deleted.", "Invitation codes");
+  }
+}
+
+async function createManualBackup(): Promise<void> {
+  const created = await backupsStore.createBackup();
+  syncRestoreInputs();
+
+  if (created) {
+    showSuccess("Backup created.", "Backups");
+  }
+}
+
+async function restoreBackupEntry(backupId: string): Promise<void> {
+  const restored = await backupsStore.restoreBackup(
+    backupId,
+    restoreConfirmationInputs.value[backupId] ?? "",
+  );
+  syncRestoreInputs();
+
+  if (restored) {
+    showSuccess("Backup restored.", "Backups");
   }
 }
 
@@ -250,6 +319,14 @@ watch(
 );
 
 watch(
+  () => backupsStore.backups,
+  () => {
+    syncRestoreInputs();
+  },
+  { deep: true },
+);
+
+watch(
   () => props.invitationCodesVisible,
   async (visible) => {
     if (!visible) {
@@ -258,6 +335,17 @@ watch(
     createInvitationCodeExpiresAt.value = defaultInvitationCodeExpiration();
     await invitationCodesStore.loadInvitationCodes();
     syncInvitationCodeInputs();
+  },
+);
+
+watch(
+  () => props.backupsVisible,
+  async (visible) => {
+    if (!visible) {
+      return;
+    }
+    await backupsStore.loadBackupInventory();
+    syncRestoreInputs();
   },
 );
 </script>
@@ -303,13 +391,19 @@ watch(
         </label>
 
         <p class="dialog-copy">
-          Timestamps render in your browser timezone. This profile timezone controls how the
-          app should interpret day boundaries for tracking logic.
+          Timestamps render in your browser timezone. This profile timezone
+          controls how the app should interpret day boundaries for tracking
+          logic.
         </p>
 
         <label class="field">
           <span class="label">Avatar image</span>
-          <input class="native-file-input" type="file" accept="image/*" @change="uploadAvatar" />
+          <input
+            class="native-file-input"
+            type="file"
+            accept="image/*"
+            @change="uploadAvatar"
+          />
         </label>
 
         <Button
@@ -405,6 +499,170 @@ watch(
   </Dialog>
 
   <Dialog
+    :visible="backupsVisible"
+    modal
+    header="Backups"
+    class="profile-dialog"
+    :style="{ width: 'min(64rem, 96vw)' }"
+    @update:visible="(value) => emit('update:backupsVisible', value)"
+  >
+    <div class="dialog-stack">
+      <div
+        v-if="backupsStore.viewState === 'loading'"
+        class="loading shell-center"
+      >
+        <ProgressSpinner
+          strokeWidth="5"
+          style="width: 2.5rem; height: 2.5rem"
+          animationDuration=".8s"
+        />
+        <span>Loading backups.</span>
+      </div>
+
+      <template v-else>
+        <section class="dialog-section">
+          <div class="section-heading-text">
+            <h3>Create backup</h3>
+            <p>
+              Manual backups write into the repository `./backups` directory.
+              Restore takes a fresh pre-restore backup before replacing the
+              database contents.
+            </p>
+          </div>
+
+          <Button
+            label="Create backup"
+            icon="pi pi-download"
+            :loading="backupsStore.submissionState === 'submitting'"
+            @click="createManualBackup"
+          />
+        </section>
+
+        <section class="dialog-section">
+          <div class="section-heading-text">
+            <h3>Available backups</h3>
+            <p>
+              Automatic and manual backups are both listed here. Restore
+              requires typing `RESTORE`.
+            </p>
+          </div>
+
+          <div
+            v-if="backupsStore.backups.length === 0"
+            class="panel-card empty-invitation-state"
+          >
+            <p>No backups yet.</p>
+          </div>
+
+          <article
+            v-for="backup in backupsStore.backups"
+            :key="backup.id"
+            class="invitation-code-card"
+          >
+            <div class="invitation-code-header">
+              <div class="invitation-code-copy">
+                <p class="code-label">{{ backup.trigger_source }}</p>
+                <code>{{ backup.filename }}</code>
+              </div>
+              <Tag :value="backup.trigger_source" severity="info" />
+            </div>
+
+            <div class="invitation-code-meta">
+              <span>Created {{ formatDateTime(backup.created_at) }}</span>
+              <span>Size {{ formatFileSize(backup.file_size_bytes) }}</span>
+              <span v-if="backup.created_by_user !== null">
+                By
+                {{
+                  backup.created_by_user.display_name ??
+                  backup.created_by_user.username
+                }}
+              </span>
+            </div>
+
+            <div class="invitation-code-actions">
+              <label class="field">
+                <span class="label">Confirm restore</span>
+                <InputText
+                  v-model="restoreConfirmationInputs[backup.id]"
+                  placeholder="Type RESTORE"
+                />
+              </label>
+
+              <div class="invitation-code-buttons">
+                <Button
+                  label="Restore"
+                  icon="pi pi-history"
+                  severity="danger"
+                  :loading="backupsStore.submissionState === 'submitting'"
+                  @click="restoreBackupEntry(backup.id)"
+                />
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section class="dialog-section">
+          <div class="section-heading-text">
+            <h3>Recent restores</h3>
+            <p>Completed restores and any reported failures are shown here.</p>
+          </div>
+
+          <div
+            v-if="backupsStore.restores.length === 0"
+            class="panel-card empty-invitation-state"
+          >
+            <p>No restore operations yet.</p>
+          </div>
+
+          <article
+            v-for="restore in backupsStore.restores"
+            :key="restore.id"
+            class="invitation-code-card"
+          >
+            <div class="invitation-code-header">
+              <div class="invitation-code-copy">
+                <p class="code-label">Restore</p>
+                <code>{{ restore.backup?.filename ?? "Unknown backup" }}</code>
+              </div>
+              <Tag
+                :value="restore.status"
+                :severity="
+                  restore.status === 'completed' ? 'success' : 'danger'
+                "
+              />
+            </div>
+
+            <div class="invitation-code-meta">
+              <span>Requested {{ formatDateTime(restore.requested_at) }}</span>
+              <span v-if="restore.completed_at !== null">
+                Completed {{ formatDateTime(restore.completed_at) }}
+              </span>
+              <span v-if="restore.requested_by_user !== null">
+                By
+                {{
+                  restore.requested_by_user.display_name ??
+                  restore.requested_by_user.username
+                }}
+              </span>
+            </div>
+
+            <p v-if="restore.error_message !== null" class="dialog-copy">
+              {{ restore.error_message }}
+            </p>
+            <p
+              v-else-if="restore.pre_restore_backup !== null"
+              class="dialog-copy"
+            >
+              Pre-restore safety backup:
+              {{ restore.pre_restore_backup.filename }}
+            </p>
+          </article>
+        </section>
+      </template>
+    </div>
+  </Dialog>
+
+  <Dialog
     :visible="invitationCodesVisible"
     modal
     header="Invitation codes"
@@ -413,7 +671,10 @@ watch(
     @update:visible="(value) => emit('update:invitationCodesVisible', value)"
   >
     <div class="dialog-stack">
-      <div v-if="invitationCodesStore.viewState === 'loading'" class="loading shell-center">
+      <div
+        v-if="invitationCodesStore.viewState === 'loading'"
+        class="loading shell-center"
+      >
         <ProgressSpinner
           strokeWidth="5"
           style="width: 2.5rem; height: 2.5rem"
@@ -427,7 +688,8 @@ watch(
           <div class="section-heading-text">
             <h3>Create invitation code</h3>
             <p>
-              New accounts can sign up with any active code until it expires or you delete it.
+              New accounts can sign up with any active code until it expires or
+              you delete it.
             </p>
           </div>
 
@@ -451,7 +713,10 @@ watch(
         <section class="dialog-section">
           <div class="section-heading-text">
             <h3>Existing codes</h3>
-            <p>Review expiration, delete old codes, and see which accounts came from each one.</p>
+            <p>
+              Review expiration, delete old codes, and see which accounts came
+              from each one.
+            </p>
           </div>
 
           <div
@@ -475,8 +740,12 @@ watch(
             </div>
 
             <div class="invitation-code-meta">
-              <span>Created {{ formatDateTime(invitationCode.created_at) }}</span>
-              <span>Expires {{ formatDateTime(invitationCode.expires_at) }}</span>
+              <span
+                >Created {{ formatDateTime(invitationCode.created_at) }}</span
+              >
+              <span
+                >Expires {{ formatDateTime(invitationCode.expires_at) }}</span
+              >
               <span v-if="invitationCode.created_by_username !== null">
                 By {{ invitationCode.created_by_username }}
               </span>
@@ -497,14 +766,18 @@ watch(
                   label="Save"
                   icon="pi pi-save"
                   severity="secondary"
-                  :loading="invitationCodesStore.submissionState === 'submitting'"
+                  :loading="
+                    invitationCodesStore.submissionState === 'submitting'
+                  "
                   @click="saveInvitationCode(invitationCode.id)"
                 />
                 <Button
                   label="Delete"
                   icon="pi pi-trash"
                   severity="danger"
-                  :loading="invitationCodesStore.submissionState === 'submitting'"
+                  :loading="
+                    invitationCodesStore.submissionState === 'submitting'
+                  "
                   @click="deleteInvitationCodeEntry(invitationCode.id)"
                 />
               </div>
@@ -512,7 +785,10 @@ watch(
 
             <div class="invitation-code-users">
               <p class="label">Users created with this code</p>
-              <div v-if="invitationCode.users_created.length === 0" class="invitation-code-empty">
+              <div
+                v-if="invitationCode.users_created.length === 0"
+                class="invitation-code-empty"
+              >
                 None yet.
               </div>
               <div v-else class="invitation-code-user-list">

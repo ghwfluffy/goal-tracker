@@ -15,6 +15,7 @@ import NotificationEntryDialog from "../components/home/NotificationEntryDialog.
 import { getBrowserTimezone } from "../lib/time";
 import { watchToastError } from "../lib/toast";
 import { useAuthStore } from "../stores/auth";
+import { useBackupsStore } from "../stores/backups";
 import { useDashboardsStore } from "../stores/dashboards";
 import { useGoalsStore } from "../stores/goals";
 import { useMetricsStore } from "../stores/metrics";
@@ -22,6 +23,7 @@ import { useNotificationsStore } from "../stores/notifications";
 import { useStatusStore } from "../stores/status";
 
 const authStore = useAuthStore();
+const backupsStore = useBackupsStore();
 const dashboardsStore = useDashboardsStore();
 const goalsStore = useGoalsStore();
 const metricsStore = useMetricsStore();
@@ -32,6 +34,7 @@ const activeTabIndex = ref(0);
 const profileVisible = ref(false);
 const passwordVisible = ref(false);
 const deleteAccountVisible = ref(false);
+const backupsVisible = ref(false);
 const invitationCodesVisible = ref(false);
 const notificationsVisible = ref(false);
 const notificationEntryVisible = ref(false);
@@ -48,24 +51,39 @@ const tabs = [
 ];
 
 const appVersion = computed(() => {
-  return statusStore.state === "ready" && statusStore.data !== null ? statusStore.data.version : null;
+  return statusStore.state === "ready" && statusStore.data !== null
+    ? statusStore.data.version
+    : null;
 });
 
 const selectedMetricHistory = computed(() => {
-  return metricsStore.metrics.find((metric) => metric.id === metricHistoryMetricId.value) ?? null;
+  return (
+    metricsStore.metrics.find(
+      (metric) => metric.id === metricHistoryMetricId.value,
+    ) ?? null
+  );
 });
 
 const selectedMetricEntry = computed(() => {
-  return metricsStore.metrics.find((metric) => metric.id === metricEntryMetricId.value) ?? null;
+  return (
+    metricsStore.metrics.find(
+      (metric) => metric.id === metricEntryMetricId.value,
+    ) ?? null
+  );
 });
 
 const selectedNotificationEntry = computed(() => {
-  return notificationsStore.notifications.find((notification) => notification.id === notificationEntryId.value) ?? null;
+  return (
+    notificationsStore.notifications.find(
+      (notification) => notification.id === notificationEntryId.value,
+    ) ?? null
+  );
 });
 
 let notificationsRefreshTimer: number | null = null;
 
 watchToastError(() => authStore.errorMessage, "Authentication");
+watchToastError(() => backupsStore.errorMessage, "Backups");
 watchToastError(() => dashboardsStore.errorMessage, "Dashboards");
 watchToastError(() => goalsStore.errorMessage, "Goals");
 watchToastError(() => metricsStore.errorMessage, "Metrics");
@@ -133,6 +151,7 @@ watch(
     profileVisible.value = false;
     passwordVisible.value = false;
     deleteAccountVisible.value = false;
+    backupsVisible.value = false;
     invitationCodesVisible.value = false;
     notificationsVisible.value = false;
     notificationEntryVisible.value = false;
@@ -162,7 +181,9 @@ watch(
 
     if (
       metricHistoryMetricId.value !== "" &&
-      metricsStore.metrics.every((metric) => metric.id !== metricHistoryMetricId.value)
+      metricsStore.metrics.every(
+        (metric) => metric.id !== metricHistoryMetricId.value,
+      )
     ) {
       metricHistoryVisible.value = false;
       metricHistoryMetricId.value = "";
@@ -170,7 +191,9 @@ watch(
 
     if (
       metricEntryMetricId.value !== "" &&
-      metricsStore.metrics.every((metric) => metric.id !== metricEntryMetricId.value)
+      metricsStore.metrics.every(
+        (metric) => metric.id !== metricEntryMetricId.value,
+      )
     ) {
       metricEntryVisible.value = false;
       metricEntryMetricId.value = "";
@@ -189,7 +212,9 @@ watch(
   () => {
     if (
       notificationEntryId.value !== "" &&
-      notificationsStore.notifications.every((notification) => notification.id !== notificationEntryId.value)
+      notificationsStore.notifications.every(
+        (notification) => notification.id !== notificationEntryId.value,
+      )
     ) {
       notificationEntryVisible.value = false;
       notificationEntryId.value = "";
@@ -207,7 +232,10 @@ onBeforeUnmount(() => {
 
 <template>
   <main class="home-view">
-    <section v-if="authStore.isAuthenticated && authStore.currentUser !== null" class="app-shell">
+    <section
+      v-if="authStore.isAuthenticated && authStore.currentUser !== null"
+      class="app-shell"
+    >
       <HomeHeaderBanner
         :notification-count="notificationsStore.count"
         :user="authStore.currentUser"
@@ -215,6 +243,7 @@ onBeforeUnmount(() => {
         @open-notifications="notificationsVisible = true"
         @open-profile="profileVisible = true"
         @open-password="passwordVisible = true"
+        @open-backups="backupsVisible = true"
         @open-invitation-codes="invitationCodesVisible = true"
         @delete-account="deleteAccountVisible = true"
         @logout="void authStore.logout()"
@@ -262,6 +291,7 @@ onBeforeUnmount(() => {
         v-model:profileVisible="profileVisible"
         v-model:passwordVisible="passwordVisible"
         v-model:deleteAccountVisible="deleteAccountVisible"
+        v-model:backupsVisible="backupsVisible"
         v-model:invitationCodesVisible="invitationCodesVisible"
       />
     </section>

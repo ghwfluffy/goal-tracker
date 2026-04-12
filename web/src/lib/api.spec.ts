@@ -4,6 +4,7 @@ import {
   ApiError,
   addMetricEntry,
   completeNotification,
+  createBackup,
   createDashboard,
   createDashboardWidget,
   createGoal,
@@ -12,6 +13,7 @@ import {
   deleteDashboard,
   deleteDashboardWidget,
   deleteInvitationCode,
+  fetchBackupInventory,
   fetchBootstrapStatus,
   fetchCurrentSession,
   fetchDashboards,
@@ -22,6 +24,7 @@ import {
   fetchStatus,
   loginWithPassword,
   registerWithInvitationCode,
+  restoreBackup,
   skipNotification,
   updateDashboard,
   updateDashboardWidget,
@@ -72,7 +75,9 @@ describe("fetchStatus", () => {
   it("throws when the backend responds with an error", async () => {
     const fetcher = vi.fn(async () => new Response(null, { status: 503 }));
 
-    await expect(fetchStatus(fetcher)).rejects.toThrow("Request failed with 503");
+    await expect(fetchStatus(fetcher)).rejects.toThrow(
+      "Request failed with 503",
+    );
   });
 });
 
@@ -87,7 +92,9 @@ describe("auth api helpers", () => {
       });
     });
 
-    await expect(fetchBootstrapStatus(fetcher)).resolves.toEqual({ bootstrap_required: true });
+    await expect(fetchBootstrapStatus(fetcher)).resolves.toEqual({
+      bootstrap_required: true,
+    });
     const [, init] = fetcher.mock.calls[0] as [string, RequestInit];
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(init.credentials).toBe("same-origin");
@@ -120,7 +127,10 @@ describe("auth api helpers", () => {
     });
 
     await expect(
-      loginWithPassword({ username: "admin", password: "supersafepassword" }, fetcher),
+      loginWithPassword(
+        { username: "admin", password: "supersafepassword" },
+        fetcher,
+      ),
     ).resolves.toEqual({
       user: {
         avatar_version: null,
@@ -135,7 +145,9 @@ describe("auth api helpers", () => {
 
     const [, init] = fetcher.mock.calls[0] as [string, RequestInit];
     expect(fetcher).toHaveBeenCalledTimes(1);
-    expect(init.body).toBe(JSON.stringify({ username: "admin", password: "supersafepassword" }));
+    expect(init.body).toBe(
+      JSON.stringify({ username: "admin", password: "supersafepassword" }),
+    );
     expect(init.credentials).toBe("same-origin");
     expect(init.method).toBe("POST");
     expect(headersToObject(init.headers as Headers)).toEqual({
@@ -294,7 +306,10 @@ describe("auth api helpers", () => {
         );
       }
 
-      if (path.endsWith("/invitation-codes/code-1") && init?.method === "PATCH") {
+      if (
+        path.endsWith("/invitation-codes/code-1") &&
+        init?.method === "PATCH"
+      ) {
         return new Response(
           JSON.stringify({
             code: "A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6",
@@ -336,12 +351,151 @@ describe("auth api helpers", () => {
     });
 
     await expect(
-      updateInvitationCode("code-1", { expires_at: "2026-04-19T20:00:00Z" }, fetcher),
+      updateInvitationCode(
+        "code-1",
+        { expires_at: "2026-04-19T20:00:00Z" },
+        fetcher,
+      ),
     ).resolves.toMatchObject({
       expires_at: "2026-04-19T20:00:00Z",
     });
 
-    await expect(deleteInvitationCode("code-1", fetcher)).resolves.toBeUndefined();
+    await expect(
+      deleteInvitationCode("code-1", fetcher),
+    ).resolves.toBeUndefined();
+  });
+
+  it("supports backup admin helpers", async () => {
+    const fetcher = vi.fn(async (input, init) => {
+      const path = String(input);
+
+      if (path.endsWith("/admin/backups") && init?.method === undefined) {
+        return new Response(
+          JSON.stringify({
+            backups: [
+              {
+                created_at: "2026-04-12T16:00:00Z",
+                created_by_user: {
+                  display_name: null,
+                  id: "user-1",
+                  username: "admin",
+                },
+                file_size_bytes: 2048,
+                filename: "20260412T160000Z_manual.dump",
+                id: "backup-1",
+                relative_path: "20260412T160000Z_manual.dump",
+                sha256: "a".repeat(64),
+                storage_key: "20260412T160000Z_manual",
+                trigger_source: "manual",
+              },
+            ],
+            restores: [],
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      if (path.endsWith("/admin/backups") && init?.method === "POST") {
+        return new Response(
+          JSON.stringify({
+            created_at: "2026-04-12T16:10:00Z",
+            created_by_user: {
+              display_name: null,
+              id: "user-1",
+              username: "admin",
+            },
+            file_size_bytes: 4096,
+            filename: "20260412T161000Z_manual.dump",
+            id: "backup-2",
+            relative_path: "20260412T161000Z_manual.dump",
+            sha256: "b".repeat(64),
+            storage_key: "20260412T161000Z_manual",
+            trigger_source: "manual",
+          }),
+          {
+            status: 201,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      if (
+        path.endsWith("/admin/backups/backup-1/restore") &&
+        init?.method === "POST"
+      ) {
+        return new Response(
+          JSON.stringify({
+            backup: {
+              created_at: "2026-04-12T16:00:00Z",
+              created_by_user: {
+                display_name: null,
+                id: "user-1",
+                username: "admin",
+              },
+              file_size_bytes: 2048,
+              filename: "20260412T160000Z_manual.dump",
+              id: "backup-1",
+              relative_path: "20260412T160000Z_manual.dump",
+              sha256: "a".repeat(64),
+              storage_key: "20260412T160000Z_manual",
+              trigger_source: "manual",
+            },
+            completed_at: "2026-04-12T16:12:00Z",
+            error_message: null,
+            id: "restore-1",
+            pre_restore_backup: {
+              created_at: "2026-04-12T16:11:00Z",
+              created_by_user: {
+                display_name: null,
+                id: "user-1",
+                username: "admin",
+              },
+              file_size_bytes: 8192,
+              filename: "20260412T161100Z_pre_restore.dump",
+              id: "backup-3",
+              relative_path: "20260412T161100Z_pre_restore.dump",
+              sha256: "c".repeat(64),
+              storage_key: "20260412T161100Z_pre_restore",
+              trigger_source: "pre_restore",
+            },
+            requested_at: "2026-04-12T16:11:30Z",
+            requested_by_user: {
+              display_name: null,
+              id: "user-1",
+              username: "admin",
+            },
+            started_at: "2026-04-12T16:11:30Z",
+            status: "completed",
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      return new Response(null, { status: 404 });
+    });
+
+    await expect(fetchBackupInventory(fetcher)).resolves.toMatchObject({
+      backups: [{ id: "backup-1", trigger_source: "manual" }],
+      restores: [],
+    });
+
+    await expect(createBackup(fetcher)).resolves.toMatchObject({
+      id: "backup-2",
+      trigger_source: "manual",
+    });
+
+    await expect(
+      restoreBackup("backup-1", { confirmation_text: "RESTORE" }, fetcher),
+    ).resolves.toMatchObject({
+      id: "restore-1",
+      status: "completed",
+    });
   });
 
   it("supports metric and goal helpers", async () => {
@@ -398,7 +552,10 @@ describe("auth api helpers", () => {
         );
       }
 
-      if (path.endsWith("/metrics/metric-1/entries") && init?.method === "POST") {
+      if (
+        path.endsWith("/metrics/metric-1/entries") &&
+        init?.method === "POST"
+      ) {
         return new Response(
           JSON.stringify({
             entries: [
@@ -635,7 +792,9 @@ describe("auth api helpers", () => {
       goals: [{ id: "goal-1", is_archived: true }],
     });
 
-    await expect(updateGoal("goal-1", { archived: true }, fetcher)).resolves.toMatchObject({
+    await expect(
+      updateGoal("goal-1", { archived: true }, fetcher),
+    ).resolves.toMatchObject({
       id: "goal-1",
       is_archived: true,
     });
@@ -686,11 +845,11 @@ describe("auth api helpers", () => {
                 metric: {
                   decimal_places: 1,
                   id: "metric-1",
-                metric_type: "number",
-                name: "Weight",
-                update_type: "success",
-                unit_label: "lbs",
-              },
+                  metric_type: "number",
+                  name: "Weight",
+                  update_type: "success",
+                  unit_label: "lbs",
+                },
                 notification_date: "2026-04-12",
                 scheduled_time: "06:00",
                 slot_index: 1,
@@ -772,7 +931,9 @@ describe("auth api helpers", () => {
       reminder_time_1: "07:15",
     });
 
-    await expect(fetchNotifications("America/Chicago", fetcher)).resolves.toEqual({
+    await expect(
+      fetchNotifications("America/Chicago", fetcher),
+    ).resolves.toEqual({
       notifications: [
         {
           id: "notification-1",
@@ -795,14 +956,20 @@ describe("auth api helpers", () => {
     await expect(
       completeNotification(
         "notification-1",
-        { number_value: 244.4, recorded_at: "2026-04-12T11:43:00.000Z", timezone: "America/Chicago" },
+        {
+          number_value: 244.4,
+          recorded_at: "2026-04-12T11:43:00.000Z",
+          timezone: "America/Chicago",
+        },
         fetcher,
       ),
     ).resolves.toMatchObject({
       status: "completed",
     });
 
-    await expect(skipNotification("notification-1", fetcher)).resolves.toMatchObject({
+    await expect(
+      skipNotification("notification-1", fetcher),
+    ).resolves.toMatchObject({
       status: "skipped",
     });
   });
@@ -924,7 +1091,10 @@ describe("auth api helpers", () => {
         );
       }
 
-      if (path.endsWith("/dashboards/dashboard-1") && init?.method === "PATCH") {
+      if (
+        path.endsWith("/dashboards/dashboard-1") &&
+        init?.method === "PATCH"
+      ) {
         return new Response(
           JSON.stringify({
             description: "Updated",
@@ -940,7 +1110,10 @@ describe("auth api helpers", () => {
         );
       }
 
-      if (path.endsWith("/dashboards/dashboard-1/widgets") && init?.method === "POST") {
+      if (
+        path.endsWith("/dashboards/dashboard-1/widgets") &&
+        init?.method === "POST"
+      ) {
         return new Response(
           JSON.stringify({
             current_progress_percent: null,
@@ -975,7 +1148,10 @@ describe("auth api helpers", () => {
         );
       }
 
-      if (path.endsWith("/dashboards/dashboard-1/widgets/widget-1") && init?.method === "PATCH") {
+      if (
+        path.endsWith("/dashboards/dashboard-1/widgets/widget-1") &&
+        init?.method === "PATCH"
+      ) {
         return new Response(
           JSON.stringify({
             current_progress_percent: null,
@@ -1087,7 +1263,11 @@ describe("auth api helpers", () => {
       rolling_window_days: 90,
     });
 
-    await expect(deleteDashboard("dashboard-1", fetcher)).resolves.toBeUndefined();
-    await expect(deleteDashboardWidget("dashboard-1", "widget-1", fetcher)).resolves.toBeUndefined();
+    await expect(
+      deleteDashboard("dashboard-1", fetcher),
+    ).resolves.toBeUndefined();
+    await expect(
+      deleteDashboardWidget("dashboard-1", "widget-1", fetcher),
+    ).resolves.toBeUndefined();
   });
 });

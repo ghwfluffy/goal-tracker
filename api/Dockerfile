@@ -9,6 +9,7 @@ RUN apt-get update \
         python3-venv \
         build-essential \
         libpq-dev \
+        postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /workspace/api

@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     session_duration_minutes: int = 60
     auth_max_failed_attempts: int = 5
     auth_lockout_minutes: int = 15
+    backup_dir: str = str(ROOT_DIR / "backups")
+    backup_uid: int = 1000
+    backup_gid: int = 1000
+    backup_command_timeout_seconds: int = 1800
     cors_origins: list[str] = [
         "http://127.0.0.1:8080",
         "http://127.0.0.1:8081",
