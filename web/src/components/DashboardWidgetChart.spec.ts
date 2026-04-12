@@ -122,10 +122,11 @@ describe("DashboardWidgetChart", () => {
 
     const option = setOptionMock.mock.calls[0]?.[0] as {
       series: Array<{ data: Array<[number, number]> }>;
-      yAxis: { max?: number };
+      yAxis: { min?: number; max?: number };
     };
 
-    expect(option.yAxis.max).toBeUndefined();
+    expect(option.yAxis.min).toBe(217);
+    expect(option.yAxis.max).toBe(253);
     expect(option.series[0]?.data).toEqual([
       [new Date("2026-04-01T05:00:00Z").getTime(), 250],
       [new Date("2026-04-05T12:00:00Z").getTime(), 238],

@@ -118,6 +118,16 @@ export interface CreateMetricEntryPayload {
   recorded_at?: string | null;
 }
 
+export interface ImportMetricEntriesPayload {
+  data: string;
+}
+
+export interface ImportMetricEntriesResponse {
+  imported_count: number;
+  skipped_count: number;
+  metric: MetricSummary;
+}
+
 export interface UpdateMetricPayload {
   archived?: boolean;
   decimal_places?: number | null;
@@ -629,6 +639,21 @@ export function addMetricEntry(
 ): Promise<MetricSummary> {
   return requestJson<MetricSummary>(
     `/metrics/${metricId}/entries`,
+    {
+      body: JSON.stringify(payload),
+      method: "POST",
+    },
+    fetcher,
+  );
+}
+
+export function importMetricEntries(
+  metricId: string,
+  payload: ImportMetricEntriesPayload,
+  fetcher: Fetcher = fetch,
+): Promise<ImportMetricEntriesResponse> {
+  return requestJson<ImportMetricEntriesResponse>(
+    `/metrics/${metricId}/import`,
     {
       body: JSON.stringify(payload),
       method: "POST",

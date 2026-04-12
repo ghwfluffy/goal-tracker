@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { getActivePinia } from "pinia";
 
 import type { DashboardWidgetSummary } from "../lib/api";
+import { getPaddedNumericAxisBounds } from "../lib/chart";
 import { getDashboardWidgetValueText, isDashboardValueWidget } from "../lib/dashboardWidgets";
 import {
   buildGoalForecastSeries,
@@ -139,6 +140,29 @@ const hasRenderableContent = computed(() => {
   return metricChartPoints.value.length > 0;
 });
 
+const metricHistoryAxisBounds = computed(() => {
+  if (props.widget.metric?.metric_type !== "number") {
+    return null;
+  }
+  return getPaddedNumericAxisBounds(metricChartPoints.value.map((point) => point.value));
+});
+
+const goalMetricAxisBounds = computed(() => {
+  if (props.widget.goal?.metric.metric_type !== "number") {
+    return null;
+  }
+
+  const values = [
+    ...goalMetricChartPoints.value.map((point) => point.value),
+  ];
+  const targetValue = goalTargetValue.value;
+  if (typeof targetValue === "number") {
+    values.push(targetValue);
+  }
+
+  return getPaddedNumericAxisBounds(values);
+});
+
 function formatMetricAxisValue(value: number): string {
   if (props.widget.metric?.metric_type !== "date") {
     return value.toFixed(props.widget.metric?.decimal_places ?? 0);
@@ -166,6 +190,8 @@ function createMetricHistoryOption(): object {
     },
     yAxis: {
       type: "value",
+      min: metricHistoryAxisBounds.value?.min,
+      max: metricHistoryAxisBounds.value?.max,
       axisLine: { show: false },
       splitLine: { lineStyle: { color: chartTheme.gridLine } },
       axisLabel: {
@@ -214,6 +240,8 @@ function createGoalMetricProgressOption(): object {
     },
     yAxis: {
       type: "value",
+      min: goalMetricAxisBounds.value?.min,
+      max: goalMetricAxisBounds.value?.max,
       axisLine: { show: false },
       axisLabel: {
         color: chartTheme.axisLabel,

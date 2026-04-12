@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
 import type { MetricSummary } from "../lib/api";
+import { getPaddedNumericAxisBounds } from "../lib/chart";
 import { getChartThemeColors } from "../lib/theme";
 import { formatDateOnly } from "../lib/time";
 
@@ -59,6 +60,14 @@ const chartData = computed(() => {
 
 const hasChartData = computed(() => chartData.value.length > 0);
 
+const numericAxisBounds = computed(() => {
+  if (props.metric.metric_type !== "number") {
+    return null;
+  }
+
+  return getPaddedNumericAxisBounds(chartData.value.map((point) => point.value));
+});
+
 function createChartOption(): object {
   const isDateMetric = props.metric.metric_type === "date";
   const decimalPlaces = props.metric.decimal_places ?? 0;
@@ -76,6 +85,8 @@ function createChartOption(): object {
     },
     yAxis: {
       type: "value",
+      min: numericAxisBounds.value?.min,
+      max: numericAxisBounds.value?.max,
       axisLine: { show: false },
       splitLine: { lineStyle: { color: chartTheme.gridLine } },
       axisLabel: {

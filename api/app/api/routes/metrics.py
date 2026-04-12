@@ -17,7 +17,9 @@ from app.services.metrics import (
     create_metric_entry,
     delete_metric,
     get_metric_for_user,
+    import_metric_entries,
     list_metrics_for_user,
+    parse_metric_import_text,
     update_metric,
 )
 
@@ -80,6 +82,16 @@ class UpdateMetricRequest(BaseModel):
     reminder_time_1: time | None = None
     reminder_time_2: time | None = None
     archived: bool | None = None
+
+
+class ImportMetricEntriesRequest(BaseModel):
+    data: str = Field(min_length=1)
+
+
+class ImportMetricEntriesResponse(BaseModel):
+    imported_count: int
+    skipped_count: int
+    metric: MetricSummary
 
 
 def decimal_to_float(value: Decimal | float | None) -> float | None:
@@ -191,6 +203,43 @@ def post_metric_entry(
         ) from exc
 
     return serialize_metric(updated_metric)
+
+
+@router.post("/{metric_id}/import", response_model=ImportMetricEntriesResponse)
+def post_metric_import(
+    metric_id: str,
+    payload: ImportMetricEntriesRequest,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> ImportMetricEntriesResponse:
+    try:
+        metric = get_metric_for_user(db, user=user, metric_id=metric_id)
+        rows = parse_metric_import_text(
+            metric=metric,
+            raw_text=payload.data,
+            timezone_name=user.timezone,
+        )
+        updated_metric, imported_count, skipped_count = import_metric_entries(
+            db,
+            metric=metric,
+            rows=rows,
+        )
+        db.commit()
+    except MetricNotFoundError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except MetricError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(exc),
+        ) from exc
+
+    return ImportMetricEntriesResponse(
+        imported_count=imported_count,
+        skipped_count=skipped_count,
+        metric=serialize_metric(updated_metric),
+    )
 
 
 @router.patch("/{metric_id}", response_model=MetricSummary)

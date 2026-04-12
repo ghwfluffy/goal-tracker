@@ -171,6 +171,86 @@ def test_metric_schedule_fields_can_be_created_and_updated(client: TestClient) -
     assert updated_payload["reminder_time_2"] is None
 
 
+def test_import_number_metric_entries_is_idempotent(client: TestClient) -> None:
+    bootstrap_admin(client)
+
+    create_response = client.post(
+        "/api/v1/metrics",
+        json={
+            "name": "Weight",
+            "metric_type": "number",
+            "decimal_places": 1,
+            "unit_label": "lbs",
+        },
+    )
+    assert create_response.status_code == 201
+    metric_id = create_response.json()["id"]
+
+    import_response = client.post(
+        f"/api/v1/metrics/{metric_id}/import",
+        json={
+            "data": "recorded_at\tvalue\n2026-01-05 20:56\t298.6\n2026-01-06 07:00\t296.6\n",
+        },
+    )
+
+    assert import_response.status_code == 200
+    payload = import_response.json()
+    assert payload["imported_count"] == 2
+    assert payload["skipped_count"] == 0
+    assert len(payload["metric"]["entries"]) == 2
+    assert payload["metric"]["entries"][0]["number_value"] == 296.6
+    assert payload["metric"]["entries"][0]["recorded_at"] == "2026-01-06T13:00:00"
+    assert payload["metric"]["entries"][1]["recorded_at"] == "2026-01-06T02:56:00"
+
+    repeat_response = client.post(
+        f"/api/v1/metrics/{metric_id}/import",
+        json={
+            "data": "2026-01-05 20:56,298.6\n2026-01-06 07:00,296.6\n",
+        },
+    )
+    assert repeat_response.status_code == 200
+    repeat_payload = repeat_response.json()
+    assert repeat_payload["imported_count"] == 0
+    assert repeat_payload["skipped_count"] == 2
+    assert len(repeat_payload["metric"]["entries"]) == 2
+
+
+def test_import_rejects_conflicting_existing_metric_entry(client: TestClient) -> None:
+    bootstrap_admin(client)
+
+    create_response = client.post(
+        "/api/v1/metrics",
+        json={
+            "name": "Weight",
+            "metric_type": "number",
+            "decimal_places": 1,
+        },
+    )
+    assert create_response.status_code == 201
+    metric_id = create_response.json()["id"]
+
+    update_response = client.post(
+        f"/api/v1/metrics/{metric_id}/entries",
+        json={
+            "number_value": 245.5,
+            "recorded_at": "2026-01-06T02:56:00Z",
+        },
+    )
+    assert update_response.status_code == 200
+
+    import_response = client.post(
+        f"/api/v1/metrics/{metric_id}/import",
+        json={
+            "data": "2026-01-05 20:56\t244.5\n",
+        },
+    )
+    assert import_response.status_code == 422
+    assert (
+        import_response.json()["detail"]
+        == "Import line 1 conflicts with an existing entry at 2026-01-06T02:56:00+00:00."
+    )
+
+
 def test_due_number_metric_notification_can_be_completed(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,

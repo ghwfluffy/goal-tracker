@@ -5,9 +5,11 @@ import {
   createMetric,
   deleteMetric,
   fetchMetrics,
+  importMetricEntries,
   updateMetric,
   type CreateMetricEntryPayload,
   type CreateMetricPayload,
+  type ImportMetricEntriesPayload,
   type MetricSummary,
   type UpdateMetricPayload,
 } from "../lib/api";
@@ -93,6 +95,27 @@ export const useMetricsStore = defineStore("metrics", {
       } catch (error: unknown) {
         this.errorMessage = error instanceof Error ? error.message : "Unable to update metric.";
         return false;
+      } finally {
+        this.submissionState = "idle";
+      }
+    },
+    async importMetricEntries(
+      metricId: string,
+      payload: ImportMetricEntriesPayload,
+    ): Promise<{ importedCount: number; skippedCount: number } | null> {
+      this.submissionState = "submitting";
+      this.errorMessage = "";
+
+      try {
+        const response = await importMetricEntries(metricId, payload);
+        await this.loadMetrics();
+        return {
+          importedCount: response.imported_count,
+          skippedCount: response.skipped_count,
+        };
+      } catch (error: unknown) {
+        this.errorMessage = error instanceof Error ? error.message : "Unable to import metric values.";
+        return null;
       } finally {
         this.submissionState = "idle";
       }

@@ -27,6 +27,9 @@ const activeMetricMenuId = ref("");
 const metricDialogVisible = ref(false);
 const metricDialogMode = ref<"create" | "edit">("create");
 const metricEditId = ref("");
+const metricImportDialogVisible = ref(false);
+const metricImportMetricId = ref("");
+const metricImportTextInput = ref("");
 const viewMode = ref<"table" | "cards">("table");
 
 const metricNameInput = ref("");
@@ -48,6 +51,10 @@ const editingMetric = computed(() => {
   return metricsStore.metrics.find((metric) => metric.id === metricEditId.value) ?? null;
 });
 
+const importingMetric = computed(() => {
+  return metricsStore.metrics.find((metric) => metric.id === metricImportMetricId.value) ?? null;
+});
+
 const metricRowMenuItems = computed<MenuItem[]>(() => {
   const metric = selectedMetricMenuMetric.value;
   if (metric === null) {
@@ -67,6 +74,11 @@ const metricRowMenuItems = computed<MenuItem[]>(() => {
       icon: "pi pi-plus-circle",
       label: "Add update",
       command: () => emit("openMetricEntry", metric.id),
+    });
+    items.push({
+      icon: "pi pi-upload",
+      label: "Import values",
+      command: () => openImportDialog(metric),
     });
   }
 
@@ -137,6 +149,12 @@ function openEditDialog(metric: (typeof metricsStore.metrics)[number]): void {
   metricReminderTime1Input.value = metric.reminder_time_1;
   metricReminderTime2Input.value = metric.reminder_time_2 ?? "";
   metricDialogVisible.value = true;
+}
+
+function openImportDialog(metric: (typeof metricsStore.metrics)[number]): void {
+  metricImportMetricId.value = metric.id;
+  metricImportTextInput.value = "";
+  metricImportDialogVisible.value = true;
 }
 
 function toggleMetricRowMenu(event: Event, metricId: string): void {
@@ -210,6 +228,35 @@ async function submitMetricForm(): Promise<void> {
 
   showSuccess("Metric updated.", "Metrics");
   metricDialogVisible.value = false;
+}
+
+function formatImportSuccessMessage(importedCount: number, skippedCount: number): string {
+  if (skippedCount === 0) {
+    return `Imported ${importedCount} value${importedCount === 1 ? "" : "s"}.`;
+  }
+
+  return `Imported ${importedCount} value${importedCount === 1 ? "" : "s"} and skipped ${skippedCount} duplicate${skippedCount === 1 ? "" : "s"}.`;
+}
+
+async function submitImportForm(): Promise<void> {
+  if (importingMetric.value === null) {
+    return;
+  }
+
+  const result = await metricsStore.importMetricEntries(importingMetric.value.id, {
+    data: metricImportTextInput.value,
+  });
+  if (result === null) {
+    return;
+  }
+
+  showSuccess(
+    formatImportSuccessMessage(result.importedCount, result.skippedCount),
+    "Metrics",
+  );
+  metricImportDialogVisible.value = false;
+  metricImportTextInput.value = "";
+  await goalsStore.loadGoals();
 }
 
 async function setMetricArchived(metricId: string, archived: boolean): Promise<void> {
@@ -291,9 +338,6 @@ function toggleIncludeArchived(): void {
             <td>
               <div class="table-primary-cell">
                 <strong>{{ metric.name }}</strong>
-                <span v-if="metric.unit_label !== null" class="table-secondary-text">
-                  {{ metric.unit_label }}
-                </span>
               </div>
             </td>
             <td>
@@ -492,6 +536,57 @@ function toggleIncludeArchived(): void {
         </section>
       </div>
     </Dialog>
+
+    <Dialog
+      v-model:visible="metricImportDialogVisible"
+      modal
+      header="Import metric values"
+      class="profile-dialog"
+      :style="{ width: 'min(42rem, 96vw)' }"
+    >
+      <div class="dialog-stack">
+        <section v-if="importingMetric !== null" class="dialog-section">
+          <div class="section-heading-text">
+            <h3>Import values into {{ importingMetric.name }}</h3>
+            <p>
+              Paste one line per entry as timestamp plus value. Tabs and commas are both accepted.
+              Header rows are optional.
+            </p>
+          </div>
+
+          <label class="field">
+            <span class="label">Paste data</span>
+            <textarea
+              v-model="metricImportTextInput"
+              class="native-file-input metric-import-textarea"
+              rows="10"
+              spellcheck="false"
+              placeholder="2026-01-05 20:56\t298.6&#10;2026-01-06 07:00\t296.6"
+            />
+          </label>
+
+          <div class="widget-dialog-note">
+            Use local-style timestamps like <code>2026-01-05 20:56</code> or ISO timestamps like
+            <code>2026-01-05T20:56:00Z</code>. Importing the same rows again skips duplicates.
+          </div>
+
+          <div class="dialog-actions-row">
+            <Button
+              label="Cancel"
+              severity="secondary"
+              text
+              @click="metricImportDialogVisible = false"
+            />
+            <Button
+              label="Import values"
+              icon="pi pi-upload"
+              :loading="metricsStore.submissionState === 'submitting'"
+              @click="submitImportForm"
+            />
+          </div>
+        </section>
+      </div>
+    </Dialog>
   </div>
 </template>
 
@@ -501,6 +596,12 @@ function toggleIncludeArchived(): void {
 .metric-reminder-grid {
   display: grid;
   gap: 1rem;
+}
+
+.metric-import-textarea {
+  min-height: 16rem;
+  resize: vertical;
+  font-family: "SFMono-Regular", "Consolas", "Liberation Mono", monospace;
 }
 
 @media (max-width: 720px) {
