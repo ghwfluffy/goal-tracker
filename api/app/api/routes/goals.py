@@ -20,7 +20,7 @@ from app.services.goals import (
     goal_target_met,
     goal_time_completion_percent,
     list_goals_for_user,
-    set_goal_archived_state,
+    update_goal,
 )
 from app.services.metrics import (
     MetricError,
@@ -106,7 +106,23 @@ class CreateGoalRequest(BaseModel):
 
 
 class UpdateGoalRequest(BaseModel):
-    archived: bool
+    title: str | None = Field(default=None, max_length=120)
+    description: str | None = None
+    start_date: date | None = None
+    target_date: date | None = None
+    target_value_number: float | None = None
+    target_value_date: date | None = None
+    success_threshold_percent: float | None = Field(default=None, ge=0, le=100)
+    exception_dates: list[date] | None = None
+    archived: bool | None = None
+
+    @model_validator(mode="after")
+    def validate_update_payload(self) -> UpdateGoalRequest:
+        if len(self.model_fields_set) == 0:
+            raise ValueError("Provide at least one goal field to update.")
+        if "title" in self.model_fields_set and (self.title is None or self.title.strip() == ""):
+            raise ValueError("Goal title is required.")
+        return self
 
 
 def decimal_to_float(value: Decimal | float | None) -> float | None:
@@ -241,7 +257,20 @@ def patch_goal(
 ) -> GoalSummary:
     try:
         goal = get_goal_for_user(db, user=user, goal_id=goal_id)
-        updated_goal = set_goal_archived_state(db, goal=goal, archived=payload.archived)
+        updated_goal = update_goal(
+            db,
+            goal=goal,
+            update_fields=set(payload.model_fields_set),
+            title=payload.title,
+            description=payload.description,
+            start_date=payload.start_date,
+            target_date=payload.target_date,
+            target_value_number=payload.target_value_number,
+            target_value_date=payload.target_value_date,
+            success_threshold_percent=payload.success_threshold_percent,
+            exception_dates=payload.exception_dates,
+            archived=payload.archived,
+        )
         db.commit()
     except GoalNotFoundError as exc:
         db.rollback()

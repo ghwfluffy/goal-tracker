@@ -6,6 +6,7 @@ import {
   updateGoal,
   type CreateGoalPayload,
   type GoalSummary,
+  type UpdateGoalPayload,
 } from "../lib/api";
 
 type GoalsViewState = "idle" | "loading" | "ready" | "error";
@@ -58,6 +59,21 @@ export const useGoalsStore = defineStore("goals", {
         return true;
       } catch (error: unknown) {
         this.errorMessage = error instanceof Error ? error.message : "Unable to create goal.";
+        return false;
+      } finally {
+        this.submissionState = "idle";
+      }
+    },
+    async updateGoalDetails(goalId: string, payload: UpdateGoalPayload): Promise<boolean> {
+      this.submissionState = "submitting";
+      this.errorMessage = "";
+
+      try {
+        await updateGoal(goalId, payload);
+        await this.loadGoals();
+        return true;
+      } catch (error: unknown) {
+        this.errorMessage = error instanceof Error ? error.message : "Unable to update goal.";
         return false;
       } finally {
         this.submissionState = "idle";

@@ -74,7 +74,7 @@ The frontend home page now consumes that auth foundation and can:
 7. let administrators create, update, review, and revoke invitation codes
 8. create reusable number/date metrics with configurable decimal places and add quick updates
 9. archive metrics so they are hidden by default, or permanently delete standalone metrics that are not used by goals or widgets
-10. create goals tied to an existing metric or a new inline metric, including date-based compliance goals with exception dates and success thresholds
+10. create and edit goals tied to an existing metric or a new inline metric, including date-based compliance goals with exception dates and success thresholds
 11. archive goals so they are hidden by default and can be restored when needed
 12. create dashboards, choose a default dashboard, and manage dashboard widgets in a dedicated edit mode, including target-date goal charts plus completion, success, and risk widgets
 13. render widget timestamps in the browser timezone while showing the saved profile timezone used for day-boundary logic

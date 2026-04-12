@@ -165,7 +165,15 @@ export interface CreateGoalPayload {
 }
 
 export interface UpdateGoalPayload {
-  archived: boolean;
+  archived?: boolean;
+  description?: string | null;
+  exception_dates?: string[];
+  start_date?: string;
+  success_threshold_percent?: number | null;
+  target_date?: string | null;
+  target_value_date?: string | null;
+  target_value_number?: number | null;
+  title?: string;
 }
 
 export interface DashboardMetricReference {

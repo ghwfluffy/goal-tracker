@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime
 from decimal import ROUND_HALF_UP, Decimal
+from typing import cast
 from uuid import uuid4
 
 from sqlalchemy import select
@@ -72,10 +73,8 @@ def normalize_exception_dates(
     return unique_dates
 
 
-def create_goal(
-    db: Session,
+def normalize_goal_details(
     *,
-    user: User,
     metric: Metric,
     title: str,
     description: str | None,
@@ -83,21 +82,22 @@ def create_goal(
     target_date: date | None,
     target_value_number: float | None,
     target_value_date: date | None,
-    success_threshold_percent: float | None = None,
-    exception_dates: list[date] | None = None,
-) -> Goal:
+    success_threshold_percent: float | None,
+    exception_dates: list[date],
+) -> tuple[str, str | None, date | None, Decimal | None, date | None, Decimal | None, list[date]]:
     normalized_title = title.strip()
     if normalized_title == "":
         raise GoalError("Goal title is required.")
-    if metric.user_id != user.id:
-        raise GoalError("Goals can only reference your own metrics.")
     if target_date is not None and target_date < start_date:
         raise GoalError("Target date cannot be earlier than the start date.")
 
+    normalized_description = (
+        description.strip() if description is not None and description.strip() != "" else None
+    )
     normalized_exception_dates = normalize_exception_dates(
         start_date=start_date,
         target_date=target_date,
-        exception_dates=exception_dates or [],
+        exception_dates=exception_dates,
     )
     normalized_success_threshold = normalize_success_threshold_percent(success_threshold_percent)
 
@@ -129,16 +129,63 @@ def create_goal(
             rounding=ROUND_HALF_UP,
         )
 
+    return (
+        normalized_title,
+        normalized_description,
+        target_date,
+        normalized_target_number,
+        target_value_date,
+        normalized_success_threshold,
+        normalized_exception_dates,
+    )
+
+
+def create_goal(
+    db: Session,
+    *,
+    user: User,
+    metric: Metric,
+    title: str,
+    description: str | None,
+    start_date: date,
+    target_date: date | None,
+    target_value_number: float | None,
+    target_value_date: date | None,
+    success_threshold_percent: float | None = None,
+    exception_dates: list[date] | None = None,
+) -> Goal:
+    if metric.user_id != user.id:
+        raise GoalError("Goals can only reference your own metrics.")
+    (
+        normalized_title,
+        normalized_description,
+        normalized_target_date,
+        normalized_target_number,
+        normalized_target_value_date,
+        normalized_success_threshold,
+        normalized_exception_dates,
+    ) = normalize_goal_details(
+        metric=metric,
+        title=title,
+        description=description,
+        start_date=start_date,
+        target_date=target_date,
+        target_value_number=target_value_number,
+        target_value_date=target_value_date,
+        success_threshold_percent=success_threshold_percent,
+        exception_dates=exception_dates or [],
+    )
+
     goal = Goal(
         id=str(uuid4()),
         user_id=user.id,
         metric_id=metric.id,
         title=normalized_title,
-        description=(description.strip() if description is not None and description.strip() != "" else None),
+        description=normalized_description,
         start_date=start_date,
-        target_date=target_date,
+        target_date=normalized_target_date,
         target_value_number=normalized_target_number,
-        target_value_date=target_value_date,
+        target_value_date=normalized_target_value_date,
         success_threshold_percent=normalized_success_threshold,
     )
     db.add(goal)
@@ -172,8 +219,96 @@ def get_goal_for_user(db: Session, *, user: User, goal_id: str) -> Goal:
     return goal
 
 
-def set_goal_archived_state(db: Session, *, goal: Goal, archived: bool) -> Goal:
-    goal.archived_at = utcnow() if archived else None
+def update_goal(
+    db: Session,
+    *,
+    goal: Goal,
+    update_fields: set[str],
+    title: str | None = None,
+    description: str | None = None,
+    start_date: date | None = None,
+    target_date: date | None = None,
+    target_value_number: float | None = None,
+    target_value_date: date | None = None,
+    success_threshold_percent: float | None = None,
+    exception_dates: list[date] | None = None,
+    archived: bool | None = None,
+) -> Goal:
+    resolved_title = title if "title" in update_fields else goal.title
+    resolved_description = description if "description" in update_fields else goal.description
+    resolved_start_date = start_date if "start_date" in update_fields else goal.start_date
+    resolved_target_date = target_date if "target_date" in update_fields else goal.target_date
+    resolved_target_value_number = (
+        target_value_number if "target_value_number" in update_fields else goal.target_value_number
+    )
+    resolved_target_value_date = (
+        target_value_date if "target_value_date" in update_fields else goal.target_value_date
+    )
+    resolved_success_threshold_percent = (
+        success_threshold_percent
+        if "success_threshold_percent" in update_fields
+        else goal.success_threshold_percent
+    )
+    resolved_exception_dates = (
+        exception_dates
+        if "exception_dates" in update_fields
+        else [exception_date.exception_date for exception_date in goal.exception_dates]
+    )
+
+    normalized_title_input = cast(str, resolved_title)
+    normalized_start_date_input = cast(date, resolved_start_date)
+    normalized_exception_dates_input = cast(list[date], resolved_exception_dates)
+
+    (
+        normalized_title,
+        normalized_description,
+        normalized_target_date,
+        normalized_target_number,
+        normalized_target_value_date,
+        normalized_success_threshold,
+        normalized_exception_dates,
+    ) = normalize_goal_details(
+        metric=goal.metric,
+        title=normalized_title_input,
+        description=resolved_description,
+        start_date=normalized_start_date_input,
+        target_date=resolved_target_date,
+        target_value_number=(
+            float(resolved_target_value_number) if resolved_target_value_number is not None else None
+        ),
+        target_value_date=resolved_target_value_date,
+        success_threshold_percent=(
+            float(resolved_success_threshold_percent)
+            if resolved_success_threshold_percent is not None
+            else None
+        ),
+        exception_dates=normalized_exception_dates_input,
+    )
+
+    goal.title = normalized_title
+    goal.description = normalized_description
+    goal.start_date = normalized_start_date_input
+    goal.target_date = normalized_target_date
+    goal.target_value_number = (
+        float(normalized_target_number) if normalized_target_number is not None else None
+    )
+    goal.target_value_date = normalized_target_value_date
+    goal.success_threshold_percent = (
+        float(normalized_success_threshold) if normalized_success_threshold is not None else None
+    )
+    if "archived" in update_fields:
+        goal.archived_at = utcnow() if archived else None
+
+    goal.exception_dates.clear()
+    for exception_date in normalized_exception_dates:
+        goal.exception_dates.append(
+            GoalExceptionDate(
+                id=str(uuid4()),
+                goal_id=goal.id,
+                exception_date=exception_date,
+            )
+        )
+
     goal.updated_at = utcnow()
     db.flush()
     return get_goal_for_user(db, user=goal.user, goal_id=goal.id)

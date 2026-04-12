@@ -24,7 +24,9 @@ const metricsStore = useMetricsStore();
 
 const goalRowMenu = ref<InstanceType<typeof Menu> | null>(null);
 const activeGoalMenuId = ref("");
-const createDialogVisible = ref(false);
+const goalDialogVisible = ref(false);
+const goalDialogMode = ref<"create" | "edit">("create");
+const goalEditId = ref("");
 const viewMode = ref<"table" | "cards">("table");
 const { showSuccess } = useAppToast();
 
@@ -51,16 +53,33 @@ const selectedGoalMetric = computed(() => {
   return activeMetrics.value.find((metric) => metric.id === goalMetricIdInput.value) ?? null;
 });
 
+const editingGoal = computed(() => {
+  return goalsStore.goals.find((goal) => goal.id === goalEditId.value) ?? null;
+});
+
 const selectedGoalMenuGoal = computed(() => {
   return goalsStore.goals.find((goal) => goal.id === activeGoalMenuId.value) ?? null;
 });
 
 const goalMetricType = computed(() => {
+  if (goalDialogMode.value === "edit") {
+    return editingGoal.value?.metric.metric_type ?? "number";
+  }
   if (goalUseNewMetric.value) {
     return goalNewMetricTypeInput.value;
   }
 
   return selectedGoalMetric.value?.metric_type ?? "number";
+});
+
+const goalMetricDecimalPlaces = computed(() => {
+  if (goalDialogMode.value === "edit") {
+    return editingGoal.value?.metric.decimal_places ?? 0;
+  }
+  if (goalUseNewMetric.value) {
+    return parseDecimalPlaces(goalNewMetricDecimalPlacesInput.value);
+  }
+  return selectedGoalMetric.value?.decimal_places ?? 0;
 });
 
 const goalRowMenuItems = computed<MenuItem[]>(() => {
@@ -70,6 +89,11 @@ const goalRowMenuItems = computed<MenuItem[]>(() => {
   }
 
   return [
+    {
+      icon: "pi pi-pencil",
+      label: "Edit",
+      command: () => openEditDialog(goal),
+    },
     {
       icon: "pi pi-plus-circle",
       label: "Add metric update",
@@ -118,8 +142,34 @@ function resetGoalForm(): void {
 }
 
 function openCreateDialog(): void {
+  goalDialogMode.value = "create";
+  goalEditId.value = "";
   resetGoalForm();
-  createDialogVisible.value = true;
+  goalDialogVisible.value = true;
+}
+
+function openEditDialog(goal: (typeof goalsStore.goals)[number]): void {
+  goalDialogMode.value = "edit";
+  goalEditId.value = goal.id;
+  goalTitleInput.value = goal.title;
+  goalDescriptionInput.value = goal.description ?? "";
+  goalStartDateInput.value = goal.start_date;
+  goalTargetDateInput.value = goal.target_date ?? "";
+  goalTargetNumberValueInput.value =
+    goal.target_value_number === null ? "" : String(goal.target_value_number);
+  goalSuccessThresholdPercentInput.value =
+    goal.success_threshold_percent === null ? "100" : String(goal.success_threshold_percent);
+  goalExceptionDateInput.value = "";
+  goalExceptionDates.value = [...goal.exception_dates];
+  goalUseNewMetric.value = false;
+  goalMetricIdInput.value = goal.metric.id;
+  goalNewMetricNameInput.value = "";
+  goalNewMetricTypeInput.value = goal.metric.metric_type;
+  goalNewMetricDecimalPlacesInput.value = String(goal.metric.decimal_places ?? 0);
+  goalNewMetricUnitLabelInput.value = goal.metric.unit_label ?? "";
+  goalNewMetricInitialNumberValueInput.value = "";
+  goalNewMetricInitialDateValueInput.value = "";
+  goalDialogVisible.value = true;
 }
 
 function addGoalExceptionDate(): void {
@@ -195,27 +245,56 @@ function goalStatusTagSeverity(goal: (typeof goalsStore.goals)[number]): "succes
 }
 
 async function submitGoalForm(): Promise<void> {
-  const created = await goalsStore.createGoal({
+  if (goalDialogMode.value === "create") {
+    const created = await goalsStore.createGoal({
+      description: goalDescriptionInput.value.trim() === "" ? null : goalDescriptionInput.value,
+      metric_id: goalUseNewMetric.value ? null : goalMetricIdInput.value || null,
+      new_metric: goalUseNewMetric.value
+        ? {
+            decimal_places:
+              goalNewMetricTypeInput.value === "number"
+                ? parseDecimalPlaces(goalNewMetricDecimalPlacesInput.value)
+                : null,
+            initial_date_value:
+              goalNewMetricTypeInput.value === "date" ? goalNewMetricInitialDateValueInput.value || null : null,
+            initial_number_value:
+              goalNewMetricTypeInput.value === "number"
+                ? parseOptionalNumber(goalNewMetricInitialNumberValueInput.value)
+                : null,
+            metric_type: goalNewMetricTypeInput.value,
+            name: goalNewMetricNameInput.value,
+            unit_label:
+              goalNewMetricUnitLabelInput.value.trim() === "" ? null : goalNewMetricUnitLabelInput.value,
+          }
+        : null,
+      exception_dates: goalMetricType.value === "date" ? goalExceptionDates.value : [],
+      start_date: goalStartDateInput.value,
+      success_threshold_percent:
+        goalMetricType.value === "date" ? parseOptionalNumber(goalSuccessThresholdPercentInput.value) : null,
+      target_date: goalTargetDateInput.value || null,
+      target_value_date: null,
+      target_value_number:
+        goalMetricType.value === "number" ? parseOptionalNumber(goalTargetNumberValueInput.value) : null,
+      title: goalTitleInput.value,
+    });
+
+    if (!created) {
+      return;
+    }
+
+    showSuccess("Goal created.", "Goals");
+    goalDialogVisible.value = false;
+    resetGoalForm();
+    await metricsStore.loadMetrics();
+    return;
+  }
+
+  if (editingGoal.value === null) {
+    return;
+  }
+
+  const updated = await goalsStore.updateGoalDetails(editingGoal.value.id, {
     description: goalDescriptionInput.value.trim() === "" ? null : goalDescriptionInput.value,
-    metric_id: goalUseNewMetric.value ? null : goalMetricIdInput.value || null,
-    new_metric: goalUseNewMetric.value
-      ? {
-          decimal_places:
-            goalNewMetricTypeInput.value === "number"
-              ? parseDecimalPlaces(goalNewMetricDecimalPlacesInput.value)
-              : null,
-          initial_date_value:
-            goalNewMetricTypeInput.value === "date" ? goalNewMetricInitialDateValueInput.value || null : null,
-          initial_number_value:
-            goalNewMetricTypeInput.value === "number"
-              ? parseOptionalNumber(goalNewMetricInitialNumberValueInput.value)
-              : null,
-          metric_type: goalNewMetricTypeInput.value,
-          name: goalNewMetricNameInput.value,
-          unit_label:
-            goalNewMetricUnitLabelInput.value.trim() === "" ? null : goalNewMetricUnitLabelInput.value,
-        }
-      : null,
     exception_dates: goalMetricType.value === "date" ? goalExceptionDates.value : [],
     start_date: goalStartDateInput.value,
     success_threshold_percent:
@@ -226,15 +305,13 @@ async function submitGoalForm(): Promise<void> {
       goalMetricType.value === "number" ? parseOptionalNumber(goalTargetNumberValueInput.value) : null,
     title: goalTitleInput.value,
   });
-
-  if (!created) {
+  if (!updated) {
     return;
   }
 
-  showSuccess("Goal created.", "Goals");
-  createDialogVisible.value = false;
-  resetGoalForm();
-  await metricsStore.loadMetrics();
+  showSuccess("Goal updated.", "Goals");
+  goalDialogVisible.value = false;
+  goalEditId.value = "";
 }
 
 async function setGoalArchived(goalId: string, archived: boolean): Promise<void> {
@@ -403,17 +480,22 @@ function toggleIncludeArchived(): void {
     <Menu ref="goalRowMenu" :model="goalRowMenuItems" popup />
 
     <Dialog
-      v-model:visible="createDialogVisible"
+      v-model:visible="goalDialogVisible"
       modal
-      header="Add goal"
+      :header="goalDialogMode === 'create' ? 'Add goal' : 'Edit goal'"
       class="profile-dialog"
       :style="{ width: 'min(42rem, 96vw)' }"
     >
       <div class="dialog-stack">
         <section class="dialog-section">
           <div class="section-heading-text">
-            <h3>Create a goal</h3>
-            <p>Goals reference a metric and define the time window or target you care about.</p>
+            <h3>{{ goalDialogMode === "create" ? "Create a goal" : "Edit goal" }}</h3>
+            <p v-if="goalDialogMode === 'create'">
+              Goals reference a metric and define the time window or target you care about.
+            </p>
+            <p v-else>
+              Update the goal details here. The linked metric stays the same after creation.
+            </p>
           </div>
 
           <div class="form-stack">
@@ -427,73 +509,78 @@ function toggleIncludeArchived(): void {
               <textarea v-model="goalDescriptionInput" class="native-textarea" rows="3" />
             </label>
 
-            <label class="checkbox-row">
-              <Checkbox v-model="goalUseNewMetric" binary input-id="goal-use-new-metric" />
-              <span>Create a new metric as part of this goal</span>
-            </label>
-
-            <template v-if="goalUseNewMetric">
-              <label class="field">
-                <span class="label">Name</span>
-                <InputText v-model="goalNewMetricNameInput" />
+            <template v-if="goalDialogMode === 'create'">
+              <label class="checkbox-row">
+                <Checkbox v-model="goalUseNewMetric" binary input-id="goal-use-new-metric" />
+                <span>Create a new metric as part of this goal</span>
               </label>
 
-              <label class="field">
-                <span class="label">New metric type</span>
-                <select v-model="goalNewMetricTypeInput" class="native-file-input">
-                  <option value="number">Number</option>
-                  <option value="date">Date</option>
-                </select>
-              </label>
+              <template v-if="goalUseNewMetric">
+                <label class="field">
+                  <span class="label">Name</span>
+                  <InputText v-model="goalNewMetricNameInput" />
+                </label>
 
-              <label v-if="goalNewMetricTypeInput === 'number'" class="field">
-                <span class="label">Decimal places</span>
-                <input
-                  v-model="goalNewMetricDecimalPlacesInput"
-                  class="native-file-input"
-                  type="number"
-                  min="0"
-                  max="6"
-                  step="1"
-                />
-              </label>
+                <label class="field">
+                  <span class="label">New metric type</span>
+                  <select v-model="goalNewMetricTypeInput" class="native-file-input">
+                    <option value="number">Number</option>
+                    <option value="date">Date</option>
+                  </select>
+                </label>
 
-              <label class="field">
-                <span class="label">Unit label</span>
-                <InputText
-                  v-model="goalNewMetricUnitLabelInput"
-                  placeholder="Optional, like lbs"
-                />
-              </label>
+                <label v-if="goalNewMetricTypeInput === 'number'" class="field">
+                  <span class="label">Decimal places</span>
+                  <input
+                    v-model="goalNewMetricDecimalPlacesInput"
+                    class="native-file-input"
+                    type="number"
+                    min="0"
+                    max="6"
+                    step="1"
+                  />
+                </label>
 
-              <label v-if="goalNewMetricTypeInput === 'number'" class="field">
-                <span class="label">Initial metric value</span>
-                <input
-                  v-model="goalNewMetricInitialNumberValueInput"
-                  class="native-file-input"
-                  type="number"
-                  :step="numberInputStep(parseDecimalPlaces(goalNewMetricDecimalPlacesInput))"
-                />
-              </label>
+                <label class="field">
+                  <span class="label">Unit label</span>
+                  <InputText
+                    v-model="goalNewMetricUnitLabelInput"
+                    placeholder="Optional, like lbs"
+                  />
+                </label>
+
+                <label v-if="goalNewMetricTypeInput === 'number'" class="field">
+                  <span class="label">Initial metric value</span>
+                  <input
+                    v-model="goalNewMetricInitialNumberValueInput"
+                    class="native-file-input"
+                    type="number"
+                    :step="numberInputStep(parseDecimalPlaces(goalNewMetricDecimalPlacesInput))"
+                  />
+                </label>
+
+                <label v-else class="field">
+                  <span class="label">Initial metric value</span>
+                  <input
+                    v-model="goalNewMetricInitialDateValueInput"
+                    class="native-file-input"
+                    type="date"
+                  />
+                </label>
+              </template>
 
               <label v-else class="field">
-                <span class="label">Initial metric value</span>
-                <input
-                  v-model="goalNewMetricInitialDateValueInput"
-                  class="native-file-input"
-                  type="date"
-                />
+                <span class="label">Metric</span>
+                <select v-model="goalMetricIdInput" class="native-file-input">
+                  <option v-for="metric in activeMetrics" :key="metric.id" :value="metric.id">
+                    {{ metric.name }} ({{ metric.metric_type }})
+                  </option>
+                </select>
               </label>
             </template>
-
-            <label v-else class="field">
-              <span class="label">Metric</span>
-              <select v-model="goalMetricIdInput" class="native-file-input">
-                <option v-for="metric in activeMetrics" :key="metric.id" :value="metric.id">
-                  {{ metric.name }} ({{ metric.metric_type }})
-                </option>
-              </select>
-            </label>
+            <div v-else class="widget-dialog-note">
+              Metric: {{ editingGoal?.metric.name }} ({{ editingGoal?.metric.metric_type }})
+            </div>
 
             <div class="date-grid">
               <label class="field">
@@ -509,13 +596,13 @@ function toggleIncludeArchived(): void {
 
             <label v-if="goalMetricType === 'number'" class="field">
               <span class="label">Target metric value</span>
-              <input
-                v-model="goalTargetNumberValueInput"
-                class="native-file-input"
-                type="number"
-                :step="numberInputStep(selectedGoalMetric?.decimal_places ?? parseDecimalPlaces(goalNewMetricDecimalPlacesInput))"
-              />
-            </label>
+                <input
+                  v-model="goalTargetNumberValueInput"
+                  class="native-file-input"
+                  type="number"
+                  :step="numberInputStep(goalMetricDecimalPlaces)"
+                />
+              </label>
 
             <template v-else>
               <label class="field">
@@ -567,10 +654,10 @@ function toggleIncludeArchived(): void {
               label="Cancel"
               severity="secondary"
               text
-              @click="createDialogVisible = false"
+              @click="goalDialogVisible = false"
             />
             <Button
-              label="Create goal"
+              :label="goalDialogMode === 'create' ? 'Create goal' : 'Save goal'"
               icon="pi pi-flag"
               :loading="goalsStore.submissionState === 'submitting'"
               @click="submitGoalForm"

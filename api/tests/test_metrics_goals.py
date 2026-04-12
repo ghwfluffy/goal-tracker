@@ -190,6 +190,95 @@ def test_archived_goals_are_hidden_by_default_and_can_be_included(client: TestCl
     assert archived_list_response.json()["goals"][0]["is_archived"] is True
 
 
+def test_goal_details_can_be_updated_after_creation(client: TestClient) -> None:
+    bootstrap_admin(client)
+
+    metric_response = client.post(
+        "/api/v1/metrics",
+        json={
+            "name": "Weight",
+            "metric_type": "number",
+            "decimal_places": 1,
+            "initial_number_value": 245.5,
+        },
+    )
+    assert metric_response.status_code == 201
+
+    goal_response = client.post(
+        "/api/v1/goals",
+        json={
+            "title": "Reach 220",
+            "description": "Cut steadily over spring.",
+            "start_date": "2026-04-11",
+            "target_date": "2026-06-30",
+            "target_value_number": 220.0,
+            "metric_id": metric_response.json()["id"],
+        },
+    )
+    assert goal_response.status_code == 201
+    goal_id = goal_response.json()["id"]
+
+    update_response = client.patch(
+        f"/api/v1/goals/{goal_id}",
+        json={
+            "title": "Reach 215",
+            "description": "Updated target after a stronger start.",
+            "target_date": "2026-06-15",
+            "target_value_number": 215.0,
+        },
+    )
+
+    assert update_response.status_code == 200
+    payload = update_response.json()
+    assert payload["title"] == "Reach 215"
+    assert payload["description"] == "Updated target after a stronger start."
+    assert payload["target_date"] == "2026-06-15"
+    assert payload["target_value_number"] == 215.0
+
+
+def test_date_goal_updates_replace_exception_dates(client: TestClient) -> None:
+    bootstrap_admin(client)
+
+    metric_response = client.post(
+        "/api/v1/metrics",
+        json={
+            "name": "Last Drink",
+            "metric_type": "date",
+            "initial_date_value": "2026-04-10",
+        },
+    )
+    assert metric_response.status_code == 201
+
+    goal_response = client.post(
+        "/api/v1/goals",
+        json={
+            "title": "No drinks",
+            "start_date": "2026-04-11",
+            "target_date": "2026-04-30",
+            "success_threshold_percent": 100,
+            "exception_dates": ["2026-04-20"],
+            "metric_id": metric_response.json()["id"],
+        },
+    )
+    assert goal_response.status_code == 201
+    goal_id = goal_response.json()["id"]
+
+    update_response = client.patch(
+        f"/api/v1/goals/{goal_id}",
+        json={
+            "description": "Allow one planned exception.",
+            "success_threshold_percent": 80,
+            "exception_dates": ["2026-04-18", "2026-04-22"],
+        },
+    )
+
+    assert update_response.status_code == 200
+    payload = update_response.json()
+    assert payload["description"] == "Allow one planned exception."
+    assert payload["success_threshold_percent"] == 80.0
+    assert payload["exception_dates"] == ["2026-04-18", "2026-04-22"]
+
+
 def test_metric_delete_requires_no_goal_or_widget_dependencies(client: TestClient) -> None:
     bootstrap_admin(client)
 

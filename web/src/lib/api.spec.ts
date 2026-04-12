@@ -614,6 +614,83 @@ describe("auth api helpers", () => {
     });
   });
 
+  it("supports updating goal details", async () => {
+    const fetcher = vi.fn(async (input, init) => {
+      const path = String(input);
+
+      if (path.endsWith("/goals/goal-1") && init?.method === "PATCH") {
+        expect(init.body).toBe(
+          JSON.stringify({
+            description: "Updated target",
+            exception_dates: [],
+            start_date: "2026-04-11",
+            success_threshold_percent: null,
+            target_date: "2026-06-15",
+            target_value_date: null,
+            target_value_number: 215,
+            title: "Reach 215",
+          }),
+        );
+
+        return new Response(
+          JSON.stringify({
+            archived_at: null,
+            current_progress_percent: 42,
+            description: "Updated target",
+            exception_dates: [],
+            failure_risk_percent: 8,
+            id: "goal-1",
+            is_archived: false,
+            metric: {
+              decimal_places: 1,
+              id: "metric-1",
+              latest_entry: null,
+              metric_type: "number",
+              name: "Weight",
+              unit_label: "lbs",
+            },
+            start_date: "2026-04-11",
+            status: "active",
+            success_threshold_percent: null,
+            target_date: "2026-06-15",
+            target_value_date: null,
+            target_value_number: 215,
+            target_met: false,
+            time_progress_percent: 30,
+            title: "Reach 215",
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      throw new Error(`Unexpected request: ${path}`);
+    });
+
+    await expect(
+      updateGoal(
+        "goal-1",
+        {
+          description: "Updated target",
+          exception_dates: [],
+          start_date: "2026-04-11",
+          success_threshold_percent: null,
+          target_date: "2026-06-15",
+          target_value_date: null,
+          target_value_number: 215,
+          title: "Reach 215",
+        },
+        fetcher,
+      ),
+    ).resolves.toMatchObject({
+      id: "goal-1",
+      target_value_number: 215,
+      title: "Reach 215",
+    });
+  });
+
   it("supports dashboard helpers", async () => {
     const fetcher = vi.fn(async (input, init) => {
       const path = String(input);
