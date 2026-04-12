@@ -67,6 +67,10 @@
   text-align: right;
 }
 
+.mobile-hide-column {
+  display: table-cell;
+}
+
 .tracking-table :deep(.p-tag) {
   padding: 0.2rem 0.45rem;
   font-size: 0.72rem;
@@ -122,6 +126,21 @@
 }
 
 @media (max-width: 720px) {
+  .management-shell,
+  .management-card-grid,
+  .goal-meta-grid {
+    gap: var(--space-4);
+  }
+
+  .tracking-table th,
+  .tracking-table td {
+    padding: 0.35rem 0.45rem;
+  }
+
+  .mobile-hide-column {
+    display: none;
+  }
+
   .tracking-card-header,
   .history-row,
   .dialog-actions-row {
@@ -132,5 +151,10 @@
   .dialog-actions-row {
     width: 100%;
     justify-content: flex-start;
+  }
+
+  .tracking-card {
+    gap: var(--space-4);
+    padding: var(--space-5);
   }
 }

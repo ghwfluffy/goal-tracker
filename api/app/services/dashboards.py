@@ -9,13 +9,17 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.db.models import Dashboard, DashboardWidget, Goal, Metric, MetricEntry, User
 from app.services.dashboard_layout import (
+    LAYOUT_MODE_DESKTOP,
+    LAYOUT_MODE_MOBILE,
     METRIC_WIDGET_TYPES,
     WIDGET_TYPE_DAYS_SINCE,
     DashboardError,
+    default_mobile_widget_height,
     default_widget_dimensions,
     ensure_layout_slot_is_available,
     find_first_available_layout_slot,
     normalize_forecast_algorithm,
+    normalize_layout_mode,
     normalize_name,
     normalize_optional_text,
     normalize_rolling_window_days,
@@ -31,6 +35,28 @@ class DashboardNotFoundError(Exception):
 
 class DashboardWidgetNotFoundError(Exception):
     pass
+
+
+def restack_mobile_layouts(
+    db: Session,
+    *,
+    dashboard: Dashboard,
+    priority_widget_id: str | None = None,
+) -> None:
+    widgets = list(db.scalars(select(DashboardWidget).where(DashboardWidget.dashboard_id == dashboard.id)))
+    widgets.sort(
+        key=lambda widget: (
+            widget.mobile_grid_y,
+            0 if priority_widget_id is not None and widget.id == priority_widget_id else 1,
+            widget.display_order,
+        )
+    )
+    next_y = 0
+    for widget in widgets:
+        widget.mobile_grid_x = 0
+        widget.mobile_grid_w = 1
+        widget.mobile_grid_y = next_y
+        next_y += widget.mobile_grid_h
 
 
 def _dashboard_loading_options() -> tuple[Any, ...]:
@@ -202,6 +228,7 @@ def create_dashboard_widget(
         normalized_x, normalized_y = find_first_available_layout_slot(
             db,
             dashboard=dashboard,
+            layout_mode=LAYOUT_MODE_DESKTOP,
             grid_w=normalized_width,
             grid_h=normalized_height,
         )
@@ -210,6 +237,7 @@ def create_dashboard_widget(
         normalized_y = grid_y
 
     normalized_x, normalized_y, normalized_width, normalized_height = normalize_widget_layout(
+        layout_mode=LAYOUT_MODE_DESKTOP,
         grid_x=normalized_x,
         grid_y=normalized_y,
         grid_w=normalized_width,
@@ -218,10 +246,37 @@ def create_dashboard_widget(
     ensure_layout_slot_is_available(
         db,
         dashboard=dashboard,
+        layout_mode=LAYOUT_MODE_DESKTOP,
         grid_x=normalized_x,
         grid_y=normalized_y,
         grid_w=normalized_width,
         grid_h=normalized_height,
+    )
+
+    mobile_width = 1
+    mobile_height = default_mobile_widget_height(normalized_widget_type)
+    mobile_x, mobile_y = find_first_available_layout_slot(
+        db,
+        dashboard=dashboard,
+        layout_mode=LAYOUT_MODE_MOBILE,
+        grid_w=mobile_width,
+        grid_h=mobile_height,
+    )
+    mobile_x, mobile_y, mobile_width, mobile_height = normalize_widget_layout(
+        layout_mode=LAYOUT_MODE_MOBILE,
+        grid_x=mobile_x,
+        grid_y=mobile_y,
+        grid_w=mobile_width,
+        grid_h=mobile_height,
+    )
+    ensure_layout_slot_is_available(
+        db,
+        dashboard=dashboard,
+        layout_mode=LAYOUT_MODE_MOBILE,
+        grid_x=mobile_x,
+        grid_y=mobile_y,
+        grid_w=mobile_width,
+        grid_h=mobile_height,
     )
 
     display_order = (
@@ -248,10 +303,16 @@ def create_dashboard_widget(
         grid_y=normalized_y,
         grid_w=normalized_width,
         grid_h=normalized_height,
+        mobile_grid_x=mobile_x,
+        mobile_grid_y=mobile_y,
+        mobile_grid_w=mobile_width,
+        mobile_grid_h=mobile_height,
         display_order=display_order + 1,
         updated_at=utcnow(),
     )
     db.add(widget)
+    db.flush()
+    restack_mobile_layouts(db, dashboard=dashboard)
     db.flush()
     return get_dashboard_widget_for_user(
         db,
@@ -270,11 +331,13 @@ def update_dashboard_widget(
     title: str | None = None,
     rolling_window_days: int | None = None,
     forecast_algorithm: str | None = None,
+    layout_mode: str | None = None,
     grid_x: int | None = None,
     grid_y: int | None = None,
     grid_w: int | None = None,
     grid_h: int | None = None,
 ) -> DashboardWidget:
+    normalized_layout_mode = normalize_layout_mode(layout_mode)
     if title is not None:
         widget.title = normalize_name(title, field_name="Widget title", max_length=120)
     if forecast_algorithm is not None or widget.forecast_algorithm is not None:
@@ -287,25 +350,41 @@ def update_dashboard_widget(
     elif rolling_window_days is not None or widget.rolling_window_days is not None:
         widget.rolling_window_days = normalize_rolling_window_days(rolling_window_days)
     if any(value is not None for value in (grid_x, grid_y, grid_w, grid_h)):
-        normalized_x, normalized_y, normalized_width, normalized_height = normalize_widget_layout(
-            grid_x=grid_x if grid_x is not None else widget.grid_x,
-            grid_y=grid_y if grid_y is not None else widget.grid_y,
-            grid_w=grid_w if grid_w is not None else widget.grid_w,
-            grid_h=grid_h if grid_h is not None else widget.grid_h,
-        )
-        ensure_layout_slot_is_available(
-            db,
-            dashboard=dashboard,
-            grid_x=normalized_x,
-            grid_y=normalized_y,
-            grid_w=normalized_width,
-            grid_h=normalized_height,
-            ignore_widget_id=widget.id,
-        )
-        widget.grid_x = normalized_x
-        widget.grid_y = normalized_y
-        widget.grid_w = normalized_width
-        widget.grid_h = normalized_height
+        if normalized_layout_mode == LAYOUT_MODE_MOBILE:
+            _, normalized_y, _, normalized_height = normalize_widget_layout(
+                layout_mode=normalized_layout_mode,
+                grid_x=0,
+                grid_y=grid_y if grid_y is not None else widget.mobile_grid_y,
+                grid_w=1,
+                grid_h=grid_h if grid_h is not None else widget.mobile_grid_h,
+            )
+            widget.mobile_grid_x = 0
+            widget.mobile_grid_y = normalized_y
+            widget.mobile_grid_w = 1
+            widget.mobile_grid_h = normalized_height
+            restack_mobile_layouts(db, dashboard=dashboard, priority_widget_id=widget.id)
+        else:
+            normalized_x, normalized_y, normalized_width, normalized_height = normalize_widget_layout(
+                layout_mode=normalized_layout_mode,
+                grid_x=grid_x if grid_x is not None else widget.grid_x,
+                grid_y=grid_y if grid_y is not None else widget.grid_y,
+                grid_w=grid_w if grid_w is not None else widget.grid_w,
+                grid_h=grid_h if grid_h is not None else widget.grid_h,
+            )
+            ensure_layout_slot_is_available(
+                db,
+                dashboard=dashboard,
+                layout_mode=normalized_layout_mode,
+                grid_x=normalized_x,
+                grid_y=normalized_y,
+                grid_w=normalized_width,
+                grid_h=normalized_height,
+                ignore_widget_id=widget.id,
+            )
+            widget.grid_x = normalized_x
+            widget.grid_y = normalized_y
+            widget.grid_w = normalized_width
+            widget.grid_h = normalized_height
     widget.updated_at = utcnow()
     db.flush()
     return get_dashboard_widget_for_user(

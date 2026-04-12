@@ -39,6 +39,10 @@ function buildWidget(overrides: Partial<DashboardWidgetSummary> = {}): Dashboard
     grid_y: 0,
     id: "widget-1",
     metric: null,
+    mobile_grid_h: 3,
+    mobile_grid_w: 1,
+    mobile_grid_x: 0,
+    mobile_grid_y: 0,
     rolling_window_days: 30,
     series: [],
     target_met: null,
@@ -105,5 +109,28 @@ describe("useDashboardsStore", () => {
       grid_y: 4,
       rolling_window_days: 90,
     });
+  });
+
+  it("reloads dashboards after a mobile layout update", async () => {
+    const store = useDashboardsStore();
+    store.viewState = "ready";
+    store.dashboards = [buildDashboard()];
+    fetchDashboardsMock.mockResolvedValue({
+      dashboards: [
+        buildDashboard({
+          widgets: [buildWidget({ mobile_grid_y: 3 }), buildWidget({ id: "widget-2", mobile_grid_y: 0 })],
+        }),
+      ],
+    });
+    updateDashboardWidgetMock.mockResolvedValue(buildWidget({ mobile_grid_y: 3 }));
+
+    await expect(
+      store.updateWidget("dashboard-1", "widget-1", {
+        grid_y: 3,
+        layout_mode: "mobile",
+      }),
+    ).resolves.toBe(true);
+
+    expect(fetchDashboardsMock).toHaveBeenCalledTimes(1);
   });
 });

@@ -51,7 +51,7 @@ What already exists:
 - metric archiving, with archived metrics hidden by default
 - goal archiving, with archived goals hidden by default
 - goal creation backed by existing or newly created metrics, including date-based compliance goals with exception dates and success thresholds
-- saved dashboards with reusable metric and goal widgets, including target-date goal charts with selectable forecast algorithms plus completion, success, and risk widgets
+- saved dashboards with reusable metric and goal widgets, including target-date goal charts with selectable forecast algorithms plus completion, success, and risk widgets, plus separate mobile and desktop widget layouts
 - a default dashboard per user, plus an edit mode for arranging widgets
 - browser-local timestamp rendering with profile-configured day-boundary timezone semantics
 - a backend API foundation

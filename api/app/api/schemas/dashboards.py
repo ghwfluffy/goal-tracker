@@ -22,6 +22,7 @@ ForecastAlgorithm = Literal[
     "weighted_week_over_week",
     "weighted_day_over_day",
 ]
+LayoutMode = Literal["desktop", "mobile"]
 WidgetType = Literal[
     "metric_history",
     "metric_summary",
@@ -78,6 +79,10 @@ class WidgetSummary(BaseModel):
     grid_y: int
     grid_w: int
     grid_h: int
+    mobile_grid_x: int
+    mobile_grid_y: int
+    mobile_grid_w: int
+    mobile_grid_h: int
     rolling_window_days: int | None
     forecast_algorithm: ForecastAlgorithm | None
     metric: MetricReferenceSummary | None
@@ -139,6 +144,7 @@ class UpdateWidgetRequest(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=120)
     rolling_window_days: int | None = Field(default=None, ge=1, le=3650)
     forecast_algorithm: ForecastAlgorithm | None = None
+    layout_mode: LayoutMode | None = None
     grid_x: int | None = Field(default=None, ge=0, le=11)
     grid_y: int | None = Field(default=None, ge=0, le=10000)
     grid_w: int | None = Field(default=None, ge=1, le=12)
@@ -238,6 +244,10 @@ def serialize_widget(widget: DashboardWidget) -> WidgetSummary:
         grid_y=widget.grid_y,
         grid_w=widget.grid_w,
         grid_h=widget.grid_h,
+        mobile_grid_x=widget.mobile_grid_x,
+        mobile_grid_y=widget.mobile_grid_y,
+        mobile_grid_w=widget.mobile_grid_w,
+        mobile_grid_h=widget.mobile_grid_h,
         rolling_window_days=widget.rolling_window_days,
         forecast_algorithm=cast(ForecastAlgorithm | None, widget.forecast_algorithm),
         metric=serialize_metric_reference(widget.metric) if widget.metric is not None else None,

@@ -155,19 +155,30 @@ function toggleProfileMenu(event: Event): void {
 
 @media (max-width: 720px) {
   .app-header {
-    flex-direction: column;
-    align-items: stretch;
+    padding: var(--space-3) var(--space-4);
+    gap: var(--space-3);
+    align-items: center;
   }
 
   .header-actions {
     justify-content: space-between;
+    width: 100%;
+  }
+
+  .brand-title {
+    font-size: 1.35rem;
+    line-height: 1;
   }
 
   .profile-name {
-    max-width: 10rem;
+    max-width: 7rem;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .profile-button-content {
+    gap: var(--space-3);
   }
 }
 </style>

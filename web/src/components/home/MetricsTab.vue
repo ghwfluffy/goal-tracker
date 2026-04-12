@@ -2,7 +2,6 @@
 import { computed, ref } from "vue";
 import type { MenuItem } from "primevue/menuitem";
 import Button from "primevue/button";
-import Checkbox from "primevue/checkbox";
 import Dialog from "primevue/dialog";
 import InputText from "primevue/inputtext";
 import Menu from "primevue/menu";
@@ -171,13 +170,17 @@ async function deleteMetricEntry(metricId: string): Promise<void> {
   showSuccess("Metric deleted.", "Metrics");
   await goalsStore.loadGoals();
 }
+
+function toggleIncludeArchived(): void {
+  metricsStore.includeArchived = !metricsStore.includeArchived;
+  void metricsStore.loadMetrics();
+}
 </script>
 
 <template>
   <div class="management-shell">
     <ManagementToolbar
       v-model:viewMode="viewMode"
-      eyebrow="Metrics"
       title="Manage metrics"
       description="Reusable metric records are listed below. Add new ones from the toolbar and manage each row from the kebab menu."
       primary-action-label="Add metric"
@@ -185,15 +188,15 @@ async function deleteMetricEntry(metricId: string): Promise<void> {
       @add="openCreateDialog"
     >
       <template #leading-actions>
-        <label class="checkbox-row">
-          <Checkbox
-            v-model="metricsStore.includeArchived"
-            binary
-            input-id="include-archived-metrics"
-            @change="metricsStore.loadMetrics()"
-          />
-          <span>Include archived</span>
-        </label>
+        <Button
+          label="Archived"
+          icon="pi pi-box"
+          severity="secondary"
+          :outlined="!metricsStore.includeArchived"
+          class="toolbar-filter-button"
+          aria-label="Toggle archived metrics"
+          @click="toggleIncludeArchived"
+        />
       </template>
     </ManagementToolbar>
 
@@ -215,10 +218,10 @@ async function deleteMetricEntry(metricId: string): Promise<void> {
         <thead>
           <tr>
             <th>Name</th>
-            <th>Type</th>
             <th>Latest value</th>
-            <th>Latest update</th>
-            <th>Status</th>
+            <th class="mobile-hide-column">Type</th>
+            <th class="mobile-hide-column">Latest update</th>
+            <th class="mobile-hide-column">Status</th>
             <th class="table-actions-column">Actions</th>
           </tr>
         </thead>
@@ -233,13 +236,15 @@ async function deleteMetricEntry(metricId: string): Promise<void> {
               </div>
             </td>
             <td>
+              {{ formatMetricLatestSummary(metric) }}
+            </td>
+            <td class="mobile-hide-column">
               <Tag :value="metric.metric_type" severity="info" />
             </td>
-            <td>{{ formatMetricLatestSummary(metric) }}</td>
-            <td>
+            <td class="mobile-hide-column">
               {{ metric.latest_entry === null ? "No updates yet" : new Date(metric.latest_entry.recorded_at).toLocaleString() }}
             </td>
-            <td>
+            <td class="mobile-hide-column">
               <Tag
                 :value="metric.is_archived ? 'archived' : 'active'"
                 :severity="metric.is_archived ? 'warning' : 'success'"
@@ -397,8 +402,8 @@ async function deleteMetricEntry(metricId: string): Promise<void> {
 @import "./management.css";
 
 @media (max-width: 720px) {
-  .checkbox-row {
-    width: 100%;
+  .toolbar-filter-button :deep(.p-button-label) {
+    display: none;
   }
 }
 </style>

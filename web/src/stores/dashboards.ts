@@ -167,7 +167,11 @@ export const useDashboardsStore = defineStore("dashboards", {
 
       try {
         const updatedWidget = await updateDashboardWidget(dashboardId, widgetId, payload);
-        this.dashboards = upsertWidget(this.dashboards, dashboardId, updatedWidget);
+        if (payload.layout_mode === "mobile") {
+          await this.loadDashboards();
+        } else {
+          this.dashboards = upsertWidget(this.dashboards, dashboardId, updatedWidget);
+        }
         return true;
       } catch (error: unknown) {
         this.errorMessage =

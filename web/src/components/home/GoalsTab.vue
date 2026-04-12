@@ -2,7 +2,6 @@
 import { computed, ref } from "vue";
 import type { MenuItem } from "primevue/menuitem";
 import Button from "primevue/button";
-import Checkbox from "primevue/checkbox";
 import Dialog from "primevue/dialog";
 import InputText from "primevue/inputtext";
 import Menu from "primevue/menu";
@@ -246,13 +245,17 @@ async function setGoalArchived(goalId: string, archived: boolean): Promise<void>
 
   showSuccess(archived ? "Goal archived." : "Goal restored.", "Goals");
 }
+
+function toggleIncludeArchived(): void {
+  goalsStore.includeArchived = !goalsStore.includeArchived;
+  void goalsStore.loadGoals();
+}
 </script>
 
 <template>
   <div class="management-shell">
     <ManagementToolbar
       v-model:viewMode="viewMode"
-      eyebrow="Goals"
       title="Manage goals"
       description="Goals use the same management pattern as other backend records: table first, cards when you want a looser browse view."
       primary-action-label="Add goal"
@@ -260,15 +263,15 @@ async function setGoalArchived(goalId: string, archived: boolean): Promise<void>
       @add="openCreateDialog"
     >
       <template #leading-actions>
-        <label class="checkbox-row">
-          <Checkbox
-            v-model="goalsStore.includeArchived"
-            binary
-            input-id="include-archived-goals"
-            @change="goalsStore.loadGoals()"
-          />
-          <span>Include archived</span>
-        </label>
+        <Button
+          label="Archived"
+          icon="pi pi-box"
+          severity="secondary"
+          :outlined="!goalsStore.includeArchived"
+          class="toolbar-filter-button"
+          aria-label="Toggle archived goals"
+          @click="toggleIncludeArchived"
+        />
       </template>
     </ManagementToolbar>
 
@@ -290,12 +293,12 @@ async function setGoalArchived(goalId: string, archived: boolean): Promise<void>
         <thead>
           <tr>
             <th>Title</th>
-            <th>Metric</th>
-            <th>Start</th>
-            <th>Target</th>
             <th>Progress</th>
-            <th>Failure risk</th>
-            <th>Status</th>
+            <th>Target</th>
+            <th class="mobile-hide-column">Metric</th>
+            <th class="mobile-hide-column">Start</th>
+            <th class="mobile-hide-column">Failure risk</th>
+            <th class="mobile-hide-column">Status</th>
             <th class="table-actions-column">Actions</th>
           </tr>
         </thead>
@@ -306,8 +309,7 @@ async function setGoalArchived(goalId: string, archived: boolean): Promise<void>
                 <strong>{{ goal.title }}</strong>
               </div>
             </td>
-            <td>{{ goal.metric.name }} ({{ goal.metric.metric_type }})</td>
-            <td>{{ goal.start_date }}</td>
+            <td>{{ formatGoalCurrentProgressSummary(goal) }}</td>
             <td>
               <div class="table-primary-cell">
                 <span>{{ formatGoalTargetSummary(goal) }}</span>
@@ -316,9 +318,12 @@ async function setGoalArchived(goalId: string, archived: boolean): Promise<void>
                 </span>
               </div>
             </td>
-            <td>{{ formatGoalCurrentProgressSummary(goal) }}</td>
-            <td>{{ goal.failure_risk_percent === null ? "n/a" : `${goal.failure_risk_percent}%` }}</td>
-            <td>
+            <td class="mobile-hide-column">{{ goal.metric.name }} ({{ goal.metric.metric_type }})</td>
+            <td class="mobile-hide-column">{{ goal.start_date }}</td>
+            <td class="mobile-hide-column">
+              {{ goal.failure_risk_percent === null ? "n/a" : `${goal.failure_risk_percent}%` }}
+            </td>
+            <td class="mobile-hide-column">
               <Tag :value="goalStatusTagValue(goal)" :severity="goalStatusTagSeverity(goal)" />
             </td>
             <td class="table-kebab-cell">
@@ -620,6 +625,10 @@ async function setGoalArchived(goalId: string, archived: boolean): Promise<void>
 }
 
 @media (max-width: 720px) {
+  .toolbar-filter-button :deep(.p-button-label) {
+    display: none;
+  }
+
   .exception-date-row {
     align-items: flex-start;
     flex-direction: column;

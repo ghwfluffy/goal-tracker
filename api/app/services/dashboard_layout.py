@@ -50,15 +50,51 @@ METRIC_WIDGET_TYPES = {
 }
 
 GRID_COLUMN_COUNT = 12
+MOBILE_GRID_COLUMN_COUNT = 1
 DEFAULT_SUMMARY_WIDGET_WIDTH = 4
 DEFAULT_SUMMARY_WIDGET_HEIGHT = 3
+DEFAULT_MOBILE_SUMMARY_WIDGET_HEIGHT = 2
 DEFAULT_CHART_WIDGET_WIDTH = 6
 DEFAULT_CHART_WIDGET_HEIGHT = 4
 MAX_WIDGET_HEIGHT = 12
+LAYOUT_MODE_DESKTOP = "desktop"
+LAYOUT_MODE_MOBILE = "mobile"
+SUPPORTED_LAYOUT_MODES = {
+    LAYOUT_MODE_DESKTOP,
+    LAYOUT_MODE_MOBILE,
+}
 
 
 class DashboardError(Exception):
     pass
+
+
+def normalize_layout_mode(layout_mode: str | None) -> str:
+    if layout_mode is None:
+        return LAYOUT_MODE_DESKTOP
+    normalized = layout_mode.strip().lower()
+    if normalized not in SUPPORTED_LAYOUT_MODES:
+        raise DashboardError("Unsupported layout mode.")
+    return normalized
+
+
+def grid_column_count_for_layout_mode(layout_mode: str) -> int:
+    return MOBILE_GRID_COLUMN_COUNT if layout_mode == LAYOUT_MODE_MOBILE else GRID_COLUMN_COUNT
+
+
+def widget_layout_for_mode(
+    widget: DashboardWidget,
+    *,
+    layout_mode: str,
+) -> tuple[int, int, int, int]:
+    if layout_mode == LAYOUT_MODE_MOBILE:
+        return (
+            widget.mobile_grid_x,
+            widget.mobile_grid_y,
+            widget.mobile_grid_w,
+            widget.mobile_grid_h,
+        )
+    return widget.grid_x, widget.grid_y, widget.grid_w, widget.grid_h
 
 
 def normalize_name(value: str, *, field_name: str, max_length: int) -> str:
@@ -126,6 +162,19 @@ def default_widget_dimensions(widget_type: str) -> tuple[int, int]:
     return DEFAULT_CHART_WIDGET_WIDTH, DEFAULT_CHART_WIDGET_HEIGHT
 
 
+def default_mobile_widget_height(widget_type: str) -> int:
+    if widget_type in {
+        WIDGET_TYPE_METRIC_SUMMARY,
+        WIDGET_TYPE_DAYS_SINCE,
+        WIDGET_TYPE_GOAL_SUMMARY,
+        WIDGET_TYPE_GOAL_COMPLETION_PERCENT,
+        WIDGET_TYPE_GOAL_SUCCESS_PERCENT,
+        WIDGET_TYPE_GOAL_FAILURE_RISK,
+    }:
+        return DEFAULT_MOBILE_SUMMARY_WIDGET_HEIGHT
+    return DEFAULT_CHART_WIDGET_HEIGHT
+
+
 def normalize_grid_dimension(
     value: int,
     *,
@@ -140,16 +189,18 @@ def normalize_grid_dimension(
 
 def normalize_widget_layout(
     *,
+    layout_mode: str = LAYOUT_MODE_DESKTOP,
     grid_x: int,
     grid_y: int,
     grid_w: int,
     grid_h: int,
 ) -> tuple[int, int, int, int]:
+    grid_column_count = grid_column_count_for_layout_mode(layout_mode)
     normalized_w = normalize_grid_dimension(
         grid_w,
         field_name="Widget width",
         minimum=1,
-        maximum=GRID_COLUMN_COUNT,
+        maximum=grid_column_count,
     )
     normalized_h = normalize_grid_dimension(
         grid_h,
@@ -161,7 +212,7 @@ def normalize_widget_layout(
         grid_x,
         field_name="Widget horizontal position",
         minimum=0,
-        maximum=GRID_COLUMN_COUNT - 1,
+        maximum=grid_column_count - 1,
     )
     normalized_y = normalize_grid_dimension(
         grid_y,
@@ -169,7 +220,7 @@ def normalize_widget_layout(
         minimum=0,
         maximum=10_000,
     )
-    if normalized_x + normalized_w > GRID_COLUMN_COUNT:
+    if normalized_x + normalized_w > grid_column_count:
         raise DashboardError("Widget layout exceeds dashboard width.")
     return normalized_x, normalized_y, normalized_w, normalized_h
 
@@ -197,6 +248,7 @@ def ensure_layout_slot_is_available(
     db: Session,
     *,
     dashboard: Dashboard,
+    layout_mode: str = LAYOUT_MODE_DESKTOP,
     grid_x: int,
     grid_y: int,
     grid_w: int,
@@ -208,15 +260,19 @@ def ensure_layout_slot_is_available(
     for existing_widget in widgets:
         if ignore_widget_id is not None and existing_widget.id == ignore_widget_id:
             continue
+        existing_x, existing_y, existing_w, existing_h = widget_layout_for_mode(
+            existing_widget,
+            layout_mode=layout_mode,
+        )
         if widgets_overlap(
             first_x=grid_x,
             first_y=grid_y,
             first_w=grid_w,
             first_h=grid_h,
-            second_x=existing_widget.grid_x,
-            second_y=existing_widget.grid_y,
-            second_w=existing_widget.grid_w,
-            second_h=existing_widget.grid_h,
+            second_x=existing_x,
+            second_y=existing_y,
+            second_w=existing_w,
+            second_h=existing_h,
         ):
             raise DashboardError("Widget layout overlaps another widget.")
 
@@ -225,25 +281,34 @@ def find_first_available_layout_slot(
     db: Session,
     *,
     dashboard: Dashboard,
+    layout_mode: str = LAYOUT_MODE_DESKTOP,
     grid_w: int,
     grid_h: int,
 ) -> tuple[int, int]:
+    grid_column_count = grid_column_count_for_layout_mode(layout_mode)
     existing_widgets = list(
         db.scalars(select(DashboardWidget).where(DashboardWidget.dashboard_id == dashboard.id))
     )
-    max_y = max((widget.grid_y + widget.grid_h for widget in existing_widgets), default=0)
+    max_y = max(
+        (
+            widget_layout_for_mode(widget, layout_mode=layout_mode)[1]
+            + widget_layout_for_mode(widget, layout_mode=layout_mode)[3]
+            for widget in existing_widgets
+        ),
+        default=0,
+    )
     for candidate_y in range(0, max_y + MAX_WIDGET_HEIGHT + 1):
-        for candidate_x in range(0, GRID_COLUMN_COUNT - grid_w + 1):
+        for candidate_x in range(0, grid_column_count - grid_w + 1):
             if any(
                 widgets_overlap(
                     first_x=candidate_x,
                     first_y=candidate_y,
                     first_w=grid_w,
                     first_h=grid_h,
-                    second_x=existing_widget.grid_x,
-                    second_y=existing_widget.grid_y,
-                    second_w=existing_widget.grid_w,
-                    second_h=existing_widget.grid_h,
+                    second_x=widget_layout_for_mode(existing_widget, layout_mode=layout_mode)[0],
+                    second_y=widget_layout_for_mode(existing_widget, layout_mode=layout_mode)[1],
+                    second_w=widget_layout_for_mode(existing_widget, layout_mode=layout_mode)[2],
+                    second_h=widget_layout_for_mode(existing_widget, layout_mode=layout_mode)[3],
                 )
                 for existing_widget in existing_widgets
             ):

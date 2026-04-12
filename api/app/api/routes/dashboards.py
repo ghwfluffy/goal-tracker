@@ -202,6 +202,7 @@ def patch_dashboard_widget(
             title=payload.title,
             rolling_window_days=payload.rolling_window_days,
             forecast_algorithm=payload.forecast_algorithm,
+            layout_mode=payload.layout_mode,
             grid_x=payload.grid_x,
             grid_y=payload.grid_y,
             grid_w=payload.grid_w,

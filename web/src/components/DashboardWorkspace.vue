@@ -32,8 +32,10 @@ interface WidgetInteractionState {
 }
 
 const GRID_COLUMNS = 12;
+const MOBILE_GRID_COLUMNS = 1;
 const GRID_ROW_HEIGHT_PX = 96;
 const MAX_WIDGET_HEIGHT = 12;
+const MOBILE_LAYOUT_BREAKPOINT = "(max-width: 860px)";
 
 const dashboardsStore = useDashboardsStore();
 const metricsStore = useMetricsStore();
@@ -42,6 +44,8 @@ const { showSuccess } = useAppToast();
 
 const selectedDashboardId = ref("");
 const editMode = ref(false);
+const dashboardPanelExpanded = ref(false);
+const isMobileLayout = ref(false);
 
 const dashboardDialogVisible = ref(false);
 const dashboardDialogMode = ref<"create" | "edit">("create");
@@ -63,6 +67,7 @@ const gridWidth = ref(0);
 const localLayouts = ref<Record<string, WidgetLayoutDraft>>({});
 const activeInteraction = ref<WidgetInteractionState | null>(null);
 let resizeObserver: ResizeObserver | null = null;
+let mobileLayoutMediaQuery: MediaQueryList | null = null;
 
 const dashboardOptions = computed(() => {
   return dashboardsStore.dashboards.map((dashboard) => ({
@@ -74,6 +79,39 @@ const dashboardOptions = computed(() => {
 const selectedDashboard = computed(() => {
   return dashboardsStore.dashboards.find((dashboard) => dashboard.id === selectedDashboardId.value) ?? null;
 });
+
+const activeLayoutMode = computed<"desktop" | "mobile">(() => {
+  return isMobileLayout.value ? "mobile" : "desktop";
+});
+
+const activeGridColumns = computed(() => {
+  return isMobileLayout.value ? MOBILE_GRID_COLUMNS : GRID_COLUMNS;
+});
+
+const layoutModeLabel = computed(() => {
+  return isMobileLayout.value ? "Mobile layout" : "Desktop layout";
+});
+
+function layoutForMode(
+  widget: DashboardWidgetSummary,
+  layoutMode: "desktop" | "mobile" = activeLayoutMode.value,
+): WidgetLayoutDraft {
+  if (layoutMode === "mobile") {
+    return {
+      grid_h: widget.mobile_grid_h ?? widget.grid_h,
+      grid_w: widget.mobile_grid_w ?? 1,
+      grid_x: widget.mobile_grid_x ?? 0,
+      grid_y: widget.mobile_grid_y ?? widget.grid_y,
+    };
+  }
+
+  return {
+    grid_h: widget.grid_h,
+    grid_w: widget.grid_w,
+    grid_x: widget.grid_x,
+    grid_y: widget.grid_y,
+  };
+}
 
 const orderedWidgets = computed(() => {
   const widgets = selectedDashboard.value?.widgets ?? [];
@@ -133,7 +171,13 @@ const columnWidth = computed(() => {
   if (gridWidth.value <= 0) {
     return 0;
   }
-  return gridWidth.value / GRID_COLUMNS;
+  return gridWidth.value / activeGridColumns.value;
+});
+
+const widgetGridInlineStyle = computed(() => {
+  return {
+    gridTemplateColumns: `repeat(${activeGridColumns.value}, minmax(0, 1fr))`,
+  };
 });
 
 function syncSelectedDashboard(): void {
@@ -150,15 +194,7 @@ function syncSelectedDashboard(): void {
 
 function snapshotWidgetLayouts(): void {
   localLayouts.value = Object.fromEntries(
-    (selectedDashboard.value?.widgets ?? []).map((widget) => [
-      widget.id,
-      {
-        grid_h: widget.grid_h,
-        grid_w: widget.grid_w,
-        grid_x: widget.grid_x,
-        grid_y: widget.grid_y,
-      },
-    ]),
+    (selectedDashboard.value?.widgets ?? []).map((widget) => [widget.id, layoutForMode(widget)]),
   );
 }
 
@@ -167,14 +203,7 @@ function refreshGridMetrics(): void {
 }
 
 function getWidgetLayout(widget: DashboardWidgetSummary): WidgetLayoutDraft {
-  return (
-    localLayouts.value[widget.id] ?? {
-      grid_h: widget.grid_h,
-      grid_w: widget.grid_w,
-      grid_x: widget.grid_x,
-      grid_y: widget.grid_y,
-    }
-  );
+  return localLayouts.value[widget.id] ?? layoutForMode(widget);
 }
 
 function widgetGridStyle(widget: DashboardWidgetSummary): Record<string, string> {
@@ -215,6 +244,18 @@ function openEditDashboardDialog(): void {
   dashboardNameInput.value = selectedDashboard.value.name;
   dashboardDescriptionInput.value = selectedDashboard.value.description ?? "";
   dashboardDialogVisible.value = true;
+}
+
+function handleDashboardPanelToggle(event: Event): void {
+  dashboardPanelExpanded.value = (event.currentTarget as HTMLDetailsElement).open;
+}
+
+function syncMobileLayout(mediaQuery: MediaQueryList | MediaQueryListEvent): void {
+  const wasMobileLayout = isMobileLayout.value;
+  isMobileLayout.value = mediaQuery.matches;
+  if (wasMobileLayout !== isMobileLayout.value) {
+    snapshotWidgetLayouts();
+  }
 }
 
 async function submitDashboardDialog(): Promise<void> {
@@ -317,7 +358,7 @@ const selectedWidgetGoal = computed(() => {
   if (widgetUsesMetric.value) {
     return null;
   }
-  return goalsStore.goals.find((goal) => goal.id === widgetGoalIdInput.value) ?? null;
+  return activeGoals.value.find((goal) => goal.id === widgetGoalIdInput.value) ?? null;
 });
 
 const widgetUsesGoalTimeline = computed(() => {
@@ -403,9 +444,10 @@ function wouldOverlap(widgetId: string, candidate: WidgetLayoutDraft): boolean {
 }
 
 function clampLayout(candidate: WidgetLayoutDraft): WidgetLayoutDraft {
-  const clampedWidth = Math.max(1, Math.min(GRID_COLUMNS, candidate.grid_w));
+  const maxColumns = activeGridColumns.value;
+  const clampedWidth = Math.max(1, Math.min(maxColumns, candidate.grid_w));
   const clampedHeight = Math.max(1, Math.min(MAX_WIDGET_HEIGHT, candidate.grid_h));
-  const clampedX = Math.max(0, Math.min(GRID_COLUMNS - clampedWidth, candidate.grid_x));
+  const clampedX = Math.max(0, Math.min(maxColumns - clampedWidth, candidate.grid_x));
   return {
     grid_h: clampedHeight,
     grid_w: clampedWidth,
@@ -419,7 +461,7 @@ function startInteraction(
   widget: DashboardWidgetSummary,
   kind: "drag" | "resize",
 ): void {
-  if (!editMode.value) {
+  if (!editMode.value || isMobileLayout.value) {
     return;
   }
 
@@ -478,12 +520,62 @@ async function persistWidgetLayout(widgetId: string): Promise<void> {
     return;
   }
 
-  const updated = await dashboardsStore.updateWidget(selectedDashboard.value.id, widgetId, layout);
+  const updated = await dashboardsStore.updateWidget(selectedDashboard.value.id, widgetId, {
+    ...layout,
+    layout_mode: activeLayoutMode.value,
+  });
   if (!updated) {
     snapshotWidgetLayouts();
     return;
   }
   showSuccess("Widget layout saved.", "Dashboards");
+}
+
+function canMoveWidget(direction: "up" | "down", widgetId: string): boolean {
+  const index = orderedWidgets.value.findIndex((widget) => widget.id === widgetId);
+  if (index < 0) {
+    return false;
+  }
+  if (direction === "up") {
+    return index > 0;
+  }
+  return index < orderedWidgets.value.length - 1;
+}
+
+async function moveWidgetInMobileStack(widgetId: string, direction: "up" | "down"): Promise<void> {
+  if (selectedDashboard.value === null || !isMobileLayout.value) {
+    return;
+  }
+
+  const index = orderedWidgets.value.findIndex((widget) => widget.id === widgetId);
+  if (index < 0) {
+    return;
+  }
+
+  const currentWidget = orderedWidgets.value[index];
+  const currentLayout = getWidgetLayout(currentWidget);
+  const targetWidget = orderedWidgets.value[direction === "up" ? index - 1 : index + 1];
+  if (targetWidget === undefined) {
+    return;
+  }
+
+  const targetLayout = getWidgetLayout(targetWidget);
+  const nextY =
+    direction === "up"
+      ? Math.max(0, targetLayout.grid_y - 1)
+      : targetLayout.grid_y + targetLayout.grid_h + 1;
+
+  const updated = await dashboardsStore.updateWidget(selectedDashboard.value.id, widgetId, {
+    grid_h: currentLayout.grid_h,
+    grid_y: nextY,
+    layout_mode: "mobile",
+  });
+  if (!updated) {
+    return;
+  }
+
+  snapshotWidgetLayouts();
+  showSuccess("Widget order updated.", "Dashboards");
 }
 
 function stopInteraction(): void {
@@ -506,6 +598,9 @@ watch(
   () => dashboardsStore.dashboards,
   () => {
     syncSelectedDashboard();
+    if (selectedDashboard.value !== null) {
+      dashboardPanelExpanded.value = false;
+    }
     snapshotWidgetLayouts();
   },
   { deep: true, immediate: true },
@@ -576,69 +671,109 @@ watch(
 
 onMounted(() => {
   refreshGridMetrics();
+  mobileLayoutMediaQuery = window.matchMedia(MOBILE_LAYOUT_BREAKPOINT);
+  syncMobileLayout(mobileLayoutMediaQuery);
+  mobileLayoutMediaQuery.addEventListener("change", syncMobileLayout);
   window.addEventListener("resize", refreshGridMetrics);
 });
 
 onBeforeUnmount(() => {
   stopInteraction();
   resizeObserver?.disconnect();
+  mobileLayoutMediaQuery?.removeEventListener("change", syncMobileLayout);
   window.removeEventListener("resize", refreshGridMetrics);
 });
 </script>
 
 <template>
   <section class="dashboard-shell">
-    <div class="dashboard-toolbar panel-card">
-      <div class="toolbar-actions">
-        <Dropdown
-          v-model="selectedDashboardId"
-          :options="dashboardOptions"
-          option-label="label"
-          option-value="value"
-          placeholder="Select dashboard"
-          class="dashboard-picker"
-          :disabled="dashboardsStore.dashboards.length === 0"
-        />
-        <Button label="New dashboard" icon="pi pi-plus" @click="openCreateDashboardDialog" />
-        <Button
-          v-if="selectedDashboard !== null"
-          :label="editMode ? 'Exit edit mode' : 'Edit dashboard'"
-          :icon="editMode ? 'pi pi-check' : 'pi pi-pencil'"
-          @click="editMode ? exitEditMode() : enterEditMode()"
-        />
-        <Button
-          v-if="selectedDashboard !== null"
-          label="Edit info"
-          icon="pi pi-file-edit"
-          severity="secondary"
-          outlined
-          @click="openEditDashboardDialog"
-        />
-        <Button
-          v-if="selectedDashboard !== null && editMode"
-          label="Add widget"
-          icon="pi pi-plus-circle"
-          severity="secondary"
-          @click="openCreateWidgetDialog"
-        />
-        <Button
-          v-if="selectedDashboard !== null && editMode && !selectedDashboard.is_default"
-          label="Make default"
-          icon="pi pi-star"
-          severity="secondary"
-          outlined
-          @click="makeDashboardDefault"
-        />
-        <Button
-          v-if="selectedDashboard !== null && editMode"
-          label="Delete dashboard"
-          icon="pi pi-trash"
-          severity="danger"
-          outlined
-          @click="removeDashboard"
-        />
+    <details
+      class="dashboard-disclosure panel-card"
+      :open="dashboardPanelExpanded || selectedDashboard === null"
+      @toggle="handleDashboardPanelToggle"
+    >
+      <summary class="dashboard-disclosure-summary">
+        <div class="dashboard-summary-row">
+          <h3>{{ selectedDashboard?.name ?? "Dashboards" }}</h3>
+          <Tag v-if="selectedDashboard?.is_default" value="Default" severity="success" />
+        </div>
+        <div class="dashboard-disclosure-meta">
+          <Tag v-if="editMode" value="Edit mode" severity="info" />
+          <i class="pi disclosure-chevron" :class="dashboardPanelExpanded ? 'pi-chevron-up' : 'pi-chevron-down'" />
+        </div>
+      </summary>
+
+      <div class="dashboard-disclosure-body">
+        <div class="dashboard-toolbar">
+          <div class="toolbar-actions">
+            <Dropdown
+              v-model="selectedDashboardId"
+              :options="dashboardOptions"
+              option-label="label"
+              option-value="value"
+              placeholder="Select dashboard"
+              class="dashboard-picker"
+              :disabled="dashboardsStore.dashboards.length === 0"
+            />
+            <Button label="New dashboard" icon="pi pi-plus" @click="openCreateDashboardDialog" />
+            <Button
+              v-if="selectedDashboard !== null"
+              :label="editMode ? 'Exit edit mode' : 'Edit dashboard'"
+              :icon="editMode ? 'pi pi-check' : 'pi pi-pencil'"
+              @click="editMode ? exitEditMode() : enterEditMode()"
+            />
+            <Button
+              v-if="selectedDashboard !== null"
+              label="Edit info"
+              icon="pi pi-file-edit"
+              severity="secondary"
+              outlined
+              @click="openEditDashboardDialog"
+            />
+            <Button
+              v-if="selectedDashboard !== null && editMode"
+              label="Add widget"
+              icon="pi pi-plus-circle"
+              severity="secondary"
+              @click="openCreateWidgetDialog"
+            />
+            <Button
+              v-if="selectedDashboard !== null && editMode && !selectedDashboard.is_default"
+              label="Make default"
+              icon="pi pi-star"
+              severity="secondary"
+              outlined
+              @click="makeDashboardDefault"
+            />
+            <Button
+              v-if="selectedDashboard !== null && editMode"
+              label="Delete dashboard"
+              icon="pi pi-trash"
+              severity="danger"
+              outlined
+              @click="removeDashboard"
+            />
+          </div>
+        </div>
+
+        <div v-if="selectedDashboard !== null" class="dashboard-summary">
+          <div>
+            <div class="dashboard-title-row">
+              <Tag v-if="selectedDashboard.is_default" value="Default" severity="success" />
+              <Tag v-if="editMode" value="Edit mode" severity="info" />
+              <Tag :value="layoutModeLabel" severity="warning" />
+            </div>
+            <p v-if="selectedDashboard.description !== null" class="dashboard-description">
+              {{ selectedDashboard.description }}
+            </p>
+            <p v-else class="dashboard-description">No description yet.</p>
+            <p class="dashboard-layout-note">
+              Widget moves and resizes currently save to the {{ layoutModeLabel.toLowerCase() }}.
+            </p>
+          </div>
+        </div>
       </div>
-    </div>
+    </details>
 
     <div v-if="dashboardsStore.viewState === 'loading'" class="panel-card loading-panel">
       <ProgressSpinner strokeWidth="5" style="width: 2rem; height: 2rem" animationDuration=".8s" />
@@ -646,24 +781,12 @@ onBeforeUnmount(() => {
     </div>
 
     <div v-else-if="selectedDashboard !== null" class="dashboard-view">
-      <div class="dashboard-summary panel-card">
-        <div>
-          <div class="dashboard-title-row">
-            <h3>{{ selectedDashboard.name }}</h3>
-            <Tag v-if="selectedDashboard.is_default" value="Default" severity="success" />
-            <Tag v-if="editMode" value="Edit mode" severity="info" />
-          </div>
-          <p v-if="selectedDashboard.description !== null" class="dashboard-description">
-            {{ selectedDashboard.description }}
-          </p>
-        </div>
-      </div>
-
       <div
         v-if="orderedWidgets.length > 0"
         ref="gridHost"
         class="widget-grid"
         :class="{ editing: editMode }"
+        :style="widgetGridInlineStyle"
       >
         <article
           v-for="widget in orderedWidgets"
@@ -676,8 +799,28 @@ onBeforeUnmount(() => {
             <h4>{{ widget.title }}</h4>
 
             <div class="widget-card-actions">
+              <template v-if="editMode && isMobileLayout">
+                <button
+                  class="widget-icon-button"
+                  type="button"
+                  title="Move widget up"
+                  :disabled="!canMoveWidget('up', widget.id)"
+                  @click="void moveWidgetInMobileStack(widget.id, 'up')"
+                >
+                  <i class="pi pi-arrow-up" />
+                </button>
+                <button
+                  class="widget-icon-button"
+                  type="button"
+                  title="Move widget down"
+                  :disabled="!canMoveWidget('down', widget.id)"
+                  @click="void moveWidgetInMobileStack(widget.id, 'down')"
+                >
+                  <i class="pi pi-arrow-down" />
+                </button>
+              </template>
               <button
-                v-if="editMode"
+                v-else-if="editMode"
                 class="widget-icon-button widget-move-handle"
                 type="button"
                 title="Drag widget"
@@ -709,10 +852,15 @@ onBeforeUnmount(() => {
           <DashboardWidgetChart :widget="widget" />
 
           <div v-if="editMode" class="widget-layout-meta">
-            {{ getWidgetLayout(widget).grid_w }} x {{ getWidgetLayout(widget).grid_h }}
+            <template v-if="isMobileLayout">
+              {{ layoutModeLabel }}: stacked
+            </template>
+            <template v-else>
+              {{ layoutModeLabel }}: {{ getWidgetLayout(widget).grid_w }} x {{ getWidgetLayout(widget).grid_h }}
+            </template>
           </div>
           <button
-            v-if="editMode"
+            v-if="editMode && !isMobileLayout"
             class="widget-resize-handle"
             type="button"
             title="Resize widget"
@@ -729,8 +877,8 @@ onBeforeUnmount(() => {
         <p>
           {{
             editMode
-              ? "Use the Add widget button in the toolbar to start composing the layout."
-              : "Enter edit mode to build this dashboard."
+              ? "Use the Add widget button in the dashboard controls panel to start composing the layout."
+              : "Expand the dashboard controls panel and enter edit mode to build this dashboard."
           }}
         </p>
       </div>
@@ -739,7 +887,7 @@ onBeforeUnmount(() => {
     <div v-else class="panel-card empty-panel">
       <p class="panel-eyebrow">Dashboards</p>
       <h3>No dashboards yet</h3>
-      <p>Create your first dashboard from the toolbar to start arranging widgets.</p>
+      <p>Expand the dashboard controls panel and create your first dashboard.</p>
     </div>
 
     <Dialog
@@ -901,7 +1049,7 @@ onBeforeUnmount(() => {
   gap: var(--space-6);
 }
 
-.dashboard-toolbar,
+.dashboard-disclosure,
 .dashboard-summary,
 .widget-card,
 .empty-panel,
@@ -909,15 +1057,67 @@ onBeforeUnmount(() => {
   background: var(--color-surface-panel-strong);
 }
 
+.dashboard-disclosure {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.dashboard-disclosure-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-4);
+  cursor: pointer;
+  list-style: none;
+}
+
+.dashboard-disclosure-summary::-webkit-details-marker {
+  display: none;
+}
+
+.dashboard-summary-row,
+.dashboard-disclosure-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.dashboard-summary-row {
+  min-width: 0;
+}
+
+.dashboard-summary-row h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.dashboard-disclosure-meta {
+  margin-left: auto;
+}
+
+.disclosure-chevron {
+  font-size: 0.9rem;
+  color: var(--color-text-faint);
+}
+
+.dashboard-disclosure-body {
+  display: grid;
+  gap: var(--space-4);
+}
+
 .dashboard-toolbar {
   display: flex;
   justify-content: flex-start;
-  gap: var(--space-6);
   align-items: center;
 }
 
 .dashboard-description {
   color: var(--color-text-subtle);
+}
+
+.dashboard-layout-note {
+  margin-top: var(--space-3);
+  color: var(--color-text-faint);
 }
 
 .toolbar-actions {
@@ -940,7 +1140,7 @@ onBeforeUnmount(() => {
 .dashboard-summary {
   display: flex;
   justify-content: space-between;
-  gap: var(--space-6);
+  gap: var(--space-4);
   align-items: flex-start;
 }
 
@@ -954,7 +1154,6 @@ onBeforeUnmount(() => {
 
 .widget-grid {
   display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
   grid-auto-rows: 6rem;
   gap: var(--space-6);
   align-items: stretch;
@@ -1002,6 +1201,11 @@ onBeforeUnmount(() => {
 .widget-icon-button:hover {
   border-color: var(--color-border-interactive);
   color: var(--color-text-link);
+}
+
+.widget-icon-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .widget-delete-button:hover {
@@ -1078,89 +1282,61 @@ onBeforeUnmount(() => {
   gap: var(--space-6);
 }
 
-.dialog-control {
-  width: 100%;
-}
-
-.dashboard-description-input {
-  min-height: 7.5rem;
-  line-height: 1.5;
-}
-
-.native-number-input {
-  min-height: 2.85rem;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border-input-strong);
-  padding: 0.7rem 0.9rem;
-  background: var(--color-surface-input);
-}
-
-.dashboard-dialog-actions,
-.widget-dialog-actions {
-  justify-content: space-between;
-  align-items: center;
-  padding-top: 0.35rem;
-}
-
-.dialog-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--space-4);
-}
-
-.loading-panel,
-.empty-panel {
-  display: grid;
-  gap: var(--space-4);
-}
-
-@media (max-width: 1100px) {
-  .dashboard-toolbar,
-  .dashboard-summary {
-    grid-template-columns: 1fr;
-    display: grid;
-  }
-}
-
 @media (max-width: 900px) {
-  .widget-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .dashboard-disclosure-summary,
+  .dashboard-summary,
+  .dashboard-title-row {
+    flex-direction: column;
   }
 
-  .widget-card {
-    grid-column: span 2 !important;
-    grid-row: auto !important;
+  .dashboard-disclosure-meta {
+    margin-left: 0;
+    width: 100%;
+    justify-content: space-between;
   }
 }
 
-@media (max-width: 640px) {
-  .toolbar-actions {
-    flex-direction: column;
-    align-items: stretch;
+@media (max-width: 720px) {
+  .dashboard-shell {
+    gap: var(--space-4);
+  }
+
+  .dashboard-disclosure {
+    padding: var(--space-4);
+  }
+
+  .dashboard-summary-row h3 {
+    font-size: 0.95rem;
   }
 
   .dashboard-picker {
-    min-width: 0;
-    width: 100%;
+    min-width: 100%;
   }
 
-  .widget-grid {
-    grid-template-columns: 1fr;
-    grid-auto-rows: auto;
-  }
-
-  .widget-dialog-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .widget-dialog-actions {
-    flex-direction: column-reverse;
+  .dashboard-toolbar {
     align-items: stretch;
   }
 
-  .widget-card {
-    grid-column: auto !important;
-    grid-row: auto !important;
+  .toolbar-actions {
+    gap: var(--space-2);
+  }
+
+  .toolbar-actions :deep(.p-button) {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .dashboard-view {
+    gap: var(--space-4);
+    padding: 0 var(--space-3) var(--space-3);
+  }
+
+  .widget-grid {
+    gap: var(--space-4);
+  }
+
+  .widget-dialog-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 </style>

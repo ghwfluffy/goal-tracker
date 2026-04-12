@@ -210,6 +210,10 @@ export interface DashboardWidgetSummary {
   grid_w: number;
   grid_x: number;
   grid_y: number;
+  mobile_grid_h?: number;
+  mobile_grid_w?: number;
+  mobile_grid_x?: number;
+  mobile_grid_y?: number;
   goal: DashboardGoalReference | null;
   id: string;
   metric: DashboardMetricReference | null;
@@ -280,6 +284,7 @@ export interface UpdateDashboardWidgetPayload {
   grid_w?: number | null;
   grid_x?: number | null;
   grid_y?: number | null;
+  layout_mode?: "desktop" | "mobile" | null;
   rolling_window_days?: number | null;
   title?: string | null;
 }

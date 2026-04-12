@@ -189,7 +189,7 @@ onMounted(() => {
 
 @media (max-width: 720px) {
   .home-view {
-    padding: var(--space-6);
+    padding: 0;
   }
 }
 </style>
