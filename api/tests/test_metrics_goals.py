@@ -510,6 +510,52 @@ def test_date_goal_updates_replace_exception_dates(client: TestClient) -> None:
     assert payload["exception_dates"] == ["2026-04-18", "2026-04-22"]
 
 
+def test_date_goal_updates_preserve_existing_exception_dates_when_adding_more(
+    client: TestClient,
+) -> None:
+    bootstrap_admin(client)
+
+    metric_response = client.post(
+        "/api/v1/metrics",
+        json={
+            "name": "Last Drink",
+            "metric_type": "date",
+            "initial_date_value": "2026-04-10",
+        },
+    )
+    assert metric_response.status_code == 201
+
+    goal_response = client.post(
+        "/api/v1/goals",
+        json={
+            "title": "No drinks",
+            "start_date": "2026-04-11",
+            "target_date": "2026-04-30",
+            "success_threshold_percent": 100,
+            "exception_dates": ["2026-04-17"],
+            "metric_id": metric_response.json()["id"],
+        },
+    )
+    assert goal_response.status_code == 201
+    goal_id = goal_response.json()["id"]
+
+    update_response = client.patch(
+        f"/api/v1/goals/{goal_id}",
+        json={
+            "exception_dates": ["2026-04-17", "2026-04-24", "2026-04-28", "2026-04-30"],
+        },
+    )
+
+    assert update_response.status_code == 200
+    payload = update_response.json()
+    assert payload["exception_dates"] == [
+        "2026-04-17",
+        "2026-04-24",
+        "2026-04-28",
+        "2026-04-30",
+    ]
+
+
 def test_metric_delete_requires_no_goal_or_widget_dependencies(client: TestClient) -> None:
     bootstrap_admin(client)
 

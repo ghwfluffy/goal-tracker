@@ -250,6 +250,30 @@ def _sync_checklist_items(
     goal.checklist_items[:] = next_items
 
 
+def _sync_exception_dates(
+    *,
+    goal: Goal,
+    exception_dates: list[date],
+) -> None:
+    existing_dates_by_value = {
+        exception_date.exception_date: exception_date for exception_date in goal.exception_dates
+    }
+    next_exception_dates: list[GoalExceptionDate] = []
+
+    for exception_date in exception_dates:
+        existing_exception_date = existing_dates_by_value.get(exception_date)
+        if existing_exception_date is None:
+            existing_exception_date = GoalExceptionDate(
+                id=str(uuid4()),
+                goal_id=goal.id,
+                exception_date=exception_date,
+            )
+
+        next_exception_dates.append(existing_exception_date)
+
+    goal.exception_dates[:] = next_exception_dates
+
+
 def create_goal(
     db: Session,
     *,
@@ -434,15 +458,7 @@ def update_goal(
     if "archived" in update_fields:
         goal.archived_at = utcnow() if archived else None
 
-    goal.exception_dates.clear()
-    for exception_date in normalized_exception_dates:
-        goal.exception_dates.append(
-            GoalExceptionDate(
-                id=str(uuid4()),
-                goal_id=goal.id,
-                exception_date=exception_date,
-            )
-        )
+    _sync_exception_dates(goal=goal, exception_dates=normalized_exception_dates)
 
     if goal.goal_type == GOAL_TYPE_CHECKLIST:
         _sync_checklist_items(goal=goal, checklist_items=normalized_checklist_items)
