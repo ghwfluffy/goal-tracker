@@ -268,6 +268,7 @@ def find_active_session(
         return None
 
     session.last_seen_at = now
+    session.expires_at = now + timedelta(minutes=settings.session_duration_minutes)
     db.flush()
     return session
 

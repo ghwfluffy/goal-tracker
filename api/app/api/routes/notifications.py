@@ -3,11 +3,12 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated, Literal, cast
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.routes.auth import get_current_user
+from app.api.routes.auth import get_current_user, refresh_session_cookie
+from app.core.config import Settings, get_settings
 from app.db import Metric, MetricNotification, User, get_db
 from app.services.metrics import MetricError
 from app.services.notifications import (
@@ -77,8 +78,11 @@ def serialize_notification(notification: MetricNotification) -> NotificationSumm
 
 @router.get("", response_model=NotificationListResponse)
 def get_notifications(
+    request: Request,
+    response: Response,
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
     timezone: Annotated[str, Query(min_length=1)],
 ) -> NotificationListResponse:
     try:
@@ -88,6 +92,7 @@ def get_notifications(
         db.rollback()
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
 
+    refresh_session_cookie(response, request, settings=settings)
     return NotificationListResponse(
         notifications=[serialize_notification(notification) for notification in notifications]
     )

@@ -283,6 +283,7 @@ def test_due_number_metric_notification_can_be_completed(
 
     notification_list_response = client.get("/api/v1/notifications?timezone=UTC")
     assert notification_list_response.status_code == 200
+    assert "goal_tracker_session=" in notification_list_response.headers["set-cookie"]
     notifications = notification_list_response.json()["notifications"]
     assert len(notifications) == 1
     notification_id = notifications[0]["id"]

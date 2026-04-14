@@ -73,6 +73,36 @@ def test_login_and_logout_flow(client: TestClient) -> None:
         assert after_logout_response.status_code == 401
 
 
+def test_active_session_expiration_slides_forward_with_authenticated_requests(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SESSION_DURATION_MINUTES", "5")
+    get_settings.cache_clear()
+
+    now = datetime(2026, 4, 12, 12, 0, tzinfo=UTC)
+
+    def set_now(next_now: datetime) -> None:
+        nonlocal now
+        now = next_now
+
+    monkeypatch.setattr(auth_service, "utcnow", lambda: now)
+
+    bootstrap_response = client.post(
+        "/api/v1/auth/bootstrap",
+        json={"username": "admin", "password": "supersafepassword"},
+    )
+    assert bootstrap_response.status_code == 201
+
+    set_now(datetime(2026, 4, 12, 12, 4, tzinfo=UTC))
+    first_me_response = client.get("/api/v1/auth/me")
+    assert first_me_response.status_code == 200
+
+    set_now(datetime(2026, 4, 12, 12, 8, tzinfo=UTC))
+    second_me_response = client.get("/api/v1/auth/me")
+    assert second_me_response.status_code == 200
+
+
 def test_login_rejects_invalid_password(client: TestClient) -> None:
     bootstrap_response = client.post(
         "/api/v1/auth/bootstrap",

@@ -233,6 +233,43 @@ describe("auth api helpers", () => {
     });
   });
 
+  it("forces logout redirect when a protected api call returns 401", async () => {
+    const assignMock = vi.fn();
+    vi.stubGlobal("window", {
+      location: {
+        assign: assignMock,
+      },
+    });
+
+    try {
+      const fetcher = vi.fn(async (input) => {
+        const path = String(input);
+        if (path.endsWith("/auth/logout")) {
+          return new Response(null, { status: 204 });
+        }
+
+        return new Response(JSON.stringify({ detail: "Not authenticated." }), {
+          status: 401,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
+      });
+
+      await expect(fetchGoals(fetcher)).rejects.toMatchObject({
+        message: "Not authenticated.",
+        name: "ApiError",
+        status: 401,
+      });
+
+      expect(fetcher).toHaveBeenCalledTimes(2);
+      expect(String(fetcher.mock.calls[1]?.[0])).toMatch(/\/auth\/logout$/);
+      expect(assignMock).toHaveBeenCalledWith("/");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("formats validation errors into readable text", async () => {
     const fetcher = vi.fn(async () => {
       return new Response(

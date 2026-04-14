@@ -106,6 +106,14 @@ def clear_session_cookie(response: Response, *, settings: Settings) -> None:
     )
 
 
+def refresh_session_cookie(response: Response, request: Request, *, settings: Settings) -> None:
+    cookie_value = request.cookies.get(settings.session_cookie_name)
+    if cookie_value is None:
+        return
+
+    set_session_cookie(response, settings=settings, cookie_value=cookie_value)
+
+
 def get_authenticated_session(
     request: Request,
     db: Annotated[Session, Depends(get_db)],

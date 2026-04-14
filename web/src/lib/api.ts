@@ -1,4 +1,4 @@
-import { buildApiBaseUrl } from "./basePath";
+import { buildApiBaseUrl, joinBasePath } from "./basePath";
 
 export interface StatusResponse {
   application: string;
@@ -450,6 +450,8 @@ const apiBaseUrl = buildApiBaseUrl(
   import.meta.env.BASE_URL,
   import.meta.env.VITE_API_BASE_URL,
 );
+const loginRoute = joinBasePath(import.meta.env.BASE_URL, "/");
+let unauthorizedRedirectPromise: Promise<void> | null = null;
 
 export class ApiError extends Error {
   status: number;
@@ -518,6 +520,38 @@ async function parseError(response: Response): Promise<ApiError> {
   }
 }
 
+function shouldForceLogoutOnUnauthorized(path: string): boolean {
+  return !path.startsWith("/auth/");
+}
+
+async function forceLogoutRedirect(fetcher: Fetcher): Promise<void> {
+  if (unauthorizedRedirectPromise !== null) {
+    return unauthorizedRedirectPromise;
+  }
+
+  unauthorizedRedirectPromise = (async () => {
+    try {
+      await fetcher(
+        `${apiBaseUrl}/auth/logout`,
+        buildRequestInit({
+          keepalive: true,
+          method: "POST",
+        }),
+      );
+    } catch {
+      // Best-effort cookie clearing. The redirect still needs to happen.
+    }
+
+    if (typeof window !== "undefined") {
+      window.location.assign(loginRoute);
+    }
+  })().finally(() => {
+    unauthorizedRedirectPromise = null;
+  });
+
+  await unauthorizedRedirectPromise;
+}
+
 async function requestJson<T>(
   path: string,
   init?: RequestInit,
@@ -529,7 +563,11 @@ async function requestJson<T>(
   );
 
   if (!response.ok) {
-    throw await parseError(response);
+    const error = await parseError(response);
+    if (error.status === 401 && shouldForceLogoutOnUnauthorized(path)) {
+      await forceLogoutRedirect(fetcher);
+    }
+    throw error;
   }
 
   return (await response.json()) as T;
@@ -546,7 +584,11 @@ async function requestNoContent(
   );
 
   if (!response.ok) {
-    throw await parseError(response);
+    const error = await parseError(response);
+    if (error.status === 401 && shouldForceLogoutOnUnauthorized(path)) {
+      await forceLogoutRedirect(fetcher);
+    }
+    throw error;
   }
 }
 
