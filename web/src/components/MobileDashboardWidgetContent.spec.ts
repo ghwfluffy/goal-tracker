@@ -65,6 +65,40 @@ describe("MobileDashboardWidgetContent", () => {
     expect(wrapper.findComponent({ name: "DashboardWidgetChart" }).exists()).toBe(false);
   });
 
+  it("renders compact goal percent widgets as progress bars", () => {
+    const wrapper = mount(MobileDashboardWidgetContent, {
+      global: {
+        plugins: [pinia],
+      },
+      props: {
+        widget: buildWidget({
+          goal: {
+            checklist_completed_count: 0,
+            checklist_items: [],
+            checklist_total_count: 0,
+            exception_dates: [],
+            goal_type: "metric",
+            id: "goal-1",
+            metric: null,
+            start_date: "2026-04-11",
+            success_threshold_percent: 80,
+            target_date: "2026-04-30",
+            target_value_date: null,
+            target_value_number: null,
+            title: "Stay dry",
+          },
+          metric: null,
+          title: "Goal success",
+          widget_type: "goal_success_percent",
+        }),
+      },
+    });
+
+    expect(wrapper.find(".dashboard-percent-widget").exists()).toBe(true);
+    expect(wrapper.text()).toContain("Success");
+    expect(wrapper.text()).toContain("40%");
+  });
+
   it("shows a compact empty state for missing value widgets", () => {
     const wrapper = mount(MobileDashboardWidgetContent, {
       global: {

@@ -305,4 +305,26 @@ describe("DashboardWidgetChart", () => {
     expect(wrapper.text()).toContain("3 days");
     expect(setOptionMock).not.toHaveBeenCalled();
   });
+
+  it("renders goal percent widgets as progress bars instead of charts", async () => {
+    const wrapper = mount(DashboardWidgetChart, {
+      global: {
+        plugins: [pinia],
+      },
+      props: {
+        widget: buildGoalWidget({
+          metric: null,
+          title: "Goal success",
+          widget_type: "goal_success_percent",
+        }),
+      },
+    });
+
+    await nextTick();
+
+    expect(wrapper.find(".dashboard-percent-widget").exists()).toBe(true);
+    expect(wrapper.text()).toContain("Success");
+    expect(wrapper.text()).toContain("40%");
+    expect(setOptionMock).not.toHaveBeenCalled();
+  });
 });

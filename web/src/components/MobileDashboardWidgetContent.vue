@@ -3,10 +3,15 @@ import { computed } from "vue";
 import { getActivePinia } from "pinia";
 
 import type { DashboardWidgetSummary } from "../lib/api";
-import { getDashboardWidgetValueText, isDashboardValueWidget } from "../lib/dashboardWidgets";
+import {
+  getDashboardWidgetValueText,
+  isDashboardPercentWidget,
+  isDashboardValueWidget,
+} from "../lib/dashboardWidgets";
 import { DEFAULT_PROFILE_TIMEZONE } from "../lib/time";
 import { useAuthStore } from "../stores/auth";
 import DashboardChecklistWidget from "./DashboardChecklistWidget.vue";
+import DashboardPercentWidget from "./DashboardPercentWidget.vue";
 import DashboardWidgetChart from "./DashboardWidgetChart.vue";
 
 const props = defineProps<{
@@ -26,12 +31,14 @@ const profileTimezone = computed(() => {
 const displayValueText = computed(() => getDashboardWidgetValueText(props.widget, profileTimezone.value));
 const hasValue = computed(() => displayValueText.value !== "No value");
 const isChecklistWidget = computed(() => props.widget.widget_type === "goal_checklist");
+const isPercentWidget = computed(() => isDashboardPercentWidget(props.widget.widget_type));
 </script>
 
 <template>
   <DashboardChecklistWidget v-if="isChecklistWidget" :widget="widget" />
   <div v-else-if="isValueWidget" class="mobile-value-widget" :class="{ 'is-empty': !hasValue }">
-    <div class="mobile-value-text">{{ hasValue ? displayValueText : "No value yet" }}</div>
+    <DashboardPercentWidget v-if="hasValue && isPercentWidget" :widget="widget" compact />
+    <div v-else class="mobile-value-text">{{ hasValue ? displayValueText : "No value yet" }}</div>
   </div>
   <div v-else class="mobile-chart-widget">
     <DashboardWidgetChart :widget="widget" />
@@ -44,6 +51,7 @@ const isChecklistWidget = computed(() => props.widget.widget_type === "goal_chec
   align-items: center;
   justify-content: flex-start;
   min-height: 0;
+  width: 100%;
   padding: var(--space-1) 0;
 }
 

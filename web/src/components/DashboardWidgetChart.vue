@@ -4,7 +4,11 @@ import { getActivePinia } from "pinia";
 
 import type { DashboardWidgetSummary } from "../lib/api";
 import { getPaddedNumericAxisBounds } from "../lib/chart";
-import { getDashboardWidgetValueText, isDashboardValueWidget } from "../lib/dashboardWidgets";
+import {
+  getDashboardWidgetValueText,
+  isDashboardPercentWidget,
+  isDashboardValueWidget,
+} from "../lib/dashboardWidgets";
 import {
   buildGoalForecastSeries,
   type ForecastChartPoint as ChartPoint,
@@ -12,6 +16,7 @@ import {
 import { getChartThemeColors } from "../lib/theme";
 import { DEFAULT_PROFILE_TIMEZONE, formatDateOnly } from "../lib/time";
 import { useAuthStore } from "../stores/auth";
+import DashboardPercentWidget from "./DashboardPercentWidget.vue";
 
 interface EChartsInstance {
   dispose(): void;
@@ -130,6 +135,7 @@ const goalTargetValue = computed(() => {
 const goalProgressUsesMetricSeries = computed(() => goalMetricChartPoints.value.length > 0);
 
 const displayValueText = computed(() => getDashboardWidgetValueText(props.widget, profileTimezone.value));
+const isPercentWidget = computed(() => isDashboardPercentWidget(props.widget.widget_type));
 
 const hasRenderableContent = computed(() => {
   if (isValueWidget.value) {
@@ -485,7 +491,8 @@ onBeforeUnmount(() => {
 
 <template>
   <div v-if="isValueWidget && hasRenderableContent" class="widget-value-shell">
-    <div class="widget-value">{{ displayValueText }}</div>
+    <DashboardPercentWidget v-if="isPercentWidget" :widget="widget" />
+    <div v-else class="widget-value">{{ displayValueText }}</div>
   </div>
   <div v-else-if="hasRenderableContent" ref="chartElement" class="widget-chart"></div>
   <div v-else class="chart-empty-state empty-dashed-state">Not enough data yet.</div>
