@@ -3,7 +3,7 @@ from __future__ import annotations
 import csv
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, time
+from datetime import UTC, date, datetime, time, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from io import StringIO
 from uuid import uuid4
@@ -15,8 +15,9 @@ from sqlalchemy.orm import Session, selectinload
 from app.db.models import DashboardWidget, Goal, Metric, MetricEntry, MetricNotification, User
 
 METRIC_TYPE_NUMBER = "number"
+METRIC_TYPE_COUNT = "count"
 METRIC_TYPE_DATE = "date"
-SUPPORTED_METRIC_TYPES = {METRIC_TYPE_NUMBER, METRIC_TYPE_DATE}
+SUPPORTED_METRIC_TYPES = {METRIC_TYPE_NUMBER, METRIC_TYPE_COUNT, METRIC_TYPE_DATE}
 UPDATE_TYPE_SUCCESS = "success"
 UPDATE_TYPE_FAILURE = "failure"
 SUPPORTED_UPDATE_TYPES = {UPDATE_TYPE_SUCCESS, UPDATE_TYPE_FAILURE}
@@ -94,8 +95,12 @@ def metric_entry_satisfies_notification(
 def normalize_metric_type(metric_type: str) -> str:
     normalized = metric_type.strip().lower()
     if normalized not in SUPPORTED_METRIC_TYPES:
-        raise MetricError("Metric type must be either 'number' or 'date'.")
+        raise MetricError("Metric type must be 'number', 'count', or 'date'.")
     return normalized
+
+
+def is_numeric_metric_type(metric_type: str) -> bool:
+    return metric_type in {METRIC_TYPE_NUMBER, METRIC_TYPE_COUNT}
 
 
 def normalize_metric_name(name: str) -> str:
@@ -106,7 +111,7 @@ def normalize_metric_name(name: str) -> str:
 
 
 def normalize_update_type(*, metric_type: str, update_type: str | None) -> str:
-    if metric_type == METRIC_TYPE_NUMBER:
+    if is_numeric_metric_type(metric_type):
         return UPDATE_TYPE_SUCCESS
 
     normalized = (update_type or UPDATE_TYPE_SUCCESS).strip().lower()
@@ -143,7 +148,7 @@ def normalize_decimal_places(*, metric_type: str, decimal_places: int | None) ->
 
     value = 0 if decimal_places is None else decimal_places
     if value < 0 or value > MAX_DECIMAL_PLACES:
-        raise MetricError(f"Number metrics support 0 to {MAX_DECIMAL_PLACES} decimal places.")
+        raise MetricError(f"Numeric metrics support 0 to {MAX_DECIMAL_PLACES} decimal places.")
     return value
 
 
@@ -159,11 +164,11 @@ def validate_metric_value(
     date_value: date | None,
     decimal_places: int | None,
 ) -> None:
-    if metric_type == METRIC_TYPE_NUMBER:
+    if is_numeric_metric_type(metric_type):
         if number_value is None or date_value is not None:
-            raise MetricError("Number metrics require a numeric value.")
+            raise MetricError("Numeric metrics require a numeric value.")
         if decimal_places is None:
-            raise MetricError("Number metrics require a decimal-places setting.")
+            raise MetricError("Numeric metrics require a decimal-places setting.")
         return
 
     if date_value is None or number_value is not None:
@@ -255,15 +260,58 @@ def create_metric_entry(
         decimal_places=metric.decimal_places,
     )
 
+    normalized_recorded_at = normalize_metric_recorded_at(recorded_at)
+    latest_entry_recorded_at_in_second = db.scalar(
+        select(MetricEntry.recorded_at)
+        .where(
+            MetricEntry.metric_id == metric.id,
+            MetricEntry.recorded_at >= normalized_recorded_at.replace(microsecond=0),
+            MetricEntry.recorded_at < normalized_recorded_at.replace(microsecond=0) + timedelta(seconds=1),
+        )
+        .order_by(MetricEntry.recorded_at.desc())
+        .limit(1)
+    )
+    normalized_latest_entry_recorded_at_in_second = (
+        normalize_metric_recorded_at(latest_entry_recorded_at_in_second)
+        if latest_entry_recorded_at_in_second is not None
+        else None
+    )
+    if (
+        normalized_latest_entry_recorded_at_in_second is not None
+        and normalized_latest_entry_recorded_at_in_second >= normalized_recorded_at
+    ):
+        normalized_recorded_at = normalized_latest_entry_recorded_at_in_second + timedelta(microseconds=1)
+
+    normalized_number_value = (
+        normalize_number_value(value=number_value, decimal_places=metric.decimal_places or 0)
+        if number_value is not None
+        else None
+    )
+    if metric.metric_type == METRIC_TYPE_COUNT and normalized_number_value is not None:
+        latest_number_value = db.scalar(
+            select(MetricEntry.number_value)
+            .where(
+                MetricEntry.metric_id == metric.id,
+                MetricEntry.number_value.is_not(None),
+            )
+            .order_by(
+                MetricEntry.recorded_at.desc(),
+                MetricEntry.created_at.desc(),
+                MetricEntry.id.desc(),
+            )
+            .limit(1)
+        )
+        if latest_number_value is not None:
+            normalized_number_value += normalize_number_value(
+                value=latest_number_value,
+                decimal_places=metric.decimal_places or 0,
+            )
+
     entry = MetricEntry(
         id=str(uuid4()),
         metric_id=metric.id,
-        recorded_at=normalize_metric_recorded_at(recorded_at),
-        number_value=(
-            normalize_number_value(value=number_value, decimal_places=metric.decimal_places or 0)
-            if number_value is not None
-            else None
-        ),
+        recorded_at=normalized_recorded_at,
+        number_value=normalized_number_value,
         date_value=date_value,
     )
     db.add(entry)
@@ -458,16 +506,16 @@ def parse_import_value(*, metric: Metric, raw_value: str) -> tuple[Decimal | Non
     if normalized == "":
         raise ValueError("value is required")
 
-    if metric.metric_type == METRIC_TYPE_NUMBER:
+    if is_numeric_metric_type(metric.metric_type):
         if metric.decimal_places is None:
-            raise ValueError("number metrics require decimal places")
+            raise ValueError("numeric metrics require decimal places")
         try:
             return normalize_number_value(
                 value=Decimal(normalized),
                 decimal_places=metric.decimal_places,
             ), None
         except Exception as exc:  # noqa: BLE001
-            raise ValueError("number value is invalid") from exc
+            raise ValueError("numeric value is invalid") from exc
 
     try:
         return None, date.fromisoformat(normalized)

@@ -8,7 +8,12 @@ import Menu from "primevue/menu";
 import ProgressSpinner from "primevue/progressspinner";
 import Tag from "primevue/tag";
 
-import { numberInputStep, parseDecimalPlaces, parseOptionalNumber } from "../../lib/tracking";
+import {
+  isNumericMetricType,
+  numberInputStep,
+  parseDecimalPlaces,
+  parseOptionalNumber,
+} from "../../lib/tracking";
 import { useAppToast } from "../../lib/toast";
 import { useGoalsStore } from "../../stores/goals";
 import { useMetricsStore } from "../../stores/metrics";
@@ -46,7 +51,7 @@ const goalChecklistItems = ref<Array<{ id?: string | null; title: string }>>([])
 const goalUseNewMetric = ref(false);
 const goalMetricIdInput = ref("");
 const goalNewMetricNameInput = ref("");
-const goalNewMetricTypeInput = ref<"number" | "date">("number");
+const goalNewMetricTypeInput = ref<"number" | "count" | "date">("number");
 const goalNewMetricDecimalPlacesInput = ref("0");
 const goalNewMetricUnitLabelInput = ref("");
 const goalNewMetricInitialNumberValueInput = ref("");
@@ -248,7 +253,7 @@ function formatGoalTargetSummary(goal: (typeof goalsStore.goals)[number]): strin
     const itemLabel = goal.checklist_total_count === 1 ? "item" : "items";
     return `${goal.checklist_total_count} ${itemLabel}`;
   }
-  if (goal.metric?.metric_type === "number" && goal.target_value_number !== null) {
+  if (goal.metric !== null && isNumericMetricType(goal.metric.metric_type) && goal.target_value_number !== null) {
     return `${goal.target_value_number.toFixed(goal.metric.decimal_places ?? 0)}${
       goal.metric.unit_label !== null ? ` ${goal.metric.unit_label}` : ""
     }`;
@@ -324,7 +329,7 @@ async function submitGoalForm(): Promise<void> {
         !isChecklistGoal && goalUseNewMetric.value
           ? {
               decimal_places:
-                goalNewMetricTypeInput.value === "number"
+                isNumericMetricType(goalNewMetricTypeInput.value)
                   ? parseDecimalPlaces(goalNewMetricDecimalPlacesInput.value)
                   : null,
               initial_date_value:
@@ -332,7 +337,7 @@ async function submitGoalForm(): Promise<void> {
                   ? goalNewMetricInitialDateValueInput.value || null
                   : null,
               initial_number_value:
-                goalNewMetricTypeInput.value === "number"
+                isNumericMetricType(goalNewMetricTypeInput.value)
                   ? parseOptionalNumber(goalNewMetricInitialNumberValueInput.value)
                   : null,
               metric_type: goalNewMetricTypeInput.value,
@@ -351,7 +356,7 @@ async function submitGoalForm(): Promise<void> {
       target_date: goalTargetDateInput.value || null,
       target_value_date: null,
       target_value_number:
-        !isChecklistGoal && goalMetricType.value === "number"
+        !isChecklistGoal && goalMetricType.value !== null && isNumericMetricType(goalMetricType.value)
           ? parseOptionalNumber(goalTargetNumberValueInput.value)
           : null,
       title: goalTitleInput.value,
@@ -386,7 +391,7 @@ async function submitGoalForm(): Promise<void> {
     target_date: goalTargetDateInput.value || null,
     target_value_date: null,
     target_value_number:
-      !isChecklistGoal && goalMetricType.value === "number"
+      !isChecklistGoal && goalMetricType.value !== null && isNumericMetricType(goalMetricType.value)
         ? parseOptionalNumber(goalTargetNumberValueInput.value)
         : null,
     title: goalTitleInput.value,
@@ -633,11 +638,12 @@ function toggleIncludeArchived(): void {
                     <span class="label">New metric type</span>
                     <select v-model="goalNewMetricTypeInput" class="native-file-input">
                       <option value="number">Number</option>
+                      <option value="count">Count</option>
                       <option value="date">Date</option>
                     </select>
                   </label>
 
-                  <label v-if="goalNewMetricTypeInput === 'number'" class="field">
+                  <label v-if="isNumericMetricType(goalNewMetricTypeInput)" class="field">
                     <span class="label">Decimal places</span>
                     <input
                       v-model="goalNewMetricDecimalPlacesInput"
@@ -654,8 +660,10 @@ function toggleIncludeArchived(): void {
                     <InputText v-model="goalNewMetricUnitLabelInput" placeholder="Optional, like lbs" />
                   </label>
 
-                  <label v-if="goalNewMetricTypeInput === 'number'" class="field">
-                    <span class="label">Initial metric value</span>
+                  <label v-if="isNumericMetricType(goalNewMetricTypeInput)" class="field">
+                    <span class="label">
+                      {{ goalNewMetricTypeInput === "count" ? "Initial metric total" : "Initial metric value" }}
+                    </span>
                     <input
                       v-model="goalNewMetricInitialNumberValueInput"
                       class="native-file-input"
@@ -721,7 +729,10 @@ function toggleIncludeArchived(): void {
               </label>
             </div>
 
-            <label v-if="!goalIsChecklist && goalMetricType === 'number'" class="field">
+            <label
+              v-if="!goalIsChecklist && goalMetricType !== null && isNumericMetricType(goalMetricType)"
+              class="field"
+            >
               <span class="label">Target metric value</span>
               <input
                 v-model="goalTargetNumberValueInput"

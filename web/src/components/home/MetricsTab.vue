@@ -8,7 +8,12 @@ import Menu from "primevue/menu";
 import ProgressSpinner from "primevue/progressspinner";
 import Tag from "primevue/tag";
 
-import { numberInputStep, parseDecimalPlaces, parseOptionalNumber } from "../../lib/tracking";
+import {
+  isNumericMetricType,
+  numberInputStep,
+  parseDecimalPlaces,
+  parseOptionalNumber,
+} from "../../lib/tracking";
 import { useAppToast } from "../../lib/toast";
 import { useGoalsStore } from "../../stores/goals";
 import { useMetricsStore } from "../../stores/metrics";
@@ -33,7 +38,7 @@ const metricImportTextInput = ref("");
 const viewMode = ref<"table" | "cards">("table");
 
 const metricNameInput = ref("");
-const metricTypeInput = ref<"number" | "date">("number");
+const metricTypeInput = ref<"number" | "count" | "date">("number");
 const metricUpdateTypeInput = ref<"success" | "failure">("success");
 const metricDecimalPlacesInput = ref("0");
 const metricUnitLabelInput = ref("");
@@ -185,11 +190,15 @@ async function submitMetricForm(): Promise<void> {
   if (metricDialogMode.value === "create") {
     const created = await metricsStore.createMetric({
       decimal_places:
-        metricTypeInput.value === "number" ? parseDecimalPlaces(metricDecimalPlacesInput.value) : null,
+        isNumericMetricType(metricTypeInput.value)
+          ? parseDecimalPlaces(metricDecimalPlacesInput.value)
+          : null,
       initial_date_value:
         metricTypeInput.value === "date" ? metricInitialDateValueInput.value || null : null,
       initial_number_value:
-        metricTypeInput.value === "number" ? parseOptionalNumber(metricInitialNumberValueInput.value) : null,
+        isNumericMetricType(metricTypeInput.value)
+          ? parseOptionalNumber(metricInitialNumberValueInput.value)
+          : null,
       metric_type: metricTypeInput.value,
       name: metricNameInput.value,
       reminder_time_1: metricReminderTime1Input.value || null,
@@ -215,7 +224,9 @@ async function submitMetricForm(): Promise<void> {
 
   const updated = await metricsStore.updateMetricDetails(editingMetric.value.id, {
     decimal_places:
-      metricTypeInput.value === "number" ? parseDecimalPlaces(metricDecimalPlacesInput.value) : null,
+      isNumericMetricType(metricTypeInput.value)
+        ? parseDecimalPlaces(metricDecimalPlacesInput.value)
+        : null,
     name: metricNameInput.value,
     reminder_time_1: metricReminderTime1Input.value || null,
     reminder_time_2: metricReminderTime2Input.value || null,
@@ -454,6 +465,7 @@ function toggleIncludeArchived(): void {
                 <span class="label">Metric type</span>
                 <select v-model="metricTypeInput" class="native-file-input">
                   <option value="number">Number</option>
+                  <option value="count">Count</option>
                   <option value="date">Date</option>
                 </select>
               </label>
@@ -470,7 +482,7 @@ function toggleIncludeArchived(): void {
               </select>
             </label>
 
-            <label v-if="metricTypeInput === 'number'" class="field">
+            <label v-if="isNumericMetricType(metricTypeInput)" class="field">
               <span class="label">Decimal places</span>
               <input
                 v-model="metricDecimalPlacesInput"
@@ -499,8 +511,11 @@ function toggleIncludeArchived(): void {
               </label>
             </div>
 
-            <label v-if="metricDialogMode === 'create' && metricTypeInput === 'number'" class="field">
-              <span class="label">Initial value</span>
+            <label
+              v-if="metricDialogMode === 'create' && isNumericMetricType(metricTypeInput)"
+              class="field"
+            >
+              <span class="label">{{ metricTypeInput === "count" ? "Initial total" : "Initial value" }}</span>
               <input
                 v-model="metricInitialNumberValueInput"
                 class="native-file-input"

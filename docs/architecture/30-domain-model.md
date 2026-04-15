@@ -54,6 +54,8 @@ Likely metric types:
 - checklist progress
 - performance measurement such as elapsed time for a fixed-distance effort
 
+Count metrics are cumulative numeric streams. A user may record increments such as `+3.5 miles`, with the latest entry representing the running total.
+
 Important design direction:
 
 - a metric may exist even when no goal is active

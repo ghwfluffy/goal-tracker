@@ -12,7 +12,7 @@ from sqlalchemy.orm.interfaces import ExecutableOption
 
 from app.db.models import Goal, GoalChecklistItem, GoalExceptionDate, Metric, User
 from app.services import goal_progress
-from app.services.metrics import METRIC_TYPE_DATE, METRIC_TYPE_NUMBER
+from app.services.metrics import METRIC_TYPE_DATE, is_numeric_metric_type
 
 GOAL_TYPE_METRIC = "metric"
 GOAL_TYPE_CHECKLIST = "checklist"
@@ -180,15 +180,15 @@ def normalize_goal_details(
     )
     normalized_success_threshold = normalize_success_threshold_percent(success_threshold_percent)
 
-    if metric.metric_type == METRIC_TYPE_NUMBER:
+    if is_numeric_metric_type(metric.metric_type):
         if target_value_date is not None:
-            raise GoalError("Number metrics cannot use a date target value.")
+            raise GoalError("Numeric metrics cannot use a date target value.")
         if normalized_success_threshold is not None:
-            raise GoalError("Number metrics cannot use a success threshold percent.")
+            raise GoalError("Numeric metrics cannot use a success threshold percent.")
         if len(normalized_exception_dates) > 0:
-            raise GoalError("Number metrics cannot use exception dates.")
+            raise GoalError("Numeric metrics cannot use exception dates.")
         if target_value_number is None:
-            raise GoalError("Number metric goals require a target numeric value.")
+            raise GoalError("Numeric metric goals require a target numeric value.")
     elif metric.metric_type == METRIC_TYPE_DATE:
         if target_value_number is not None:
             raise GoalError("Date metrics cannot use a numeric target value.")
@@ -200,7 +200,7 @@ def normalize_goal_details(
             normalized_success_threshold = Decimal("100.00")
 
     normalized_target_number: Decimal | None = None
-    if metric.metric_type == METRIC_TYPE_NUMBER and target_value_number is not None:
+    if is_numeric_metric_type(metric.metric_type) and target_value_number is not None:
         decimal_places = metric.decimal_places or 0
         quantizer = Decimal("1").scaleb(-decimal_places)
         normalized_target_number = Decimal(str(target_value_number)).quantize(

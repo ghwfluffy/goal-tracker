@@ -5,6 +5,7 @@ import type { MetricSummary } from "../lib/api";
 import { getPaddedNumericAxisBounds } from "../lib/chart";
 import { getChartThemeColors } from "../lib/theme";
 import { formatDateOnly } from "../lib/time";
+import { isNumericMetricType } from "../lib/tracking";
 
 interface EChartsInstance {
   dispose(): void;
@@ -44,7 +45,7 @@ const chartData = computed(() => {
       day: "numeric",
     });
 
-    if (props.metric.metric_type === "number") {
+    if (isNumericMetricType(props.metric.metric_type)) {
       return {
         label,
         value: entry.number_value ?? 0,
@@ -61,7 +62,7 @@ const chartData = computed(() => {
 const hasChartData = computed(() => chartData.value.length > 0);
 
 const numericAxisBounds = computed(() => {
-  if (props.metric.metric_type !== "number") {
+  if (!isNumericMetricType(props.metric.metric_type)) {
     return null;
   }
 

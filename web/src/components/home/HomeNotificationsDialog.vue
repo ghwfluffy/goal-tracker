@@ -50,7 +50,7 @@ const emit = defineEmits<{
           </div>
           <div class="notification-card-meta">
             <span>{{ formatShortWeekdayDate(notification.notification_date) }}</span>
-            <span>{{ notification.metric.metric_type === "number" ? "Enter value" : "Confirm yes or no" }}</span>
+            <span>{{ notification.metric.metric_type === "date" ? "Confirm yes or no" : "Enter value" }}</span>
           </div>
         </button>
       </template>

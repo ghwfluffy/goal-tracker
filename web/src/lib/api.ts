@@ -128,7 +128,7 @@ export interface MetricSummary {
   id: string;
   is_archived: boolean;
   latest_entry: MetricEntrySummary | null;
-  metric_type: "number" | "date";
+  metric_type: "number" | "count" | "date";
   name: string;
   reminder_time_1: string;
   reminder_time_2: string | null;
@@ -144,7 +144,7 @@ export interface CreateMetricPayload {
   decimal_places: number | null;
   initial_date_value: string | null;
   initial_number_value: number | null;
-  metric_type: "number" | "date";
+  metric_type: "number" | "count" | "date";
   name: string;
   recorded_at?: string | null;
   reminder_time_1?: string | null;
@@ -187,7 +187,7 @@ export interface UpdateMetricPayload {
 export interface NotificationMetricSummary {
   decimal_places: number | null;
   id: string;
-  metric_type: "number" | "date";
+  metric_type: "number" | "count" | "date";
   name: string;
   update_type: "success" | "failure";
   unit_label: string | null;
@@ -216,7 +216,7 @@ export interface GoalMetricSummary {
   decimal_places: number | null;
   id: string;
   latest_entry: MetricEntrySummary | null;
-  metric_type: "number" | "date";
+  metric_type: "number" | "count" | "date";
   name: string;
   unit_label: string | null;
 }
@@ -296,7 +296,7 @@ export interface DashboardMetricReference {
   decimal_places: number | null;
   id: string;
   latest_entry: MetricEntrySummary | null;
-  metric_type: "number" | "date";
+  metric_type: "number" | "count" | "date";
   name: string;
   unit_label: string | null;
 }
@@ -455,7 +455,7 @@ export interface CreateDashboardWidgetPayload {
   grid_y?: number | null;
   metric_id: string | null;
   rolling_window_days: number | null;
-  title: string;
+  title: string | null;
   widget_type:
     | "metric_history"
     | "metric_summary"

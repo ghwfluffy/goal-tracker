@@ -10,7 +10,7 @@ import {
   getCurrentDateInTimezone,
   getCurrentTimeInputValue,
 } from "../../lib/time";
-import { numberInputStep, parseOptionalNumber } from "../../lib/tracking";
+import { isNumericMetricType, numberInputStep, parseOptionalNumber } from "../../lib/tracking";
 import { useAppToast } from "../../lib/toast";
 import { useGoalsStore } from "../../stores/goals";
 import { useMetricsStore } from "../../stores/metrics";
@@ -76,7 +76,7 @@ async function submit(): Promise<void> {
 
   const updated = await metricsStore.addMetricEntry(props.metric.id, {
     date_value: props.metric.metric_type === "date" ? dateValueInput.value || null : null,
-    number_value: props.metric.metric_type === "number" ? parseOptionalNumber(numberValueInput.value) : null,
+    number_value: isNumericMetricType(props.metric.metric_type) ? parseOptionalNumber(numberValueInput.value) : null,
     recorded_at: buildRecordedAt(),
   });
 
@@ -115,8 +115,8 @@ function buildRecordedAt(): string | null {
           <p>Record the next value for this metric.</p>
         </div>
 
-        <label v-if="metric.metric_type === 'number'" class="field">
-          <span class="label">New value</span>
+        <label v-if="isNumericMetricType(metric.metric_type)" class="field">
+          <span class="label">{{ metric.metric_type === "count" ? "Increment by" : "New value" }}</span>
           <input
             v-model="numberValueInput"
             class="native-file-input"

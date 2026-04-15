@@ -10,6 +10,7 @@ Instead of treating every goal like the same checkbox list, Goal Tracker is desi
 
 - daily habits like `30 minutes of cardio every day`
 - target goals like `240 lbs by April 30`
+- cumulative goals like `run 100 miles this month`
 - performance goals like `row 2km in under 12 minutes`
 - restraint goals like `no tv until April 30, except on specific dates`
 - one-off tasks with subtasks
@@ -30,6 +31,7 @@ The bigger idea is that the app should not just store updates. It should make pr
 Imagine using one app to track all of these at once:
 
 - your weight, with multiple weigh-ins in one day
+- your monthly running mileage, added up a few miles at a time
 - your cardio habit, tracked day by day until a deadline
 - your best 2km row attempts over time
 - a no-tv streak that correctly skips approved exception dates

@@ -239,6 +239,73 @@ def test_dashboard_widgets_include_metric_and_goal_series(client: TestClient) ->
     assert [widget["mobile_grid_y"] for widget in payload["dashboards"][0]["widgets"]] == [0, 4]
 
 
+def test_dashboard_widgets_default_titles_to_their_subject(client: TestClient) -> None:
+    bootstrap_admin(client)
+
+    metric_response = client.post(
+        "/api/v1/metrics",
+        json={
+            "name": "Miles run",
+            "metric_type": "count",
+            "decimal_places": 1,
+            "unit_label": "mi",
+            "initial_number_value": 12.5,
+        },
+    )
+    assert metric_response.status_code == 201
+    metric_id = metric_response.json()["id"]
+
+    goal_response = client.post(
+        "/api/v1/goals",
+        json={
+            "title": "Run 100 miles",
+            "start_date": "2026-04-01",
+            "target_date": "2026-04-30",
+            "target_value_number": 100.0,
+            "metric_id": metric_id,
+        },
+    )
+    assert goal_response.status_code == 201
+    goal_id = goal_response.json()["id"]
+
+    dashboard_response = client.post("/api/v1/dashboards", json={"name": "Running"})
+    assert dashboard_response.status_code == 201
+    dashboard_id = dashboard_response.json()["id"]
+
+    metric_widget_response = client.post(
+        f"/api/v1/dashboards/{dashboard_id}/widgets",
+        json={
+            "widget_type": "metric_summary",
+            "metric_id": metric_id,
+            "rolling_window_days": 30,
+        },
+    )
+    assert metric_widget_response.status_code == 201
+    assert metric_widget_response.json()["title"] == "Miles run"
+
+    goal_widget_response = client.post(
+        f"/api/v1/dashboards/{dashboard_id}/widgets",
+        json={
+            "widget_type": "goal_progress",
+            "goal_id": goal_id,
+            "rolling_window_days": 30,
+        },
+    )
+    assert goal_widget_response.status_code == 201
+    assert goal_widget_response.json()["title"] == "Run 100 miles"
+
+    calendar_widget_response = client.post(
+        f"/api/v1/dashboards/{dashboard_id}/widgets",
+        json={
+            "widget_type": "goal_calendar",
+            "goal_scope": "all",
+            "calendar_period": "current_month",
+        },
+    )
+    assert calendar_widget_response.status_code == 201
+    assert calendar_widget_response.json()["title"] == "All active goals"
+
+
 def test_mobile_widget_updates_restack_a_vertical_dashboard_layout(client: TestClient) -> None:
     bootstrap_admin(client)
 

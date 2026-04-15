@@ -22,7 +22,7 @@ from app.services.notifications import (
 
 router = APIRouter(prefix="/notifications")
 
-MetricType = Literal["number", "date"]
+MetricType = Literal["number", "count", "date"]
 MetricUpdateType = Literal["success", "failure"]
 
 

@@ -16,6 +16,7 @@ from app.api.schemas.dashboards import (
     MetricReferenceSummary,
     WidgetSummary,
 )
+from app.services.metrics import is_numeric_metric_type
 
 PREVIEW_WIDTH = 1200
 PREVIEW_HEIGHT = 630
@@ -95,7 +96,7 @@ def _format_number(value: float, decimal_places: int | None, unit_label: str | N
 def _format_metric_entry(metric: MetricReferenceSummary, entry: MetricEntrySummary | None) -> str:
     if entry is None:
         return "No value"
-    if metric.metric_type == "number":
+    if is_numeric_metric_type(metric.metric_type):
         if entry.number_value is None:
             return "No value"
         return _format_number(entry.number_value, metric.decimal_places, metric.unit_label)
@@ -107,7 +108,7 @@ def _format_metric_entry(metric: MetricReferenceSummary, entry: MetricEntrySumma
 def _format_goal_target(goal: GoalReferenceSummary) -> str | None:
     if goal.metric is None:
         return None
-    if goal.metric.metric_type == "number" and goal.target_value_number is not None:
+    if is_numeric_metric_type(goal.metric.metric_type) and goal.target_value_number is not None:
         return _format_number(goal.target_value_number, goal.metric.decimal_places, goal.metric.unit_label)
     if goal.metric.metric_type == "date" and goal.target_value_date is not None:
         return _format_calendar_date(date.fromisoformat(goal.target_value_date))
@@ -255,7 +256,7 @@ def _widget_chart_mode(widget: WidgetSummary) -> str:
         has_number_values = any(point.number_value is not None for point in widget.series)
         if goal_metric.metric_type == "date" and has_date_values:
             return "metric_date"
-        if goal_metric.metric_type == "number" and has_number_values:
+        if is_numeric_metric_type(goal_metric.metric_type) and has_number_values:
             return "metric_number"
         return "progress_percent"
 
@@ -1123,7 +1124,7 @@ def _widget_chart_bootstrap_script(widget: WidgetSummary) -> str:
 
   function createMetricHistoryOption() {{
     const points = metricChartPoints();
-    const numericBounds = widget.metric?.metric_type === "number"
+    const numericBounds = widget.metric?.metric_type !== "date"
       ? getPaddedNumericAxisBounds(points.map((point) => point.value))
       : null;
     return {{
@@ -1169,7 +1170,7 @@ def _widget_chart_bootstrap_script(widget: WidgetSummary) -> str:
       values.push(targetValue);
     }}
     const numericBounds =
-      widget.goal?.metric.metric_type === "number" ? getPaddedNumericAxisBounds(values) : null;
+      widget.goal?.metric.metric_type !== "date" ? getPaddedNumericAxisBounds(values) : null;
 
     const bridgeSeries = [];
     const futureSeries = [];

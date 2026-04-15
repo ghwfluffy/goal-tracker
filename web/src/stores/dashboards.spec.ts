@@ -117,6 +117,38 @@ describe("useDashboardsStore", () => {
     });
   });
 
+  it("creates a widget with a nullable title payload and inserts it locally", async () => {
+    const store = useDashboardsStore();
+    store.viewState = "ready";
+    store.dashboards = [buildDashboard({ widgets: [] })];
+
+    createDashboardWidgetMock.mockResolvedValue(
+      buildWidget({
+        title: "Miles run",
+        widget_type: "metric_summary",
+      }),
+    );
+
+    await expect(
+      store.createWidget("dashboard-1", {
+        goal_id: null,
+        metric_id: "metric-1",
+        rolling_window_days: 30,
+        title: null,
+        widget_type: "metric_summary",
+      }),
+    ).resolves.toBe(true);
+
+    expect(createDashboardWidgetMock).toHaveBeenCalledWith("dashboard-1", {
+      goal_id: null,
+      metric_id: "metric-1",
+      rolling_window_days: 30,
+      title: null,
+      widget_type: "metric_summary",
+    });
+    expect(store.dashboards[0]?.widgets[0]?.title).toBe("Miles run");
+  });
+
   it("reloads dashboards after a mobile layout update", async () => {
     const store = useDashboardsStore();
     store.viewState = "ready";

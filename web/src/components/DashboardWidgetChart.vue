@@ -15,6 +15,7 @@ import {
 } from "../lib/goalForecast";
 import { getChartThemeColors } from "../lib/theme";
 import { DEFAULT_PROFILE_TIMEZONE, formatDateOnly } from "../lib/time";
+import { isNumericMetricType } from "../lib/tracking";
 import { useAuthStore } from "../stores/auth";
 import DashboardPercentWidget from "./DashboardPercentWidget.vue";
 
@@ -150,7 +151,10 @@ const hasRenderableContent = computed(() => {
 });
 
 const metricHistoryAxisBounds = computed(() => {
-  if (props.widget.metric?.metric_type !== "number") {
+  if (props.widget.metric === null || props.widget.metric === undefined) {
+    return null;
+  }
+  if (!isNumericMetricType(props.widget.metric.metric_type)) {
     return null;
   }
   return getPaddedNumericAxisBounds(metricChartPoints.value.map((point) => point.value));
@@ -160,7 +164,7 @@ const goalMetricAxisBounds = computed(() => {
   if (props.widget.goal?.metric === null || props.widget.goal?.metric === undefined) {
     return null;
   }
-  if (props.widget.goal.metric.metric_type !== "number") {
+  if (!isNumericMetricType(props.widget.goal.metric.metric_type)) {
     return null;
   }
 

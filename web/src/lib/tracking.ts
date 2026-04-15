@@ -1,6 +1,10 @@
 import { formatDateOnly, formatTimestampInBrowserTimezone } from "./time";
 
-export type TrackableMetricType = "number" | "date";
+export type TrackableMetricType = "number" | "count" | "date";
+
+export function isNumericMetricType(metricType: TrackableMetricType): boolean {
+  return metricType === "number" || metricType === "count";
+}
 
 export function parseOptionalNumber(value: string | number | null | undefined): number | null {
   if (value === null || value === undefined) {
@@ -58,7 +62,7 @@ export function formatMetricValue(
   dateValue: string | null,
   decimalPlaces: number | null,
 ): string {
-  if (metricType === "number") {
+  if (isNumericMetricType(metricType)) {
     return formatNumberValue(numberValue, decimalPlaces);
   }
 

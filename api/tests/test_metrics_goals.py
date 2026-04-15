@@ -46,6 +46,78 @@ def test_create_and_update_number_metric(client: TestClient) -> None:
     assert len(updated_payload["entries"]) == 2
 
 
+def test_create_and_update_count_metric_accumulates_totals(client: TestClient) -> None:
+    bootstrap_admin(client)
+
+    create_response = client.post(
+        "/api/v1/metrics",
+        json={
+            "name": "Miles run",
+            "metric_type": "count",
+            "decimal_places": 1,
+            "unit_label": "mi",
+            "initial_number_value": 12.5,
+        },
+    )
+
+    assert create_response.status_code == 201
+    payload = create_response.json()
+    assert payload["metric_type"] == "count"
+    assert payload["latest_entry"]["number_value"] == 12.5
+
+    update_response = client.post(
+        f"/api/v1/metrics/{payload['id']}/entries",
+        json={"number_value": 5.2},
+    )
+
+    assert update_response.status_code == 200
+    updated_payload = update_response.json()
+    assert updated_payload["latest_entry"]["number_value"] == 17.7
+    assert [entry["number_value"] for entry in updated_payload["entries"]] == [17.7, 12.5]
+
+
+def test_count_metric_accumulates_even_with_same_minute_recorded_at(client: TestClient) -> None:
+    bootstrap_admin(client)
+
+    create_response = client.post(
+        "/api/v1/metrics",
+        json={
+            "name": "Count up",
+            "metric_type": "count",
+            "decimal_places": 1,
+            "initial_number_value": 22.0,
+            "recorded_at": "2026-04-15T01:21:00Z",
+        },
+    )
+
+    assert create_response.status_code == 201
+    metric_id = create_response.json()["id"]
+
+    first_update_response = client.post(
+        f"/api/v1/metrics/{metric_id}/entries",
+        json={
+            "number_value": 1.0,
+            "recorded_at": "2026-04-15T01:21:00Z",
+        },
+    )
+    assert first_update_response.status_code == 200
+    assert first_update_response.json()["latest_entry"]["number_value"] == 23.0
+
+    second_update_response = client.post(
+        f"/api/v1/metrics/{metric_id}/entries",
+        json={
+            "number_value": 0.0,
+            "recorded_at": "2026-04-15T01:21:17.647305Z",
+        },
+    )
+    assert second_update_response.status_code == 200
+    assert [entry["number_value"] for entry in second_update_response.json()["entries"]] == [
+        23.0,
+        23.0,
+        22.0,
+    ]
+
+
 def test_create_date_metric(client: TestClient) -> None:
     bootstrap_admin(client)
 

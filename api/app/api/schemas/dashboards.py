@@ -17,7 +17,7 @@ from app.services.goal_progress import (
     goal_time_completion_percent,
 )
 
-MetricType = Literal["number", "date"]
+MetricType = Literal["number", "count", "date"]
 GoalType = Literal["metric", "checklist"]
 ForecastAlgorithm = Literal[
     "simple",
@@ -167,7 +167,7 @@ class UpdateDashboardRequest(BaseModel):
 
 
 class CreateWidgetRequest(BaseModel):
-    title: str = Field(min_length=1, max_length=120)
+    title: str | None = Field(default=None, min_length=1, max_length=120)
     widget_type: WidgetType
     metric_id: str | None = None
     goal_id: str | None = None

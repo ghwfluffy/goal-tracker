@@ -36,7 +36,7 @@ from app.services.metrics import (
 
 router = APIRouter(prefix="/goals")
 
-MetricType = Literal["number", "date"]
+MetricType = Literal["number", "count", "date"]
 GoalType = Literal["metric", "checklist"]
 
 

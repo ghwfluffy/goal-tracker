@@ -54,6 +54,27 @@ class DashboardWidgetNotFoundError(Exception):
     pass
 
 
+def default_widget_title(
+    *,
+    widget_type: str,
+    metric: Metric | None,
+    goal: Goal | None,
+    goals: list[Goal],
+    goal_scope: str | None,
+) -> str:
+    if metric is not None:
+        return metric.name
+    if goal is not None:
+        return goal.title
+    if widget_type == WIDGET_TYPE_GOAL_CALENDAR:
+        if goal_scope == WIDGET_GOAL_SCOPE_ALL:
+            return "All active goals"
+        if len(goals) == 1:
+            return goals[0].title
+        return "Goal calendar"
+    return "Dashboard widget"
+
+
 def restack_mobile_layouts(
     db: Session,
     *,
@@ -278,7 +299,7 @@ def create_dashboard_widget(
     *,
     dashboard: Dashboard,
     user: User,
-    title: str,
+    title: str | None,
     widget_type: str,
     metric: Metric | None = None,
     goal: Goal | None = None,
@@ -408,13 +429,25 @@ def create_dashboard_widget(
         or 0
     )
 
+    resolved_title = (
+        title.strip()
+        if title is not None and title.strip() != ""
+        else default_widget_title(
+            widget_type=normalized_widget_type,
+            metric=metric,
+            goal=goal,
+            goals=selected_goals,
+            goal_scope=normalized_goal_scope,
+        )
+    )
+
     widget = DashboardWidget(
         id=str(uuid4()),
         user_id=user.id,
         dashboard_id=dashboard.id,
         metric_id=metric.id if metric is not None else None,
         goal_id=goal.id if goal is not None else None,
-        title=normalize_name(title, field_name="Widget title", max_length=120),
+        title=normalize_name(resolved_title, field_name="Widget title", max_length=120),
         widget_type=normalized_widget_type,
         goal_scope=normalized_goal_scope,
         calendar_period=normalized_calendar_period,

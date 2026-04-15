@@ -12,6 +12,7 @@ import { isDashboardMobileCompactWidget } from "../lib/dashboardWidgets";
 import { copyCacheBustedShareLink } from "../lib/shareLinks";
 import { getBrowserTimezone } from "../lib/time";
 import { useAppToast } from "../lib/toast";
+import { isNumericMetricType } from "../lib/tracking";
 import { useDashboardsStore } from "../stores/dashboards";
 import { useGoalsStore } from "../stores/goals";
 import { useMetricsStore } from "../stores/metrics";
@@ -160,6 +161,13 @@ const activeMetrics = computed(() => {
 
 const activeGoals = computed(() => {
   return goalsStore.goals.filter((goal) => !goal.is_archived);
+});
+
+const selectedWidgetMetric = computed(() => {
+  if (!widgetUsesMetric.value) {
+    return null;
+  }
+  return availableWidgetMetrics.value.find((metric) => metric.id === widgetMetricIdInput.value) ?? null;
 });
 
 const selectedMetricEntry = computed(() => {
@@ -480,9 +488,25 @@ const widgetSupportsForecast = computed(() => {
     widgetTypeInput.value === "goal_progress" &&
     selectedWidgetGoal.value?.metric !== null &&
     selectedWidgetGoal.value?.metric !== undefined &&
-    selectedWidgetGoal.value?.metric.metric_type === "number" &&
+    isNumericMetricType(selectedWidgetGoal.value?.metric.metric_type ?? "date") &&
     selectedWidgetGoal.value?.target_value_number !== null
   );
+});
+
+const widgetDefaultTitle = computed(() => {
+  if (widgetUsesMetric.value) {
+    return selectedWidgetMetric.value?.name ?? "Metric widget";
+  }
+  if (widgetIsGoalCalendar.value) {
+    if (widgetGoalScopeInput.value === "all") {
+      return "All active goals";
+    }
+    if (widgetGoalIdsInput.value.length === 1) {
+      return activeGoals.value.find((goal) => goal.id === widgetGoalIdsInput.value[0])?.title ?? "Goal calendar";
+    }
+    return "Goal calendar";
+  }
+  return selectedWidgetGoal.value?.title ?? "Goal widget";
 });
 
 async function submitWidgetDialog(): Promise<void> {
@@ -502,7 +526,7 @@ async function submitWidgetDialog(): Promise<void> {
         widgetUsesGoalTimeline.value || widgetIsGoalCalendar.value
           ? null
           : parseRollingWindow(widgetRollingWindowDaysInput.value),
-      title: widgetTitleInput.value,
+      title: normalizeOptionalText(widgetTitleInput.value),
       widget_type: widgetTypeInput.value,
     });
     if (created) {
@@ -1173,7 +1197,11 @@ onBeforeUnmount(() => {
       <div class="dialog-form widget-dialog-form">
         <label class="field widget-field">
           <span class="label">Title</span>
-          <InputText v-model="widgetTitleInput" class="dialog-control" placeholder="Weight trend" />
+          <InputText
+            v-model="widgetTitleInput"
+            class="dialog-control"
+            :placeholder="widgetDialogMode === 'create' ? widgetDefaultTitle : 'Widget title'"
+          />
         </label>
 
         <div class="widget-dialog-grid">

@@ -26,7 +26,7 @@ from app.services.metrics import (
 
 router = APIRouter(prefix="/metrics")
 
-MetricType = Literal["number", "date"]
+MetricType = Literal["number", "count", "date"]
 MetricUpdateType = Literal["success", "failure"]
 DateMetricDecision = Literal["yes", "no"]
 

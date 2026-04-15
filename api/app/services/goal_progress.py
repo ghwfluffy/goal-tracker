@@ -6,7 +6,7 @@ from typing import cast
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from app.db.models import Goal, GoalChecklistItem, MetricEntry, User
-from app.services.metrics import METRIC_TYPE_DATE, METRIC_TYPE_NUMBER
+from app.services.metrics import METRIC_TYPE_DATE, is_numeric_metric_type
 
 GOAL_TYPE_CHECKLIST = "checklist"
 
@@ -76,7 +76,7 @@ def sort_metric_entries_ascending(entries: list[MetricEntry]) -> list[MetricEntr
 def metric_entry_numeric_value(goal: Goal, entry: MetricEntry) -> float | int | None:
     if goal.metric is None:
         return None
-    if goal.metric.metric_type == METRIC_TYPE_NUMBER:
+    if is_numeric_metric_type(goal.metric.metric_type):
         return entry.number_value
     if entry.date_value is None:
         return None
@@ -86,7 +86,7 @@ def metric_entry_numeric_value(goal: Goal, entry: MetricEntry) -> float | int | 
 def goal_target_numeric_value(goal: Goal) -> float | int | None:
     if goal.metric is None:
         return None
-    if goal.metric.metric_type == METRIC_TYPE_NUMBER:
+    if is_numeric_metric_type(goal.metric.metric_type):
         return goal.target_value_number
     if goal.target_value_date is None:
         return None

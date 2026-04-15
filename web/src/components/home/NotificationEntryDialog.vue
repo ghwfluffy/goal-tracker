@@ -4,7 +4,7 @@ import Button from "primevue/button";
 import Dialog from "primevue/dialog";
 
 import type { NotificationSummary } from "../../lib/api";
-import { numberInputStep, parseOptionalNumber } from "../../lib/tracking";
+import { isNumericMetricType, numberInputStep, parseOptionalNumber } from "../../lib/tracking";
 import {
   combineLocalDateAndTimeToIso,
   formatShortWeekdayDate,
@@ -138,13 +138,13 @@ async function skipReminder(): Promise<void> {
           <h3>{{ metric.name }}</h3>
         </div>
 
-        <label v-if="metric.metric_type === 'number'" class="field">
+        <label v-if="isNumericMetricType(metric.metric_type)" class="field">
           <span class="label">Time</span>
           <input v-model="recordedTimeInput" class="native-file-input" type="time" />
         </label>
 
-        <label v-if="metric.metric_type === 'number'" class="field">
-          <span class="label">Value</span>
+        <label v-if="isNumericMetricType(metric.metric_type)" class="field">
+          <span class="label">{{ metric.metric_type === "count" ? "Increment by" : "Value" }}</span>
           <input
             v-model="numberValueInput"
             class="native-file-input"
@@ -153,7 +153,7 @@ async function skipReminder(): Promise<void> {
           />
         </label>
 
-        <div v-if="metric.metric_type === 'number'" class="dialog-actions-row">
+        <div v-if="isNumericMetricType(metric.metric_type)" class="dialog-actions-row">
           <Button label="Skip" severity="secondary" text @click="void skipReminder()" />
           <Button
             label="Submit"

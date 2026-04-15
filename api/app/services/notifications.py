@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.db.models import Metric, MetricNotification, User
-from app.services.metrics import create_metric_entry
+from app.services.metrics import create_metric_entry, is_numeric_metric_type
 
 NOTIFICATION_STATUS_PENDING = "pending"
 NOTIFICATION_STATUS_COMPLETED = "completed"
@@ -228,9 +228,9 @@ def complete_notification_with_entry(
         timezone=timezone,
     )
 
-    if notification.metric.metric_type == "number":
+    if is_numeric_metric_type(notification.metric.metric_type):
         if number_value is None:
-            raise NotificationError("Number metrics require a numeric value.")
+            raise NotificationError("Numeric metrics require a numeric value.")
         create_metric_entry(
             db,
             metric=notification.metric,

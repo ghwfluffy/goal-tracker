@@ -1,4 +1,5 @@
 import type { DashboardWidgetSummary } from "./api";
+import { isNumericMetricType } from "./tracking";
 import {
   DEFAULT_PROFILE_TIMEZONE,
   daysBetweenDateOnly,
@@ -96,7 +97,7 @@ export function getDashboardWidgetValueText(
     if (metric === null || metric === undefined || latestEntry === null || latestEntry === undefined) {
       return "No value";
     }
-    if (metric.metric_type === "number") {
+    if (isNumericMetricType(metric.metric_type)) {
       const numberValue = latestEntry.number_value;
       if (numberValue === null) {
         return "No value";
