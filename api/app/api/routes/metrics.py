@@ -20,6 +20,7 @@ from app.services.metrics import (
     import_metric_entries,
     list_metrics_for_user,
     parse_metric_import_text,
+    record_date_metric_decision,
     update_metric,
 )
 
@@ -27,6 +28,7 @@ router = APIRouter(prefix="/metrics")
 
 MetricType = Literal["number", "date"]
 MetricUpdateType = Literal["success", "failure"]
+DateMetricDecision = Literal["yes", "no"]
 
 
 class MetricEntrySummary(BaseModel):
@@ -72,6 +74,11 @@ class CreateMetricEntryRequest(BaseModel):
     number_value: float | None = None
     date_value: date | None = None
     recorded_at: datetime | None = None
+
+
+class RecordDateMetricDecisionRequest(BaseModel):
+    decision: DateMetricDecision
+    decision_date: date
 
 
 class UpdateMetricRequest(BaseModel):
@@ -190,6 +197,35 @@ def post_metric_entry(
             number_value=payload.number_value,
             date_value=payload.date_value,
             recorded_at=payload.recorded_at,
+        )
+        db.commit()
+    except MetricNotFoundError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except MetricError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(exc),
+        ) from exc
+
+    return serialize_metric(updated_metric)
+
+
+@router.post("/{metric_id}/date-decision", response_model=MetricSummary)
+def post_date_metric_decision(
+    metric_id: str,
+    payload: RecordDateMetricDecisionRequest,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> MetricSummary:
+    try:
+        metric = get_metric_for_user(db, user=user, metric_id=metric_id)
+        updated_metric = record_date_metric_decision(
+            db,
+            metric=metric,
+            decision=payload.decision,
+            decision_date=payload.decision_date,
         )
         db.commit()
     except MetricNotFoundError as exc:

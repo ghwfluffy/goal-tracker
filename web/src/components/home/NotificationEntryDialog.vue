@@ -138,7 +138,7 @@ async function skipReminder(): Promise<void> {
           <h3>{{ metric.name }}</h3>
         </div>
 
-        <label class="field">
+        <label v-if="metric.metric_type === 'number'" class="field">
           <span class="label">Time</span>
           <input v-model="recordedTimeInput" class="native-file-input" type="time" />
         </label>

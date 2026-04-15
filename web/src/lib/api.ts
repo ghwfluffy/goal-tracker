@@ -159,6 +159,11 @@ export interface CreateMetricEntryPayload {
   recorded_at?: string | null;
 }
 
+export interface RecordDateMetricDecisionPayload {
+  decision: "yes" | "no";
+  decision_date: string;
+}
+
 export interface ImportMetricEntriesPayload {
   data: string;
 }
@@ -886,6 +891,21 @@ export function addMetricEntry(
 ): Promise<MetricSummary> {
   return requestJson<MetricSummary>(
     `/metrics/${metricId}/entries`,
+    {
+      body: JSON.stringify(payload),
+      method: "POST",
+    },
+    fetcher,
+  );
+}
+
+export function recordDateMetricDecision(
+  metricId: string,
+  payload: RecordDateMetricDecisionPayload,
+  fetcher: Fetcher = fetch,
+): Promise<MetricSummary> {
+  return requestJson<MetricSummary>(
+    `/metrics/${metricId}/date-decision`,
     {
       body: JSON.stringify(payload),
       method: "POST",

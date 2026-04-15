@@ -48,7 +48,7 @@ watch(
       numberValueInput.value = "";
       dateValueInput.value =
         props.metric.metric_type === "date"
-          ? (props.initialDateValue ?? defaultDate)
+          ? (props.initialDateValue ?? "")
           : "";
       recordedDateInput.value = defaultDate;
       recordedTimeInput.value = getCurrentTimeInputValue(now);

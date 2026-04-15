@@ -17,10 +17,10 @@ import { useGoalsStore } from "../stores/goals";
 import { useMetricsStore } from "../stores/metrics";
 import { useNotificationsStore } from "../stores/notifications";
 import { useShareLinksStore } from "../stores/shareLinks";
+import CalendarDateMetricDecisionDialog from "./home/CalendarDateMetricDecisionDialog.vue";
 import DashboardChecklistWidget from "./DashboardChecklistWidget.vue";
 import DashboardGoalCalendar from "./DashboardGoalCalendar.vue";
 import MetricEntryDialog from "./home/MetricEntryDialog.vue";
-import NotificationEntryDialog from "./home/NotificationEntryDialog.vue";
 import DashboardWidgetChart from "./DashboardWidgetChart.vue";
 import MobileDashboardWidgetContent from "./MobileDashboardWidgetContent.vue";
 
@@ -81,8 +81,9 @@ const metricEntryVisible = ref(false);
 const metricEntryMetricId = ref("");
 const metricEntryInitialRecordedDate = ref<string | null>(null);
 const metricEntryInitialDateValue = ref<string | null>(null);
-const notificationEntryVisible = ref(false);
-const notificationEntryId = ref("");
+const dateDecisionVisible = ref(false);
+const dateDecisionMetricId = ref("");
+const dateDecisionDate = ref<string | null>(null);
 
 const gridHost = ref<HTMLElement | null>(null);
 const gridWidth = ref(0);
@@ -165,10 +166,8 @@ const selectedMetricEntry = computed(() => {
   return metricsStore.metrics.find((metric) => metric.id === metricEntryMetricId.value) ?? null;
 });
 
-const selectedNotificationEntry = computed(() => {
-  return (
-    notificationsStore.notifications.find((notification) => notification.id === notificationEntryId.value) ?? null
-  );
+const selectedDateDecisionMetric = computed(() => {
+  return metricsStore.metrics.find((metric) => metric.id === dateDecisionMetricId.value) ?? null;
 });
 
 const widgetTypeOptions = [
@@ -437,9 +436,10 @@ function openMetricEntryDialog(
   metricEntryVisible.value = true;
 }
 
-function openNotificationEntryDialog(notificationId: string): void {
-  notificationEntryId.value = notificationId;
-  notificationEntryVisible.value = true;
+function openDateDecisionDialog(metricId: string, decisionDate: string): void {
+  dateDecisionMetricId.value = metricId;
+  dateDecisionDate.value = decisionDate;
+  dateDecisionVisible.value = true;
 }
 
 function handleCalendarMissingUpdate(
@@ -454,16 +454,8 @@ function handleCalendarMissingUpdate(
   }
 
   if (metric.metric_type === "date") {
-    const notification = notificationsStore.notifications.find(
-      (candidate) =>
-        candidate.metric.id === metric.id &&
-        candidate.notification_date === payload.date &&
-        candidate.status === "pending",
-    );
-    if (notification !== undefined) {
-      openNotificationEntryDialog(notification.id);
-      return;
-    }
+    openDateDecisionDialog(metric.id, payload.date);
+    return;
   }
 
   openMetricEntryDialog(metric.id, {
@@ -1341,10 +1333,11 @@ onBeforeUnmount(() => {
       @saved="void refreshTrackingData()"
     />
 
-    <NotificationEntryDialog
-      v-model:visible="notificationEntryVisible"
-      :notification="selectedNotificationEntry"
-      @resolved="void refreshTrackingData()"
+    <CalendarDateMetricDecisionDialog
+      v-model:visible="dateDecisionVisible"
+      :metric="selectedDateDecisionMetric"
+      :decision-date="dateDecisionDate"
+      @saved="void refreshTrackingData()"
     />
   </section>
 </template>

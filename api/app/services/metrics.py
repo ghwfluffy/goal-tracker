@@ -302,6 +302,91 @@ def resolve_pending_notifications_for_entry(
         notification.updated_at = utcnow()
 
 
+def metric_due_slots(metric: Metric) -> list[tuple[int, time]]:
+    slots = [(1, metric.reminder_time_1)]
+    if metric.reminder_time_2 is not None:
+        slots.append((2, metric.reminder_time_2))
+    return slots
+
+
+def record_date_metric_decision(
+    db: Session,
+    *,
+    metric: Metric,
+    decision_date: date,
+    decision: str,
+) -> Metric:
+    if metric.archived_at is not None:
+        raise MetricError("Archived metrics cannot be updated.")
+    if metric.metric_type != METRIC_TYPE_DATE:
+        raise MetricError("Only date metrics support yes/no decisions.")
+    if decision not in {"yes", "no"}:
+        raise MetricError("Date metric decision must be either 'yes' or 'no'.")
+
+    existing_entries = list(
+        db.scalars(
+            select(MetricEntry).where(
+                MetricEntry.metric_id == metric.id,
+                MetricEntry.date_value == decision_date,
+            )
+        )
+    )
+    notifications_by_slot = {
+        notification.slot_index: notification
+        for notification in db.scalars(
+            select(MetricNotification).where(
+                MetricNotification.metric_id == metric.id,
+                MetricNotification.notification_date == decision_date,
+            )
+        )
+    }
+
+    if decision == "yes":
+        if len(existing_entries) == 0:
+            recorded_at = datetime.combine(
+                decision_date,
+                time(hour=12),
+                tzinfo=ZoneInfo(metric.user.timezone),
+            ).astimezone(UTC)
+            create_metric_entry(
+                db,
+                metric=metric,
+                number_value=None,
+                date_value=decision_date,
+                recorded_at=recorded_at,
+            )
+    else:
+        for entry in existing_entries:
+            db.delete(entry)
+        metric.updated_at = utcnow()
+
+    target_status = NOTIFICATION_STATUS_COMPLETED if decision == "yes" else "skipped"
+    resolved_at = utcnow()
+    for slot_index, scheduled_time in metric_due_slots(metric):
+        notification = notifications_by_slot.get(slot_index)
+        if notification is None:
+            notification = MetricNotification(
+                id=str(uuid4()),
+                user_id=metric.user_id,
+                metric_id=metric.id,
+                notification_date=decision_date,
+                scheduled_time=scheduled_time,
+                slot_index=slot_index,
+                status=target_status,
+                resolved_at=resolved_at,
+                updated_at=resolved_at,
+            )
+            db.add(notification)
+            continue
+
+        notification.status = target_status
+        notification.resolved_at = resolved_at
+        notification.updated_at = resolved_at
+
+    db.flush()
+    return get_metric_for_user(db, user=metric.user, metric_id=metric.id)
+
+
 def parse_metric_import_text(
     *,
     metric: Metric,
