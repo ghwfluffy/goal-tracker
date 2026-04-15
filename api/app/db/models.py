@@ -417,6 +417,8 @@ class DashboardWidget(Base):
     )
     title: Mapped[str] = mapped_column(String(120), nullable=False)
     widget_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    goal_scope: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    calendar_period: Mapped[str | None] = mapped_column(String(30), nullable=True)
     rolling_window_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
     forecast_algorithm: Mapped[str | None] = mapped_column(String(40), nullable=True)
     grid_x: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -446,11 +448,46 @@ class DashboardWidget(Base):
     dashboard: Mapped[Dashboard] = relationship(back_populates="widgets")
     metric: Mapped[Metric | None] = relationship(back_populates="widgets")
     goal: Mapped[Goal | None] = relationship(back_populates="widgets")
+    goal_links: Mapped[list[DashboardWidgetGoal]] = relationship(
+        back_populates="widget",
+        cascade="all, delete-orphan",
+        order_by="DashboardWidgetGoal.display_order",
+    )
     share_links: Mapped[list[ShareLink]] = relationship(
         back_populates="widget",
         cascade="all, delete-orphan",
         foreign_keys="ShareLink.widget_id",
     )
+
+
+class DashboardWidgetGoal(Base):
+    __tablename__ = "dashboard_widget_goals"
+    __table_args__ = (
+        UniqueConstraint(
+            "widget_id",
+            "goal_id",
+            name="uq_dashboard_widget_goals_widget_goal",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    widget_id: Mapped[str] = mapped_column(
+        ForeignKey("dashboard_widgets.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    goal_id: Mapped[str] = mapped_column(
+        ForeignKey("goals.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    display_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    widget: Mapped[DashboardWidget] = relationship(back_populates="goal_links")
+    goal: Mapped[Goal] = relationship()
 
 
 class ShareLink(Base):

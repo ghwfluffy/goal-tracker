@@ -11,11 +11,15 @@ import {
 import { DEFAULT_PROFILE_TIMEZONE } from "../lib/time";
 import { useAuthStore } from "../stores/auth";
 import DashboardChecklistWidget from "./DashboardChecklistWidget.vue";
+import DashboardGoalCalendar from "./DashboardGoalCalendar.vue";
 import DashboardPercentWidget from "./DashboardPercentWidget.vue";
 import DashboardWidgetChart from "./DashboardWidgetChart.vue";
 
 const props = defineProps<{
   widget: DashboardWidgetSummary;
+}>();
+const emit = defineEmits<{
+  openMissingUpdate: [payload: { date: string; goalId: string }];
 }>();
 
 const isValueWidget = computed(() => isDashboardValueWidget(props.widget.widget_type));
@@ -36,6 +40,11 @@ const isPercentWidget = computed(() => isDashboardPercentWidget(props.widget.wid
 
 <template>
   <DashboardChecklistWidget v-if="isChecklistWidget" :widget="widget" />
+  <DashboardGoalCalendar
+    v-else-if="widget.widget_type === 'goal_calendar'"
+    :widget="widget"
+    @open-missing-update="emit('openMissingUpdate', $event)"
+  />
   <div v-else-if="isValueWidget" class="mobile-value-widget" :class="{ 'is-empty': !hasValue }">
     <DashboardPercentWidget v-if="hasValue && isPercentWidget" :widget="widget" compact />
     <div v-else class="mobile-value-text">{{ hasValue ? displayValueText : "No value yet" }}</div>

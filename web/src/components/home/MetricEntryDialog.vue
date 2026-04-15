@@ -4,12 +4,21 @@ import Button from "primevue/button";
 import Dialog from "primevue/dialog";
 
 import type { MetricSummary } from "../../lib/api";
+import {
+  combineLocalDateAndTimeToIso,
+  getBrowserTimezone,
+  getCurrentDateInTimezone,
+  getCurrentTimeInputValue,
+} from "../../lib/time";
 import { numberInputStep, parseOptionalNumber } from "../../lib/tracking";
 import { useAppToast } from "../../lib/toast";
 import { useGoalsStore } from "../../stores/goals";
 import { useMetricsStore } from "../../stores/metrics";
+import { useNotificationsStore } from "../../stores/notifications";
 
 const props = defineProps<{
+  initialDateValue?: string | null;
+  initialRecordedDate?: string | null;
   metric: MetricSummary | null;
   visible: boolean;
 }>();
@@ -21,19 +30,39 @@ const emit = defineEmits<{
 
 const metricsStore = useMetricsStore();
 const goalsStore = useGoalsStore();
+const notificationsStore = useNotificationsStore();
 const { showSuccess } = useAppToast();
 
 const numberValueInput = ref("");
 const dateValueInput = ref("");
+const recordedDateInput = ref("");
+const recordedTimeInput = ref("");
 
 watch(
   () => props.visible,
   (visible) => {
+    if (visible && props.metric !== null) {
+      const now = new Date();
+      const defaultDate =
+        props.initialRecordedDate ?? getCurrentDateInTimezone(getBrowserTimezone(), now);
+      numberValueInput.value = "";
+      dateValueInput.value =
+        props.metric.metric_type === "date"
+          ? (props.initialDateValue ?? defaultDate)
+          : "";
+      recordedDateInput.value = defaultDate;
+      recordedTimeInput.value = getCurrentTimeInputValue(now);
+      return;
+    }
+
     if (!visible) {
       numberValueInput.value = "";
       dateValueInput.value = "";
+      recordedDateInput.value = "";
+      recordedTimeInput.value = "";
     }
   },
+  { immediate: true },
 );
 
 const dialogTitle = computed(() => {
@@ -48,16 +77,25 @@ async function submit(): Promise<void> {
   const updated = await metricsStore.addMetricEntry(props.metric.id, {
     date_value: props.metric.metric_type === "date" ? dateValueInput.value || null : null,
     number_value: props.metric.metric_type === "number" ? parseOptionalNumber(numberValueInput.value) : null,
+    recorded_at: buildRecordedAt(),
   });
 
   if (!updated) {
     return;
   }
 
+  await notificationsStore.loadNotifications(getBrowserTimezone());
   showSuccess("Metric updated.", "Metrics");
   await goalsStore.loadGoals();
   emit("saved");
   emit("update:visible", false);
+}
+
+function buildRecordedAt(): string | null {
+  if (recordedDateInput.value === "" || recordedTimeInput.value === "") {
+    return null;
+  }
+  return combineLocalDateAndTimeToIso(recordedDateInput.value, recordedTimeInput.value);
 }
 </script>
 
@@ -94,6 +132,16 @@ async function submit(): Promise<void> {
             class="native-file-input"
             type="date"
           />
+        </label>
+
+        <label class="field">
+          <span class="label">Recorded date</span>
+          <input v-model="recordedDateInput" class="native-file-input" type="date" />
+        </label>
+
+        <label class="field">
+          <span class="label">Recorded time</span>
+          <input v-model="recordedTimeInput" class="native-file-input" type="time" />
         </label>
 
         <div class="dialog-actions-row">

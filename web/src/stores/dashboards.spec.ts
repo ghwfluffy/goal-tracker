@@ -29,6 +29,8 @@ vi.mock("../lib/api", async () => {
 
 function buildWidget(overrides: Partial<DashboardWidgetSummary> = {}): DashboardWidgetSummary {
   return {
+    calendar: null,
+    calendar_period: null,
     current_progress_percent: null,
     display_order: 1,
     failure_risk_percent: null,
@@ -38,6 +40,8 @@ function buildWidget(overrides: Partial<DashboardWidgetSummary> = {}): Dashboard
     grid_w: 6,
     grid_x: 0,
     grid_y: 0,
+    goal_scope: null,
+    goals: [],
     id: "widget-1",
     metric: null,
     mobile_grid_h: 3,

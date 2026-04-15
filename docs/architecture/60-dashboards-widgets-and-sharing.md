@@ -30,9 +30,10 @@ Current implemented slice:
 - user-owned saved dashboards
 - one default dashboard per user
 - separate dashboard edit mode for adding and updating widgets
-- metric-history, metric-summary, goal-progress, goal-summary, and goal-checklist widgets
+- metric-history, metric-summary, goal-progress, goal-summary, goal-calendar, and goal-checklist widgets
 - date-metric `days since` summary widgets for streak-style dashboards
 - goal-progress series derived from metric history rather than stored separately
+- goal-calendar widgets can aggregate one goal, an explicit goal set, or all active goals across goal-length, current-month, and rolling-four-week views
 - checklist widgets can render ordered goal subtasks as checkboxes and write completions back to the goal
 - user-managed share links for dashboards and widgets
 - read-only public dashboard pages
@@ -54,6 +55,7 @@ Current direction:
 - tags organize goals flexibly
 - dashboards arrange widgets visually
 - widgets can filter by explicit goal selection, metric selection, and later by tags when useful
+- goal-calendar widgets may either target an explicit ordered goal set or all active goals for the user
 
 ## Metric-History Widgets
 

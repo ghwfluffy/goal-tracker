@@ -7,26 +7,43 @@ from uuid import uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.db.models import Dashboard, DashboardWidget, Goal, Metric, MetricEntry, User
+from app.db.models import (
+    Dashboard,
+    DashboardWidget,
+    DashboardWidgetGoal,
+    Goal,
+    Metric,
+    MetricEntry,
+    User,
+)
 from app.services.dashboard_layout import (
     LAYOUT_MODE_DESKTOP,
     LAYOUT_MODE_MOBILE,
     METRIC_WIDGET_TYPES,
+    WIDGET_GOAL_SCOPE_ALL,
+    WIDGET_GOAL_SCOPE_SELECTED,
     WIDGET_TYPE_DAYS_SINCE,
+    WIDGET_TYPE_GOAL_CALENDAR,
     DashboardError,
     default_mobile_widget_height,
     default_widget_dimensions,
     ensure_layout_slot_is_available,
     find_first_available_layout_slot,
+    normalize_calendar_period,
     normalize_forecast_algorithm,
     normalize_layout_mode,
     normalize_name,
     normalize_optional_text,
     normalize_rolling_window_days,
+    normalize_widget_goal_scope,
     normalize_widget_layout,
     normalize_widget_type,
 )
-from app.services.goal_progress import normalize_recorded_at, sort_metric_entries_ascending, utcnow
+from app.services.goal_progress import (
+    normalize_recorded_at,
+    sort_metric_entries_ascending,
+    utcnow,
+)
 
 
 class DashboardNotFoundError(Exception):
@@ -62,6 +79,46 @@ def restack_mobile_layouts(
 def _dashboard_loading_options() -> tuple[Any, ...]:
     return (
         selectinload(Dashboard.widgets).selectinload(DashboardWidget.metric).selectinload(Metric.entries),
+        selectinload(Dashboard.widgets)
+        .selectinload(DashboardWidget.goal_links)
+        .selectinload(DashboardWidgetGoal.goal)
+        .selectinload(Goal.user),
+        selectinload(Dashboard.widgets)
+        .selectinload(DashboardWidget.goal_links)
+        .selectinload(DashboardWidgetGoal.goal)
+        .selectinload(Goal.exception_dates),
+        selectinload(Dashboard.widgets)
+        .selectinload(DashboardWidget.goal_links)
+        .selectinload(DashboardWidgetGoal.goal)
+        .selectinload(Goal.checklist_items),
+        selectinload(Dashboard.widgets)
+        .selectinload(DashboardWidget.goal_links)
+        .selectinload(DashboardWidgetGoal.goal)
+        .selectinload(Goal.metric)
+        .selectinload(Metric.entries),
+        selectinload(Dashboard.widgets)
+        .selectinload(DashboardWidget.goal_links)
+        .selectinload(DashboardWidgetGoal.goal)
+        .selectinload(Goal.metric)
+        .selectinload(Metric.notifications),
+        selectinload(Dashboard.widgets)
+        .selectinload(DashboardWidget.user)
+        .selectinload(User.goals)
+        .selectinload(Goal.exception_dates),
+        selectinload(Dashboard.widgets)
+        .selectinload(DashboardWidget.user)
+        .selectinload(User.goals)
+        .selectinload(Goal.checklist_items),
+        selectinload(Dashboard.widgets)
+        .selectinload(DashboardWidget.user)
+        .selectinload(User.goals)
+        .selectinload(Goal.metric)
+        .selectinload(Metric.entries),
+        selectinload(Dashboard.widgets)
+        .selectinload(DashboardWidget.user)
+        .selectinload(User.goals)
+        .selectinload(Goal.metric)
+        .selectinload(Metric.notifications),
         selectinload(Dashboard.widgets).selectinload(DashboardWidget.goal).selectinload(Goal.user),
         selectinload(Dashboard.widgets).selectinload(DashboardWidget.goal).selectinload(Goal.exception_dates),
         selectinload(Dashboard.widgets).selectinload(DashboardWidget.goal).selectinload(Goal.checklist_items),
@@ -69,16 +126,48 @@ def _dashboard_loading_options() -> tuple[Any, ...]:
         .selectinload(DashboardWidget.goal)
         .selectinload(Goal.metric)
         .selectinload(Metric.entries),
+        selectinload(Dashboard.widgets)
+        .selectinload(DashboardWidget.goal)
+        .selectinload(Goal.metric)
+        .selectinload(Metric.notifications),
     )
 
 
 def _widget_loading_options() -> tuple[Any, ...]:
     return (
         selectinload(DashboardWidget.metric).selectinload(Metric.entries),
+        selectinload(DashboardWidget.goal_links)
+        .selectinload(DashboardWidgetGoal.goal)
+        .selectinload(Goal.user),
+        selectinload(DashboardWidget.goal_links)
+        .selectinload(DashboardWidgetGoal.goal)
+        .selectinload(Goal.exception_dates),
+        selectinload(DashboardWidget.goal_links)
+        .selectinload(DashboardWidgetGoal.goal)
+        .selectinload(Goal.checklist_items),
+        selectinload(DashboardWidget.goal_links)
+        .selectinload(DashboardWidgetGoal.goal)
+        .selectinload(Goal.metric)
+        .selectinload(Metric.entries),
+        selectinload(DashboardWidget.goal_links)
+        .selectinload(DashboardWidgetGoal.goal)
+        .selectinload(Goal.metric)
+        .selectinload(Metric.notifications),
+        selectinload(DashboardWidget.user).selectinload(User.goals).selectinload(Goal.exception_dates),
+        selectinload(DashboardWidget.user).selectinload(User.goals).selectinload(Goal.checklist_items),
+        selectinload(DashboardWidget.user)
+        .selectinload(User.goals)
+        .selectinload(Goal.metric)
+        .selectinload(Metric.entries),
+        selectinload(DashboardWidget.user)
+        .selectinload(User.goals)
+        .selectinload(Goal.metric)
+        .selectinload(Metric.notifications),
         selectinload(DashboardWidget.goal).selectinload(Goal.user),
         selectinload(DashboardWidget.goal).selectinload(Goal.exception_dates),
         selectinload(DashboardWidget.goal).selectinload(Goal.checklist_items),
         selectinload(DashboardWidget.goal).selectinload(Goal.metric).selectinload(Metric.entries),
+        selectinload(DashboardWidget.goal).selectinload(Goal.metric).selectinload(Metric.notifications),
     )
 
 
@@ -193,6 +282,9 @@ def create_dashboard_widget(
     widget_type: str,
     metric: Metric | None = None,
     goal: Goal | None = None,
+    goals: list[Goal] | None = None,
+    goal_scope: str | None = None,
+    calendar_period: str | None = None,
     rolling_window_days: int | None = None,
     forecast_algorithm: str | None = None,
     grid_x: int | None = None,
@@ -201,13 +293,28 @@ def create_dashboard_widget(
     grid_h: int | None = None,
 ) -> DashboardWidget:
     normalized_widget_type = normalize_widget_type(widget_type)
+    normalized_goal_scope = normalize_widget_goal_scope(goal_scope)
+    normalized_calendar_period = normalize_calendar_period(calendar_period)
     normalized_window = normalize_rolling_window_days(rolling_window_days)
     normalized_forecast_algorithm = normalize_forecast_algorithm(
         widget_type=normalized_widget_type,
         forecast_algorithm=forecast_algorithm,
     )
 
-    if normalized_widget_type in METRIC_WIDGET_TYPES:
+    selected_goals = goals or []
+
+    if normalized_widget_type == WIDGET_TYPE_GOAL_CALENDAR:
+        if metric is not None or goal is not None:
+            raise DashboardError("Goal calendar widgets cannot reference metric_id or goal_id.")
+        if normalized_goal_scope is None:
+            raise DashboardError("Goal calendar widgets require a goal scope.")
+        if normalized_goal_scope == WIDGET_GOAL_SCOPE_SELECTED and len(selected_goals) == 0:
+            raise DashboardError("Goal calendar widgets require at least one selected goal.")
+        if normalized_goal_scope == WIDGET_GOAL_SCOPE_ALL and len(selected_goals) > 0:
+            raise DashboardError("All-goals calendar widgets cannot set selected goals.")
+        if normalized_calendar_period is None:
+            raise DashboardError("Goal calendar widgets require a calendar period.")
+    elif normalized_widget_type in METRIC_WIDGET_TYPES:
         if metric is None or goal is not None:
             raise DashboardError("Metric widgets must reference exactly one metric.")
     elif goal is None or metric is not None:
@@ -217,10 +324,20 @@ def create_dashboard_widget(
         raise DashboardError("Widgets can only reference your own metrics.")
     if goal is not None and goal.user_id != user.id:
         raise DashboardError("Widgets can only reference your own goals.")
+    for selected_goal in selected_goals:
+        if selected_goal.user_id != user.id:
+            raise DashboardError("Widgets can only reference your own goals.")
     if normalized_widget_type == WIDGET_TYPE_DAYS_SINCE and (metric is None or metric.metric_type != "date"):
         raise DashboardError("Days since widgets require a date metric.")
+    if normalized_widget_type == WIDGET_TYPE_GOAL_CALENDAR:
+        for selected_goal in selected_goals:
+            if selected_goal.metric is None and selected_goal.goal_type != "checklist":
+                raise DashboardError("Calendar widgets require supported goals.")
     if goal is not None and goal.target_date is not None:
         normalized_window = None
+    if normalized_widget_type == WIDGET_TYPE_GOAL_CALENDAR:
+        normalized_window = None
+        normalized_forecast_algorithm = None
 
     default_width, default_height = default_widget_dimensions(normalized_widget_type)
     normalized_width = grid_w if grid_w is not None else default_width
@@ -299,6 +416,8 @@ def create_dashboard_widget(
         goal_id=goal.id if goal is not None else None,
         title=normalize_name(title, field_name="Widget title", max_length=120),
         widget_type=normalized_widget_type,
+        goal_scope=normalized_goal_scope,
+        calendar_period=normalized_calendar_period,
         rolling_window_days=normalized_window,
         forecast_algorithm=normalized_forecast_algorithm,
         grid_x=normalized_x,
@@ -314,6 +433,21 @@ def create_dashboard_widget(
     )
     db.add(widget)
     db.flush()
+
+    if (
+        normalized_widget_type == WIDGET_TYPE_GOAL_CALENDAR
+        and normalized_goal_scope == WIDGET_GOAL_SCOPE_SELECTED
+    ):
+        for display_order, selected_goal in enumerate(selected_goals):
+            db.add(
+                DashboardWidgetGoal(
+                    id=str(uuid4()),
+                    widget_id=widget.id,
+                    goal_id=selected_goal.id,
+                    display_order=display_order,
+                )
+            )
+
     restack_mobile_layouts(db, dashboard=dashboard)
     db.flush()
     return get_dashboard_widget_for_user(
@@ -333,6 +467,7 @@ def update_dashboard_widget(
     title: str | None = None,
     rolling_window_days: int | None = None,
     forecast_algorithm: str | None = None,
+    calendar_period: str | None = None,
     layout_mode: str | None = None,
     grid_x: int | None = None,
     grid_y: int | None = None,
@@ -343,14 +478,24 @@ def update_dashboard_widget(
     if title is not None:
         widget.title = normalize_name(title, field_name="Widget title", max_length=120)
     if forecast_algorithm is not None or widget.forecast_algorithm is not None:
+        if widget.widget_type == WIDGET_TYPE_GOAL_CALENDAR and forecast_algorithm is not None:
+            raise DashboardError("Goal calendar widgets do not support forecast algorithms.")
         widget.forecast_algorithm = normalize_forecast_algorithm(
             widget_type=widget.widget_type,
             forecast_algorithm=forecast_algorithm,
         )
     if widget.goal is not None and widget.goal.target_date is not None:
         widget.rolling_window_days = None
+    elif widget.widget_type == WIDGET_TYPE_GOAL_CALENDAR:
+        if rolling_window_days is not None:
+            raise DashboardError("Goal calendar widgets do not support rolling windows.")
+        widget.rolling_window_days = None
     elif rolling_window_days is not None or widget.rolling_window_days is not None:
         widget.rolling_window_days = normalize_rolling_window_days(rolling_window_days)
+    if calendar_period is not None:
+        if widget.widget_type != WIDGET_TYPE_GOAL_CALENDAR:
+            raise DashboardError("Only goal calendar widgets can set a calendar period.")
+        widget.calendar_period = normalize_calendar_period(calendar_period)
     if any(value is not None for value in (grid_x, grid_y, grid_w, grid_h)):
         if normalized_layout_mode == LAYOUT_MODE_MOBILE:
             _, normalized_y, _, normalized_height = normalize_widget_layout(

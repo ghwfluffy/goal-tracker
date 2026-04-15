@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -527,6 +527,457 @@ def test_goal_percent_widgets_return_schedule_and_risk_fields(client: TestClient
     risk_widget = risk_widget_response.json()
     assert risk_widget["failure_risk_percent"] is not None
     assert risk_widget["forecast_algorithm"] is None
+
+
+def test_goal_calendar_widget_aggregates_selected_goal_day_statuses(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "app.services.goal_calendar.utcnow",
+        lambda: datetime(2026, 4, 5, 18, 0, tzinfo=UTC),
+    )
+
+    bootstrap_admin(client)
+
+    cardio_metric_response = client.post(
+        "/api/v1/metrics",
+        json={
+            "name": "Cardio",
+            "metric_type": "date",
+            "update_type": "success",
+            "initial_date_value": "2026-04-01",
+            "recorded_at": "2026-04-01T12:00:00Z",
+        },
+    )
+    assert cardio_metric_response.status_code == 201
+    cardio_metric_id = cardio_metric_response.json()["id"]
+
+    cardio_entry_response = client.post(
+        f"/api/v1/metrics/{cardio_metric_id}/entries",
+        json={
+            "date_value": "2026-04-03",
+            "recorded_at": "2026-04-03T12:00:00Z",
+        },
+    )
+    assert cardio_entry_response.status_code == 200
+
+    cardio_goal_response = client.post(
+        "/api/v1/goals",
+        json={
+            "title": "Do cardio",
+            "start_date": "2026-04-01",
+            "target_date": "2026-04-05",
+            "success_threshold_percent": 80,
+            "metric_id": cardio_metric_id,
+        },
+    )
+    assert cardio_goal_response.status_code == 201
+
+    drink_metric_response = client.post(
+        "/api/v1/metrics",
+        json={
+            "name": "Last drink",
+            "metric_type": "date",
+            "update_type": "failure",
+            "initial_date_value": "2026-04-02",
+            "recorded_at": "2026-04-02T12:00:00Z",
+        },
+    )
+    assert drink_metric_response.status_code == 201
+    drink_metric_id = drink_metric_response.json()["id"]
+
+    drink_entry_response = client.post(
+        f"/api/v1/metrics/{drink_metric_id}/entries",
+        json={
+            "date_value": "2026-04-03",
+            "recorded_at": "2026-04-03T12:00:00Z",
+        },
+    )
+    assert drink_entry_response.status_code == 200
+
+    drink_goal_response = client.post(
+        "/api/v1/goals",
+        json={
+            "title": "No drinking",
+            "start_date": "2026-04-01",
+            "target_date": "2026-04-05",
+            "success_threshold_percent": 80,
+            "exception_dates": ["2026-04-03"],
+            "metric_id": drink_metric_id,
+        },
+    )
+    assert drink_goal_response.status_code == 201
+
+    dashboard_response = client.post("/api/v1/dashboards", json={"name": "Calendar"})
+    assert dashboard_response.status_code == 201
+    dashboard_id = dashboard_response.json()["id"]
+
+    widget_response = client.post(
+        f"/api/v1/dashboards/{dashboard_id}/widgets",
+        json={
+            "title": "Goal calendar",
+            "widget_type": "goal_calendar",
+            "goal_scope": "selected",
+            "goal_ids": [
+                cardio_goal_response.json()["id"],
+                drink_goal_response.json()["id"],
+            ],
+            "calendar_period": "goal_length",
+        },
+    )
+    assert widget_response.status_code == 201
+    widget = widget_response.json()
+
+    assert widget["goal_scope"] == "selected"
+    assert widget["calendar_period"] == "goal_length"
+    assert [goal["title"] for goal in widget["goals"]] == ["Do cardio", "No drinking"]
+    assert widget["calendar"]["goal_count"] == 2
+    assert widget["calendar"]["starts_on"] == "2026-04-01"
+    assert widget["calendar"]["ends_on"] == "2026-04-05"
+    assert widget["calendar"]["grid_starts_on"] == "2026-03-29"
+    assert widget["calendar"]["grid_ends_on"] == "2026-04-11"
+
+    status_by_day = {day["date"]: day["status"] for day in widget["calendar"]["days"] if day["is_in_range"]}
+    assert status_by_day == {
+        "2026-04-01": "pending",
+        "2026-04-02": "failed",
+        "2026-04-03": "warning",
+        "2026-04-04": "pending",
+        "2026-04-05": "pending",
+    }
+
+    details_by_day = {
+        day["date"]: [
+            (goal["subject"], goal["status"], goal["result_label"]) for goal in day["goal_statuses"]
+        ]
+        for day in widget["calendar"]["days"]
+        if day["is_in_range"]
+    }
+    assert details_by_day["2026-04-01"] == [
+        ("Cardio", "success", "Submitted"),
+        ("Last drink", "pending", "Missing"),
+    ]
+    assert details_by_day["2026-04-02"] == [
+        ("Cardio", "pending", "Missing"),
+        ("Last drink", "failed", "Failed"),
+    ]
+    assert details_by_day["2026-04-03"] == [
+        ("Cardio", "success", "Submitted"),
+        ("Last drink", "warning", "Exception"),
+    ]
+
+
+def test_goal_calendar_widget_can_target_all_active_goals_with_rolling_period(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "app.services.goal_calendar.utcnow",
+        lambda: datetime(2026, 4, 20, 12, 0, tzinfo=UTC),
+    )
+
+    bootstrap_admin(client)
+
+    first_metric_response = client.post(
+        "/api/v1/metrics",
+        json={
+            "name": "Cardio",
+            "metric_type": "date",
+            "update_type": "success",
+        },
+    )
+    assert first_metric_response.status_code == 201
+
+    second_metric_response = client.post(
+        "/api/v1/metrics",
+        json={
+            "name": "Last drink",
+            "metric_type": "date",
+            "update_type": "failure",
+        },
+    )
+    assert second_metric_response.status_code == 201
+
+    first_goal_response = client.post(
+        "/api/v1/goals",
+        json={
+            "title": "Do cardio",
+            "start_date": "2026-04-10",
+            "target_date": "2026-04-25",
+            "success_threshold_percent": 80,
+            "metric_id": first_metric_response.json()["id"],
+        },
+    )
+    assert first_goal_response.status_code == 201
+
+    second_goal_response = client.post(
+        "/api/v1/goals",
+        json={
+            "title": "No drinking",
+            "start_date": "2026-04-12",
+            "target_date": "2026-04-25",
+            "success_threshold_percent": 80,
+            "metric_id": second_metric_response.json()["id"],
+        },
+    )
+    assert second_goal_response.status_code == 201
+
+    dashboard_response = client.post("/api/v1/dashboards", json={"name": "All goals"})
+    assert dashboard_response.status_code == 201
+
+    widget_response = client.post(
+        f"/api/v1/dashboards/{dashboard_response.json()['id']}/widgets",
+        json={
+            "title": "All goals calendar",
+            "widget_type": "goal_calendar",
+            "goal_scope": "all",
+            "calendar_period": "rolling_4_weeks",
+        },
+    )
+    assert widget_response.status_code == 201
+    widget = widget_response.json()
+
+    assert widget["goal_scope"] == "all"
+    assert widget["calendar"]["goal_count"] == 2
+    assert widget["calendar"]["period"] == "rolling_4_weeks"
+    assert widget["calendar"]["starts_on"] == "2026-04-10"
+    assert widget["calendar"]["ends_on"] == "2026-04-20"
+    assert [goal["title"] for goal in widget["goals"]] == ["Do cardio", "No drinking"]
+
+
+def test_goal_calendar_marks_submitted_number_goal_days_as_success(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "app.services.goal_calendar.utcnow",
+        lambda: datetime(2026, 4, 14, 18, 0, tzinfo=UTC),
+    )
+
+    bootstrap_admin(client)
+
+    weight_metric_response = client.post(
+        "/api/v1/metrics",
+        json={
+            "name": "Weight",
+            "metric_type": "number",
+            "decimal_places": 1,
+            "initial_number_value": 220.4,
+            "recorded_at": "2026-04-14T12:00:00Z",
+        },
+    )
+    assert weight_metric_response.status_code == 201
+
+    weight_goal_response = client.post(
+        "/api/v1/goals",
+        json={
+            "title": "Log weight",
+            "start_date": "2026-04-10",
+            "target_date": "2026-04-30",
+            "target_value_number": 210.0,
+            "metric_id": weight_metric_response.json()["id"],
+        },
+    )
+    assert weight_goal_response.status_code == 201
+
+    monkeypatch.setattr(
+        "app.services.metrics.utcnow",
+        lambda: datetime(2026, 4, 14, 11, 59, tzinfo=UTC),
+    )
+    drink_metric_response = client.post(
+        "/api/v1/metrics",
+        json={
+            "name": "Last drink",
+            "metric_type": "date",
+            "update_type": "failure",
+            "reminder_time_1": "12:00",
+        },
+    )
+    assert drink_metric_response.status_code == 201
+
+    drink_goal_response = client.post(
+        "/api/v1/goals",
+        json={
+            "title": "No drinking",
+            "start_date": "2026-04-10",
+            "target_date": "2026-04-30",
+            "success_threshold_percent": 80,
+            "metric_id": drink_metric_response.json()["id"],
+        },
+    )
+    assert drink_goal_response.status_code == 201
+
+    monkeypatch.setattr(
+        "app.services.notifications.utcnow",
+        lambda: datetime(2026, 4, 14, 12, 0, tzinfo=UTC),
+    )
+    notifications_response = client.get("/api/v1/notifications?timezone=UTC")
+    assert notifications_response.status_code == 200
+    drink_notification = next(
+        notification
+        for notification in notifications_response.json()["notifications"]
+        if notification["metric"]["id"] == drink_metric_response.json()["id"]
+    )
+    skip_response = client.post(f"/api/v1/notifications/{drink_notification['id']}/skip")
+    assert skip_response.status_code == 200
+
+    dashboard_response = client.post("/api/v1/dashboards", json={"name": "Calendar"})
+    assert dashboard_response.status_code == 201
+
+    widget_response = client.post(
+        f"/api/v1/dashboards/{dashboard_response.json()['id']}/widgets",
+        json={
+            "title": "Goal calendar",
+            "widget_type": "goal_calendar",
+            "goal_scope": "selected",
+            "goal_ids": [
+                weight_goal_response.json()["id"],
+                drink_goal_response.json()["id"],
+            ],
+            "calendar_period": "current_month",
+        },
+    )
+    assert widget_response.status_code == 201
+
+    widget = widget_response.json()
+    day_by_date = {day["date"]: day for day in widget["calendar"]["days"]}
+
+    assert day_by_date["2026-04-14"]["status"] == "success"
+    assert day_by_date["2026-04-14"]["goal_statuses"] == [
+        {
+            "goal_id": weight_goal_response.json()["id"],
+            "subject": "Weight",
+            "status": "success",
+            "result_label": "Submitted",
+        },
+        {
+            "goal_id": drink_goal_response.json()["id"],
+            "subject": "Last drink",
+            "status": "success",
+            "result_label": "Clear",
+        },
+    ]
+    assert day_by_date["2026-04-13"]["status"] == "pending"
+
+
+def test_goal_calendar_uses_explicit_date_metric_no_submissions(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    scheduled_at = datetime(2026, 4, 14, 12, 0, tzinfo=UTC)
+    created_at = scheduled_at - timedelta(minutes=1)
+
+    monkeypatch.setattr(
+        "app.services.goal_calendar.utcnow",
+        lambda: datetime(2026, 4, 14, 18, 0, tzinfo=UTC),
+    )
+
+    bootstrap_admin(client)
+
+    monkeypatch.setattr("app.services.metrics.utcnow", lambda: created_at)
+    success_metric_response = client.post(
+        "/api/v1/metrics",
+        json={
+            "name": "Cardio",
+            "metric_type": "date",
+            "update_type": "success",
+            "reminder_time_1": "12:00",
+        },
+    )
+    assert success_metric_response.status_code == 201
+
+    failure_metric_response = client.post(
+        "/api/v1/metrics",
+        json={
+            "name": "Last drink",
+            "metric_type": "date",
+            "update_type": "failure",
+            "reminder_time_1": "12:00",
+        },
+    )
+    assert failure_metric_response.status_code == 201
+
+    success_goal_response = client.post(
+        "/api/v1/goals",
+        json={
+            "title": "Do cardio",
+            "start_date": "2026-04-14",
+            "target_date": "2026-04-20",
+            "success_threshold_percent": 80,
+            "metric_id": success_metric_response.json()["id"],
+        },
+    )
+    assert success_goal_response.status_code == 201
+
+    failure_goal_response = client.post(
+        "/api/v1/goals",
+        json={
+            "title": "No drinking",
+            "start_date": "2026-04-14",
+            "target_date": "2026-04-20",
+            "success_threshold_percent": 80,
+            "metric_id": failure_metric_response.json()["id"],
+        },
+    )
+    assert failure_goal_response.status_code == 201
+
+    monkeypatch.setattr("app.services.notifications.utcnow", lambda: scheduled_at)
+    notifications_response = client.get("/api/v1/notifications?timezone=UTC")
+    assert notifications_response.status_code == 200
+    notifications = notifications_response.json()["notifications"]
+    assert len(notifications) == 2
+
+    cardio_notification = next(
+        notification
+        for notification in notifications
+        if notification["metric"]["id"] == success_metric_response.json()["id"]
+    )
+    drink_notification = next(
+        notification
+        for notification in notifications
+        if notification["metric"]["id"] == failure_metric_response.json()["id"]
+    )
+
+    skip_cardio_response = client.post(f"/api/v1/notifications/{cardio_notification['id']}/skip")
+    assert skip_cardio_response.status_code == 200
+    skip_drink_response = client.post(f"/api/v1/notifications/{drink_notification['id']}/skip")
+    assert skip_drink_response.status_code == 200
+
+    dashboard_response = client.post("/api/v1/dashboards", json={"name": "Calendar"})
+    assert dashboard_response.status_code == 201
+
+    widget_response = client.post(
+        f"/api/v1/dashboards/{dashboard_response.json()['id']}/widgets",
+        json={
+            "title": "Goal calendar",
+            "widget_type": "goal_calendar",
+            "goal_scope": "selected",
+            "goal_ids": [
+                success_goal_response.json()["id"],
+                failure_goal_response.json()["id"],
+            ],
+            "calendar_period": "current_month",
+        },
+    )
+    assert widget_response.status_code == 201
+
+    day_by_date = {day["date"]: day for day in widget_response.json()["calendar"]["days"]}
+    assert day_by_date["2026-04-14"]["status"] == "failed"
+    assert day_by_date["2026-04-14"]["goal_statuses"] == [
+        {
+            "goal_id": success_goal_response.json()["id"],
+            "subject": "Cardio",
+            "status": "failed",
+            "result_label": "Failed",
+        },
+        {
+            "goal_id": failure_goal_response.json()["id"],
+            "subject": "Last drink",
+            "status": "success",
+            "result_label": "Clear",
+        },
+    ]
 
 
 def test_goal_time_completion_uses_profile_timezone_across_goals_and_dashboards(

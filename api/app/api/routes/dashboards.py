@@ -143,6 +143,7 @@ def post_dashboard_widget(
         goal = (
             get_goal_for_user(db, user=user, goal_id=payload.goal_id) if payload.goal_id is not None else None
         )
+        goals = [get_goal_for_user(db, user=user, goal_id=goal_id) for goal_id in payload.goal_ids]
         widget = create_dashboard_widget(
             db,
             dashboard=dashboard,
@@ -151,6 +152,9 @@ def post_dashboard_widget(
             widget_type=payload.widget_type,
             metric=metric,
             goal=goal,
+            goals=goals,
+            goal_scope=payload.goal_scope,
+            calendar_period=payload.calendar_period,
             rolling_window_days=payload.rolling_window_days,
             forecast_algorithm=payload.forecast_algorithm,
             grid_x=payload.grid_x,
@@ -202,6 +206,7 @@ def patch_dashboard_widget(
             title=payload.title,
             rolling_window_days=payload.rolling_window_days,
             forecast_algorithm=payload.forecast_algorithm,
+            calendar_period=payload.calendar_period,
             layout_mode=payload.layout_mode,
             grid_x=payload.grid_x,
             grid_y=payload.grid_y,

@@ -38,6 +38,10 @@ export function normalizeTimeInputValue(value: string | null): string {
   return value.slice(0, 5);
 }
 
+export function getCurrentTimeInputValue(value: Date = new Date()): string {
+  return `${String(value.getHours()).padStart(2, "0")}:${String(value.getMinutes()).padStart(2, "0")}`;
+}
+
 export function combineLocalDateAndTimeToIso(dateValue: string, timeValue: string): string {
   return new Date(`${dateValue}T${timeValue}:00`).toISOString();
 }

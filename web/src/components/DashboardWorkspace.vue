@@ -10,12 +10,17 @@ import Tag from "primevue/tag";
 import type { DashboardForecastAlgorithm, DashboardWidgetSummary } from "../lib/api";
 import { isDashboardMobileCompactWidget } from "../lib/dashboardWidgets";
 import { copyCacheBustedShareLink } from "../lib/shareLinks";
+import { getBrowserTimezone } from "../lib/time";
 import { useAppToast } from "../lib/toast";
 import { useDashboardsStore } from "../stores/dashboards";
 import { useGoalsStore } from "../stores/goals";
 import { useMetricsStore } from "../stores/metrics";
+import { useNotificationsStore } from "../stores/notifications";
 import { useShareLinksStore } from "../stores/shareLinks";
 import DashboardChecklistWidget from "./DashboardChecklistWidget.vue";
+import DashboardGoalCalendar from "./DashboardGoalCalendar.vue";
+import MetricEntryDialog from "./home/MetricEntryDialog.vue";
+import NotificationEntryDialog from "./home/NotificationEntryDialog.vue";
 import DashboardWidgetChart from "./DashboardWidgetChart.vue";
 import MobileDashboardWidgetContent from "./MobileDashboardWidgetContent.vue";
 
@@ -46,6 +51,7 @@ const MOBILE_COMPACT_WIDGET_HEIGHT = 1;
 const dashboardsStore = useDashboardsStore();
 const metricsStore = useMetricsStore();
 const goalsStore = useGoalsStore();
+const notificationsStore = useNotificationsStore();
 const shareLinksStore = useShareLinksStore();
 const { showError, showSuccess } = useAppToast();
 
@@ -66,8 +72,17 @@ const widgetTitleInput = ref("");
 const widgetTypeInput = ref<WidgetType>("metric_summary");
 const widgetMetricIdInput = ref("");
 const widgetGoalIdInput = ref("");
+const widgetGoalIdsInput = ref<string[]>([]);
+const widgetGoalScopeInput = ref<"selected" | "all">("selected");
+const widgetCalendarPeriodInput = ref<"goal_length" | "current_month" | "rolling_4_weeks">("goal_length");
 const widgetRollingWindowDaysInput = ref("30");
 const widgetForecastAlgorithmInput = ref<DashboardForecastAlgorithm>("simple");
+const metricEntryVisible = ref(false);
+const metricEntryMetricId = ref("");
+const metricEntryInitialRecordedDate = ref<string | null>(null);
+const metricEntryInitialDateValue = ref<string | null>(null);
+const notificationEntryVisible = ref(false);
+const notificationEntryId = ref("");
 
 const gridHost = ref<HTMLElement | null>(null);
 const gridWidth = ref(0);
@@ -146,6 +161,16 @@ const activeGoals = computed(() => {
   return goalsStore.goals.filter((goal) => !goal.is_archived);
 });
 
+const selectedMetricEntry = computed(() => {
+  return metricsStore.metrics.find((metric) => metric.id === metricEntryMetricId.value) ?? null;
+});
+
+const selectedNotificationEntry = computed(() => {
+  return (
+    notificationsStore.notifications.find((notification) => notification.id === notificationEntryId.value) ?? null
+  );
+});
+
 const widgetTypeOptions = [
   { label: "Metric summary", value: "metric_summary" },
   { label: "Metric history", value: "metric_history" },
@@ -155,7 +180,17 @@ const widgetTypeOptions = [
   { label: "Goal success percent", value: "goal_success_percent" },
   { label: "Goal completion percent", value: "goal_completion_percent" },
   { label: "Goal failure risk", value: "goal_failure_risk" },
+  { label: "Goal calendar", value: "goal_calendar" },
 ] satisfies Array<{ label: string; value: WidgetType }>;
+
+const widgetCalendarPeriodOptions = [
+  { label: "Goal length", value: "goal_length" },
+  { label: "Current month", value: "current_month" },
+  { label: "Rolling 4 weeks", value: "rolling_4_weeks" },
+] satisfies Array<{
+  label: string;
+  value: "goal_length" | "current_month" | "rolling_4_weeks";
+}>;
 
 const widgetForecastAlgorithmOptions = [
   { label: "Simple", value: "simple" },
@@ -170,6 +205,8 @@ const widgetUsesMetric = computed(() => {
     widgetTypeInput.value === "days_since"
   );
 });
+
+const widgetIsGoalCalendar = computed(() => widgetTypeInput.value === "goal_calendar");
 
 const availableWidgetMetrics = computed(() => {
   if (widgetTypeInput.value === "days_since") {
@@ -357,6 +394,9 @@ function openCreateWidgetDialog(): void {
   widgetTypeInput.value = "metric_summary";
   widgetMetricIdInput.value = availableWidgetMetrics.value[0]?.id ?? "";
   widgetGoalIdInput.value = availableWidgetGoals.value[0]?.id ?? "";
+  widgetGoalIdsInput.value = [];
+  widgetGoalScopeInput.value = "selected";
+  widgetCalendarPeriodInput.value = "goal_length";
   widgetRollingWindowDaysInput.value = "30";
   widgetForecastAlgorithmInput.value = "simple";
   widgetDialogVisible.value = true;
@@ -369,14 +409,71 @@ function openEditWidgetDialog(widget: DashboardWidgetSummary): void {
   widgetTypeInput.value = widget.widget_type;
   widgetMetricIdInput.value = widget.metric?.id ?? "";
   widgetGoalIdInput.value = widget.goal?.id ?? "";
+  widgetGoalIdsInput.value = widget.goals.map((goal) => goal.id);
+  widgetGoalScopeInput.value = widget.goal_scope ?? "selected";
+  widgetCalendarPeriodInput.value = widget.calendar_period ?? "goal_length";
   widgetRollingWindowDaysInput.value =
     widget.rolling_window_days === null ? "" : String(widget.rolling_window_days);
   widgetForecastAlgorithmInput.value = widget.forecast_algorithm ?? "simple";
   widgetDialogVisible.value = true;
 }
 
+async function refreshTrackingData(): Promise<void> {
+  await Promise.all([
+    dashboardsStore.loadDashboards(),
+    metricsStore.loadMetrics(),
+    goalsStore.loadGoals(),
+    notificationsStore.loadNotifications(getBrowserTimezone()),
+  ]);
+}
+
+function openMetricEntryDialog(
+  metricId: string,
+  payload: { recordedDate: string; dateValue: string | null },
+): void {
+  metricEntryMetricId.value = metricId;
+  metricEntryInitialRecordedDate.value = payload.recordedDate;
+  metricEntryInitialDateValue.value = payload.dateValue;
+  metricEntryVisible.value = true;
+}
+
+function openNotificationEntryDialog(notificationId: string): void {
+  notificationEntryId.value = notificationId;
+  notificationEntryVisible.value = true;
+}
+
+function handleCalendarMissingUpdate(
+  widget: DashboardWidgetSummary,
+  payload: { date: string; goalId: string },
+): void {
+  const goal = widget.goals.find((candidate) => candidate.id === payload.goalId) ?? null;
+  const metric = goal?.metric ?? null;
+  if (goal === null || metric === null) {
+    showError("The metric for that calendar day is no longer available.", "Dashboards");
+    return;
+  }
+
+  if (metric.metric_type === "date") {
+    const notification = notificationsStore.notifications.find(
+      (candidate) =>
+        candidate.metric.id === metric.id &&
+        candidate.notification_date === payload.date &&
+        candidate.status === "pending",
+    );
+    if (notification !== undefined) {
+      openNotificationEntryDialog(notification.id);
+      return;
+    }
+  }
+
+  openMetricEntryDialog(metric.id, {
+    dateValue: metric.metric_type === "date" ? payload.date : null,
+    recordedDate: payload.date,
+  });
+}
+
 const selectedWidgetGoal = computed(() => {
-  if (widgetUsesMetric.value) {
+  if (widgetUsesMetric.value || widgetIsGoalCalendar.value) {
     return null;
   }
   return availableWidgetGoals.value.find((goal) => goal.id === widgetGoalIdInput.value) ?? null;
@@ -403,10 +500,16 @@ async function submitWidgetDialog(): Promise<void> {
 
   if (widgetDialogMode.value === "create") {
     const created = await dashboardsStore.createWidget(selectedDashboard.value.id, {
-      goal_id: widgetUsesMetric.value ? null : widgetGoalIdInput.value || null,
+      calendar_period: widgetIsGoalCalendar.value ? widgetCalendarPeriodInput.value : null,
+      goal_id: widgetUsesMetric.value || widgetIsGoalCalendar.value ? null : widgetGoalIdInput.value || null,
+      goal_ids: widgetIsGoalCalendar.value ? widgetGoalIdsInput.value : [],
+      goal_scope: widgetIsGoalCalendar.value ? widgetGoalScopeInput.value : null,
       forecast_algorithm: widgetSupportsForecast.value ? widgetForecastAlgorithmInput.value : null,
       metric_id: widgetUsesMetric.value ? widgetMetricIdInput.value || null : null,
-      rolling_window_days: widgetUsesGoalTimeline.value ? null : parseRollingWindow(widgetRollingWindowDaysInput.value),
+      rolling_window_days:
+        widgetUsesGoalTimeline.value || widgetIsGoalCalendar.value
+          ? null
+          : parseRollingWindow(widgetRollingWindowDaysInput.value),
       title: widgetTitleInput.value,
       widget_type: widgetTypeInput.value,
     });
@@ -419,8 +522,12 @@ async function submitWidgetDialog(): Promise<void> {
   }
 
   const updated = await dashboardsStore.updateWidget(selectedDashboard.value.id, widgetEditId.value, {
+    calendar_period: widgetIsGoalCalendar.value ? widgetCalendarPeriodInput.value : null,
     forecast_algorithm: widgetSupportsForecast.value ? widgetForecastAlgorithmInput.value : null,
-    rolling_window_days: widgetUsesGoalTimeline.value ? null : parseRollingWindow(widgetRollingWindowDaysInput.value),
+    rolling_window_days:
+      widgetUsesGoalTimeline.value || widgetIsGoalCalendar.value
+        ? null
+        : parseRollingWindow(widgetRollingWindowDaysInput.value),
     title: widgetTitleInput.value,
   });
   if (updated) {
@@ -919,7 +1026,10 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <MobileDashboardWidgetContent :widget="widget" />
+          <MobileDashboardWidgetContent
+            :widget="widget"
+            @open-missing-update="handleCalendarMissingUpdate(widget, $event)"
+          />
         </article>
       </div>
 
@@ -980,6 +1090,11 @@ onBeforeUnmount(() => {
           </div>
 
           <DashboardChecklistWidget v-if="widget.widget_type === 'goal_checklist'" :widget="widget" />
+          <DashboardGoalCalendar
+            v-else-if="widget.widget_type === 'goal_calendar'"
+            :widget="widget"
+            @open-missing-update="handleCalendarMissingUpdate(widget, $event)"
+          />
           <DashboardWidgetChart v-else :widget="widget" />
 
           <div v-if="editMode" class="widget-layout-meta">
@@ -1098,7 +1213,7 @@ onBeforeUnmount(() => {
             </span>
           </label>
 
-          <label v-else class="field widget-field">
+          <label v-else-if="!widgetIsGoalCalendar" class="field widget-field">
             <span class="label">Goal</span>
             <Dropdown
               v-model="widgetGoalIdInput"
@@ -1108,6 +1223,54 @@ onBeforeUnmount(() => {
               class="dialog-control"
               placeholder="Choose a goal"
               :disabled="widgetDialogMode === 'edit'"
+            />
+          </label>
+        </div>
+
+        <div v-if="widgetIsGoalCalendar" class="dialog-form goal-calendar-config">
+          <label class="field widget-field">
+            <span class="label">Goal scope</span>
+            <Dropdown
+              v-model="widgetGoalScopeInput"
+              :options="[
+                { label: 'Selected goals', value: 'selected' },
+                { label: 'All active goals', value: 'all' },
+              ]"
+              option-label="label"
+              option-value="value"
+              class="dialog-control"
+              :disabled="widgetDialogMode === 'edit'"
+            />
+          </label>
+
+          <label v-if="widgetGoalScopeInput === 'selected'" class="field widget-field">
+            <span class="label">Goals</span>
+            <div class="goal-selection-list">
+              <label
+                v-for="goal in availableWidgetGoals"
+                :key="goal.id"
+                class="goal-selection-option"
+              >
+                <input
+                  v-model="widgetGoalIdsInput"
+                  :value="goal.id"
+                  type="checkbox"
+                  :disabled="widgetDialogMode === 'edit'"
+                />
+                <span>{{ goal.title }}</span>
+              </label>
+            </div>
+            <span class="field-hint">Select one or more goals to combine in the calendar.</span>
+          </label>
+
+          <label class="field widget-field">
+            <span class="label">Calendar period</span>
+            <Dropdown
+              v-model="widgetCalendarPeriodInput"
+              :options="widgetCalendarPeriodOptions"
+              option-label="label"
+              option-value="value"
+              class="dialog-control"
             />
           </label>
         </div>
@@ -1132,7 +1295,7 @@ onBeforeUnmount(() => {
           Forecast algorithms are available on numeric goal-progress widgets with a target value.
         </div>
 
-        <label v-if="!widgetUsesGoalTimeline" class="field widget-field">
+        <label v-if="!widgetUsesGoalTimeline && !widgetIsGoalCalendar" class="field widget-field">
           <span class="label">Rolling window days</span>
           <input
             v-model="widgetRollingWindowDaysInput"
@@ -1146,8 +1309,11 @@ onBeforeUnmount(() => {
             Leave blank to use the full available history for this widget.
           </span>
         </label>
-        <div v-else class="widget-dialog-note">
+        <div v-else-if="widgetUsesGoalTimeline" class="widget-dialog-note">
           Goal widgets with a target date always render the full start-to-end timeline.
+        </div>
+        <div v-else-if="widgetIsGoalCalendar" class="widget-dialog-note">
+          Calendar widgets always use the selected calendar period instead of a rolling-window history.
         </div>
 
         <div class="dialog-actions widget-dialog-actions">
@@ -1166,6 +1332,20 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </Dialog>
+
+    <MetricEntryDialog
+      v-model:visible="metricEntryVisible"
+      :metric="selectedMetricEntry"
+      :initial-date-value="metricEntryInitialDateValue"
+      :initial-recorded-date="metricEntryInitialRecordedDate"
+      @saved="void refreshTrackingData()"
+    />
+
+    <NotificationEntryDialog
+      v-model:visible="notificationEntryVisible"
+      :notification="selectedNotificationEntry"
+      @resolved="void refreshTrackingData()"
+    />
   </section>
 </template>
 
@@ -1411,6 +1591,24 @@ onBeforeUnmount(() => {
   border-radius: var(--radius-md);
   background: var(--color-surface-muted);
   border: 1px solid var(--color-border-soft);
+}
+
+.goal-selection-list {
+  display: grid;
+  gap: var(--space-3);
+  max-height: 12rem;
+  overflow: auto;
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border-soft);
+  background: var(--color-surface-muted-soft);
+}
+
+.goal-selection-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--color-text-default);
 }
 
 .widget-dialog-grid {

@@ -9,7 +9,7 @@ import {
   combineLocalDateAndTimeToIso,
   formatShortWeekdayDate,
   getBrowserTimezone,
-  normalizeTimeInputValue,
+  getCurrentTimeInputValue,
 } from "../../lib/time";
 import { useAppToast } from "../../lib/toast";
 import { useNotificationsStore } from "../../stores/notifications";
@@ -42,7 +42,7 @@ watch(
   (visible) => {
     if (visible && props.notification !== null) {
       numberValueInput.value = "";
-      recordedTimeInput.value = normalizeTimeInputValue(props.notification.scheduled_time);
+      recordedTimeInput.value = getCurrentTimeInputValue();
       return;
     }
 

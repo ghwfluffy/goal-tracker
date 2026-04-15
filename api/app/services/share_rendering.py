@@ -41,6 +41,7 @@ WIDGET_TYPE_LABELS: dict[str, str] = {
     "goal_completion_percent": "Goal completion",
     "goal_success_percent": "Goal success",
     "goal_failure_risk": "Failure risk",
+    "goal_calendar": "Goal calendar",
 }
 
 
@@ -144,6 +145,9 @@ def widget_primary_value_text(widget: WidgetSummary, *, profile_timezone: str) -
     if widget.widget_type == "goal_checklist" and widget.goal is not None:
         return f"{widget.goal.checklist_completed_count}/{widget.goal.checklist_total_count} done"
 
+    if widget.widget_type == "goal_calendar":
+        return "Calendar"
+
     if (
         widget.widget_type == "goal_summary"
         and widget.goal is not None
@@ -166,6 +170,12 @@ def widget_subject_text(widget: WidgetSummary) -> str:
         return f"Metric · {widget.metric.name}"
     if widget.goal is not None:
         return f"Goal · {widget.goal.title}"
+    if len(widget.goals) > 0:
+        return (
+            "Goals · All active goals"
+            if widget.goal_scope == "all"
+            else f"Goals · {len(widget.goals)} selected"
+        )
     return "Shared widget"
 
 
@@ -198,6 +208,13 @@ def widget_detail_text(widget: WidgetSummary, *, profile_timezone: str) -> str:
         if widget.goal.target_date is not None:
             parts.append(f"By {_format_calendar_date(date.fromisoformat(widget.goal.target_date))}")
         return " · ".join(parts) if parts else "Goal progress is shared read-only."
+
+    if widget.widget_type == "goal_calendar" and widget.calendar is not None:
+        return (
+            f"{widget.calendar.goal_count} goals · "
+            f"{_format_calendar_date(date.fromisoformat(widget.calendar.starts_on))} to "
+            f"{_format_calendar_date(date.fromisoformat(widget.calendar.ends_on))}"
+        )
 
     return "Shared read-only."
 
@@ -959,6 +976,7 @@ def _widget_chart_bootstrap_script(widget: WidgetSummary) -> str:
     "goal_completion_percent",
     "goal_success_percent",
     "goal_failure_risk",
+    "goal_calendar",
   ]);
   if (VALUE_WIDGET_TYPES.has(widget.widget_type)) {{
     return;

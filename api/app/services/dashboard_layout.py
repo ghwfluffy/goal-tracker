@@ -14,6 +14,23 @@ WIDGET_TYPE_GOAL_SUMMARY = "goal_summary"
 WIDGET_TYPE_GOAL_COMPLETION_PERCENT = "goal_completion_percent"
 WIDGET_TYPE_GOAL_SUCCESS_PERCENT = "goal_success_percent"
 WIDGET_TYPE_GOAL_FAILURE_RISK = "goal_failure_risk"
+WIDGET_TYPE_GOAL_CALENDAR = "goal_calendar"
+
+WIDGET_GOAL_SCOPE_SELECTED = "selected"
+WIDGET_GOAL_SCOPE_ALL = "all"
+SUPPORTED_WIDGET_GOAL_SCOPES = {
+    WIDGET_GOAL_SCOPE_SELECTED,
+    WIDGET_GOAL_SCOPE_ALL,
+}
+
+CALENDAR_PERIOD_GOAL_LENGTH = "goal_length"
+CALENDAR_PERIOD_CURRENT_MONTH = "current_month"
+CALENDAR_PERIOD_ROLLING_4_WEEKS = "rolling_4_weeks"
+SUPPORTED_CALENDAR_PERIODS = {
+    CALENDAR_PERIOD_GOAL_LENGTH,
+    CALENDAR_PERIOD_CURRENT_MONTH,
+    CALENDAR_PERIOD_ROLLING_4_WEEKS,
+}
 
 FORECAST_ALGORITHM_SIMPLE = "simple"
 FORECAST_ALGORITHM_WEIGHTED_WEEK_OVER_WEEK = "weighted_week_over_week"
@@ -35,6 +52,7 @@ SUPPORTED_WIDGET_TYPES = {
     WIDGET_TYPE_GOAL_COMPLETION_PERCENT,
     WIDGET_TYPE_GOAL_SUCCESS_PERCENT,
     WIDGET_TYPE_GOAL_FAILURE_RISK,
+    WIDGET_TYPE_GOAL_CALENDAR,
 }
 
 GOAL_WIDGET_TYPES = {
@@ -44,6 +62,7 @@ GOAL_WIDGET_TYPES = {
     WIDGET_TYPE_GOAL_COMPLETION_PERCENT,
     WIDGET_TYPE_GOAL_SUCCESS_PERCENT,
     WIDGET_TYPE_GOAL_FAILURE_RISK,
+    WIDGET_TYPE_GOAL_CALENDAR,
 }
 
 METRIC_WIDGET_TYPES = {
@@ -133,6 +152,24 @@ def normalize_rolling_window_days(rolling_window_days: int | None) -> int | None
     return rolling_window_days
 
 
+def normalize_widget_goal_scope(goal_scope: str | None) -> str | None:
+    if goal_scope is None:
+        return None
+    normalized = goal_scope.strip().lower()
+    if normalized not in SUPPORTED_WIDGET_GOAL_SCOPES:
+        raise DashboardError("Unsupported widget goal scope.")
+    return normalized
+
+
+def normalize_calendar_period(calendar_period: str | None) -> str | None:
+    if calendar_period is None:
+        return None
+    normalized = calendar_period.strip().lower()
+    if normalized not in SUPPORTED_CALENDAR_PERIODS:
+        raise DashboardError("Unsupported calendar period.")
+    return normalized
+
+
 def normalize_forecast_algorithm(
     *,
     widget_type: str,
@@ -163,6 +200,8 @@ def default_widget_dimensions(widget_type: str) -> tuple[int, int]:
         WIDGET_TYPE_GOAL_FAILURE_RISK,
     }:
         return DEFAULT_SUMMARY_WIDGET_WIDTH, DEFAULT_SUMMARY_WIDGET_HEIGHT
+    if widget_type == WIDGET_TYPE_GOAL_CALENDAR:
+        return 8, 5
     return DEFAULT_CHART_WIDGET_WIDTH, DEFAULT_CHART_WIDGET_HEIGHT
 
 
@@ -177,6 +216,8 @@ def default_mobile_widget_height(widget_type: str) -> int:
         WIDGET_TYPE_GOAL_FAILURE_RISK,
     }:
         return DEFAULT_MOBILE_SUMMARY_WIDGET_HEIGHT
+    if widget_type == WIDGET_TYPE_GOAL_CALENDAR:
+        return 5
     return DEFAULT_CHART_WIDGET_HEIGHT
 
 

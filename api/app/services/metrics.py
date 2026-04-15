@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.db.models import DashboardWidget, Goal, Metric, MetricEntry, User
+from app.db.models import DashboardWidget, Goal, Metric, MetricEntry, MetricNotification, User
 
 METRIC_TYPE_NUMBER = "number"
 METRIC_TYPE_DATE = "date"
@@ -21,6 +21,8 @@ UPDATE_TYPE_SUCCESS = "success"
 UPDATE_TYPE_FAILURE = "failure"
 SUPPORTED_UPDATE_TYPES = {UPDATE_TYPE_SUCCESS, UPDATE_TYPE_FAILURE}
 MAX_DECIMAL_PLACES = 6
+NOTIFICATION_STATUS_PENDING = "pending"
+NOTIFICATION_STATUS_COMPLETED = "completed"
 
 
 class MetricError(Exception):
@@ -62,6 +64,31 @@ def normalize_metric_recorded_at(
             return value.replace(tzinfo=ZoneInfo(timezone_name)).astimezone(UTC)
         return value.replace(tzinfo=UTC)
     return value.astimezone(UTC)
+
+
+def local_datetime(value: datetime, timezone: ZoneInfo) -> datetime:
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    return value.astimezone(timezone)
+
+
+def metric_entry_satisfies_notification(
+    *,
+    entry_local_datetime: datetime,
+    notification: MetricNotification,
+    second_reminder_time: time | None,
+) -> bool:
+    if entry_local_datetime.date() != notification.notification_date:
+        return False
+
+    if notification.slot_index == 1:
+        if second_reminder_time is None:
+            return True
+        return entry_local_datetime.timetz().replace(tzinfo=None) < second_reminder_time
+
+    if second_reminder_time is None:
+        return False
+    return entry_local_datetime.timetz().replace(tzinfo=None) >= second_reminder_time
 
 
 def normalize_metric_type(metric_type: str) -> str:
@@ -241,8 +268,38 @@ def create_metric_entry(
     )
     db.add(entry)
     metric.updated_at = utcnow()
+    resolve_pending_notifications_for_entry(db, metric=metric, entry=entry)
     db.flush()
     return get_metric_for_user(db, user=metric.user, metric_id=metric.id)
+
+
+def resolve_pending_notifications_for_entry(
+    db: Session,
+    *,
+    metric: Metric,
+    entry: MetricEntry,
+) -> None:
+    timezone = ZoneInfo(metric.user.timezone)
+    entry_local_datetime = local_datetime(entry.recorded_at, timezone)
+    pending_notifications = list(
+        db.scalars(
+            select(MetricNotification).where(
+                MetricNotification.metric_id == metric.id,
+                MetricNotification.status == NOTIFICATION_STATUS_PENDING,
+                MetricNotification.notification_date == entry_local_datetime.date(),
+            )
+        )
+    )
+    for notification in pending_notifications:
+        if not metric_entry_satisfies_notification(
+            entry_local_datetime=entry_local_datetime,
+            notification=notification,
+            second_reminder_time=metric.reminder_time_2,
+        ):
+            continue
+        notification.status = NOTIFICATION_STATUS_COMPLETED
+        notification.resolved_at = utcnow()
+        notification.updated_at = utcnow()
 
 
 def parse_metric_import_text(

@@ -312,6 +312,31 @@ export interface DashboardGoalReference {
   title: string;
 }
 
+export interface DashboardCalendarDaySummary {
+  date: string;
+  goal_statuses: DashboardCalendarGoalStatusSummary[];
+  is_in_range: boolean;
+  status: "blank" | "pending" | "success" | "failed" | "warning";
+}
+
+export interface DashboardCalendarGoalStatusSummary {
+  goal_id: string;
+  result_label: string;
+  status: "blank" | "pending" | "success" | "failed" | "warning";
+  subject: string;
+}
+
+export interface DashboardCalendarSummary {
+  days: DashboardCalendarDaySummary[];
+  ends_on: string;
+  goal_count: number;
+  goal_scope: "selected" | "all";
+  grid_ends_on: string;
+  grid_starts_on: string;
+  period: "goal_length" | "current_month" | "rolling_4_weeks";
+  starts_on: string;
+}
+
 export interface DashboardWidgetSeriesPoint {
   date_value: string | null;
   number_value: number | null;
@@ -325,6 +350,8 @@ export type DashboardForecastAlgorithm =
   | "weighted_day_over_day";
 
 export interface DashboardWidgetSummary {
+  calendar: DashboardCalendarSummary | null;
+  calendar_period: "goal_length" | "current_month" | "rolling_4_weeks" | null;
   current_progress_percent: number | null;
   display_order: number;
   failure_risk_percent: number | null;
@@ -333,6 +360,8 @@ export interface DashboardWidgetSummary {
   grid_w: number;
   grid_x: number;
   grid_y: number;
+  goal_scope: "selected" | "all" | null;
+  goals: DashboardGoalReference[];
   mobile_grid_h?: number;
   mobile_grid_w?: number;
   mobile_grid_x?: number;
@@ -354,7 +383,8 @@ export interface DashboardWidgetSummary {
     | "goal_summary"
     | "goal_completion_percent"
     | "goal_success_percent"
-    | "goal_failure_risk";
+    | "goal_failure_risk"
+    | "goal_calendar";
 }
 
 export interface DashboardSummary {
@@ -409,8 +439,11 @@ export interface UpdateDashboardPayload {
 }
 
 export interface CreateDashboardWidgetPayload {
+  calendar_period?: "goal_length" | "current_month" | "rolling_4_weeks" | null;
   forecast_algorithm?: DashboardForecastAlgorithm | null;
   goal_id: string | null;
+  goal_ids?: string[];
+  goal_scope?: "selected" | "all" | null;
   grid_h?: number | null;
   grid_w?: number | null;
   grid_x?: number | null;
@@ -427,10 +460,12 @@ export interface CreateDashboardWidgetPayload {
     | "goal_summary"
     | "goal_completion_percent"
     | "goal_success_percent"
-    | "goal_failure_risk";
+    | "goal_failure_risk"
+    | "goal_calendar";
 }
 
 export interface UpdateDashboardWidgetPayload {
+  calendar_period?: "goal_length" | "current_month" | "rolling_4_weeks" | null;
   forecast_algorithm?: DashboardForecastAlgorithm | null;
   grid_h?: number | null;
   grid_w?: number | null;

@@ -308,6 +308,53 @@ def test_due_number_metric_notification_can_be_completed(
     assert notification_list_response.json() == {"notifications": []}
 
 
+def test_manual_metric_entry_clears_matching_pending_notification(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bootstrap_admin(client)
+    scheduled_at = datetime.now(UTC).replace(second=0, microsecond=0) + timedelta(minutes=1)
+    created_at = scheduled_at - timedelta(minutes=1)
+
+    monkeypatch.setattr(
+        "app.services.metrics.utcnow",
+        lambda: created_at,
+    )
+
+    create_response = client.post(
+        "/api/v1/metrics",
+        json={
+            "name": "Weight",
+            "metric_type": "number",
+            "decimal_places": 1,
+            "reminder_time_1": scheduled_at.strftime("%H:%M"),
+        },
+    )
+    assert create_response.status_code == 201
+    metric_id = create_response.json()["id"]
+
+    monkeypatch.setattr(
+        "app.services.notifications.utcnow",
+        lambda: scheduled_at,
+    )
+    notification_list_response = client.get("/api/v1/notifications?timezone=UTC")
+    assert notification_list_response.status_code == 200
+    assert len(notification_list_response.json()["notifications"]) == 1
+
+    entry_response = client.post(
+        f"/api/v1/metrics/{metric_id}/entries",
+        json={
+            "number_value": 244.4,
+            "recorded_at": scheduled_at.isoformat().replace("+00:00", "Z"),
+        },
+    )
+    assert entry_response.status_code == 200
+
+    notification_list_response = client.get("/api/v1/notifications?timezone=UTC")
+    assert notification_list_response.status_code == 200
+    assert notification_list_response.json() == {"notifications": []}
+
+
 def test_due_date_metric_notification_can_be_skipped(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
