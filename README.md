@@ -11,7 +11,7 @@ Instead of treating every goal like the same checkbox list, Goal Tracker is desi
 - daily habits like `30 minutes of cardio every day`
 - target goals like `240 lbs by April 30`
 - performance goals like `row 2km in under 12 minutes`
-- restraint goals like `no drinking until April 30, except on specific dates`
+- restraint goals like `no tv until April 30, except on specific dates`
 - one-off tasks with subtasks
 
 The bigger idea is that the app should not just store updates. It should make progress visible and motivating.
@@ -32,42 +32,9 @@ Imagine using one app to track all of these at once:
 - your weight, with multiple weigh-ins in one day
 - your cardio habit, tracked day by day until a deadline
 - your best 2km row attempts over time
-- a no-drinking streak that correctly skips approved exception dates
+- a no-tv streak that correctly skips approved exception dates
 
 That is the kind of flexibility this project is being built around.
-
-## Project Status
-
-The project is in the foundation stage right now.
-
-What already exists:
-
-- a working web app shell
-- first-account bootstrap, invited sign-up, and sign-in flow
-- a signed-in app shell with session restoration
-- admin-managed invitation codes for creating additional accounts
-- automatic backups into `./backups`, plus admin backup inventory and manual backup/restore controls
-- optional example-data account signup seeded with starter metrics, realistic history, goals, and a dashboard that exercises multiple widget types, with revision-based upgrades for existing example accounts at server startup and during auth traffic
-- reusable metrics with quick number/date updates
-- reusable metrics with paste-import for timestamped CSV or tab-delimited history
-- reusable metrics with configurable reminder times plus notification-driven quick entry on mobile and desktop
-- metric archiving, with archived metrics hidden by default
-- a notification bell for due metric updates, including stacked missed reminders and quick submit/skip flows
-- goal archiving, with archived goals hidden by default
-- goal creation and editing backed by existing or newly created metrics, including date-based compliance goals with exception dates and success thresholds
-- checklist-style goals with ordered subtasks, target dates, and dashboard-ready completion progress
-- saved dashboards with reusable metric and goal widgets, including target-date goal charts with selectable forecast algorithms plus completion, success, and risk widgets, plus separate mobile and desktop widget layouts
-- saved dashboards with interactive checklist widgets for quick checkbox-style completion from the dashboard itself
-- user-managed share links for widgets and dashboards, including Discord/Teams-friendly widget preview images and read-only shared dashboard pages
-- a default dashboard per user, plus an edit mode for arranging widgets
-- browser-local timestamp rendering with profile-configured day-boundary timezone semantics
-- a backend API foundation
-- a landing page that successfully calls the API and renders application status
-- architecture documents covering the long-term product design
-
-What comes next:
-
-- reminders, richer forecast explanations, and richer progress views
 
 ## Why This Project Exists
 
