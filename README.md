@@ -4,6 +4,8 @@ Goal Tracker is a personal goal-tracking web app built for goals that do not all
 
 Some goals are simple daily habits. Some are target numbers. Some are one-time tasks. Some are "stay under a limit except on specific days." This project is meant to handle all of those in one system without feeling rigid or generic.
 
+![Goal Tracker mobile example](./docs/mobile.jpg)
+
 ## What Makes It Interesting
 
 Instead of treating every goal like the same checkbox list, Goal Tracker is designed to support very different kinds of progress:
