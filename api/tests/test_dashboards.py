@@ -1047,6 +1047,81 @@ def test_goal_calendar_uses_explicit_date_metric_no_submissions(
     ]
 
 
+def test_goal_calendar_uses_exception_dates_for_success_date_metrics(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    scheduled_at = datetime(2026, 4, 17, 18, 0, tzinfo=UTC)
+    created_at = scheduled_at - timedelta(minutes=1)
+
+    monkeypatch.setattr(
+        "app.services.goal_calendar.utcnow",
+        lambda: datetime(2026, 4, 18, 18, 0, tzinfo=UTC),
+    )
+
+    bootstrap_admin(client)
+
+    monkeypatch.setattr("app.services.metrics.utcnow", lambda: created_at)
+    success_metric_response = client.post(
+        "/api/v1/metrics",
+        json={
+            "name": "Cardio",
+            "metric_type": "date",
+            "update_type": "success",
+            "reminder_time_1": "18:00",
+        },
+    )
+    assert success_metric_response.status_code == 201
+
+    success_goal_response = client.post(
+        "/api/v1/goals",
+        json={
+            "title": "Do cardio",
+            "start_date": "2026-04-13",
+            "target_date": "2026-04-30",
+            "success_threshold_percent": 100,
+            "exception_dates": ["2026-04-17"],
+            "metric_id": success_metric_response.json()["id"],
+        },
+    )
+    assert success_goal_response.status_code == 201
+
+    monkeypatch.setattr("app.services.notifications.utcnow", lambda: scheduled_at)
+    notifications_response = client.get("/api/v1/notifications?timezone=UTC")
+    assert notifications_response.status_code == 200
+    notifications = notifications_response.json()["notifications"]
+    assert len(notifications) == 1
+
+    skip_response = client.post(f"/api/v1/notifications/{notifications[0]['id']}/skip")
+    assert skip_response.status_code == 200
+
+    dashboard_response = client.post("/api/v1/dashboards", json={"name": "Calendar"})
+    assert dashboard_response.status_code == 201
+
+    widget_response = client.post(
+        f"/api/v1/dashboards/{dashboard_response.json()['id']}/widgets",
+        json={
+            "title": "Goal calendar",
+            "widget_type": "goal_calendar",
+            "goal_scope": "selected",
+            "goal_ids": [success_goal_response.json()["id"]],
+            "calendar_period": "goal_length",
+        },
+    )
+    assert widget_response.status_code == 201
+
+    day_by_date = {day["date"]: day for day in widget_response.json()["calendar"]["days"]}
+    assert day_by_date["2026-04-17"]["status"] == "warning"
+    assert day_by_date["2026-04-17"]["goal_statuses"] == [
+        {
+            "goal_id": success_goal_response.json()["id"],
+            "subject": "Cardio",
+            "status": "warning",
+            "result_label": "Exception",
+        }
+    ]
+
+
 def test_goal_time_completion_uses_profile_timezone_across_goals_and_dashboards(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,

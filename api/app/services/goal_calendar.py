@@ -132,6 +132,8 @@ def _date_goal_status(goal: Goal, day: date) -> str | None:
             return CALENDAR_STATUS_SUCCESS
         return CALENDAR_STATUS_PENDING
 
+    if is_exception_day and submission_state != DATE_SUBMISSION_YES:
+        return CALENDAR_STATUS_WARNING
     if submission_state == DATE_SUBMISSION_YES:
         return CALENDAR_STATUS_SUCCESS
     if submission_state == DATE_SUBMISSION_NO:
@@ -144,6 +146,7 @@ def _date_goal_result_label(goal: Goal, day: date, status: str) -> str:
         return "Pending"
 
     submission_state = _date_goal_submission_state(goal, day)
+    is_exception_day = day in goal_exception_date_values(goal)
     if goal.metric.update_type == "failure":
         if status == CALENDAR_STATUS_WARNING:
             return "Exception"
@@ -153,6 +156,8 @@ def _date_goal_result_label(goal: Goal, day: date, status: str) -> str:
             return "Clear"
         return "Missing"
 
+    if status == CALENDAR_STATUS_WARNING and is_exception_day:
+        return "Exception"
     if status == CALENDAR_STATUS_SUCCESS:
         return "Submitted"
     if submission_state == DATE_SUBMISSION_NO:
