@@ -14,6 +14,7 @@ import {
   deleteDashboard,
   deleteDashboardWidget,
   deleteInvitationCode,
+  deleteMetricEntry,
   fetchBackupInventory,
   fetchBootstrapStatus,
   fetchCurrentSession,
@@ -33,6 +34,7 @@ import {
   updateDashboardWidget,
   updateGoal,
   updateMetric,
+  updateMetricEntry,
   updateInvitationCode,
 } from "./api";
 
@@ -1013,6 +1015,101 @@ describe("auth api helpers", () => {
       skipNotification("notification-1", fetcher),
     ).resolves.toMatchObject({
       status: "skipped",
+    });
+  });
+
+  it("supports metric entry update and delete helpers", async () => {
+    const fetcher = vi.fn(async (input, init) => {
+      const path = String(input);
+
+      if (path.endsWith("/metrics/metric-1/entries/entry-1") && init?.method === "PATCH") {
+        expect(init.body).toBe(
+          JSON.stringify({
+            number_value: 241.8,
+            recorded_at: "2026-04-16T05:00:00.000Z",
+          }),
+        );
+
+        return new Response(
+          JSON.stringify({
+            archived_at: null,
+            decimal_places: 1,
+            entries: [
+              {
+                date_value: null,
+                id: "entry-1",
+                number_value: 241.8,
+                recorded_at: "2026-04-16T05:00:00",
+              },
+            ],
+            id: "metric-1",
+            is_archived: false,
+            latest_entry: {
+              date_value: null,
+              id: "entry-1",
+              number_value: 241.8,
+              recorded_at: "2026-04-16T05:00:00",
+            },
+            metric_type: "number",
+            name: "Weight",
+            reminder_time_1: "06:00",
+            reminder_time_2: null,
+            update_type: "success",
+            unit_label: "lbs",
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      if (path.endsWith("/metrics/metric-1/entries/entry-1") && init?.method === "DELETE") {
+        return new Response(
+          JSON.stringify({
+            archived_at: null,
+            decimal_places: 1,
+            entries: [],
+            id: "metric-1",
+            is_archived: false,
+            latest_entry: null,
+            metric_type: "number",
+            name: "Weight",
+            reminder_time_1: "06:00",
+            reminder_time_2: null,
+            update_type: "success",
+            unit_label: "lbs",
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      throw new Error(`Unexpected request: ${path}`);
+    });
+
+    await expect(
+      updateMetricEntry(
+        "metric-1",
+        "entry-1",
+        {
+          number_value: 241.8,
+          recorded_at: "2026-04-16T05:00:00.000Z",
+        },
+        fetcher,
+      ),
+    ).resolves.toMatchObject({
+      latest_entry: {
+        id: "entry-1",
+        number_value: 241.8,
+      },
+    });
+
+    await expect(deleteMetricEntry("metric-1", "entry-1", fetcher)).resolves.toMatchObject({
+      entries: [],
+      latest_entry: null,
     });
   });
 

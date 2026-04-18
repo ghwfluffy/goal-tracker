@@ -3,16 +3,19 @@ import { defineStore } from "pinia";
 import {
   addMetricEntry,
   createMetric,
+  deleteMetricEntry,
   deleteMetric,
   fetchMetrics,
   importMetricEntries,
   recordDateMetricDecision,
+  updateMetricEntry,
   updateMetric,
   type CreateMetricEntryPayload,
   type CreateMetricPayload,
   type ImportMetricEntriesPayload,
   type MetricSummary,
   type RecordDateMetricDecisionPayload,
+  type UpdateMetricEntryPayload,
   type UpdateMetricPayload,
 } from "../lib/api";
 
@@ -101,6 +104,25 @@ export const useMetricsStore = defineStore("metrics", {
         this.submissionState = "idle";
       }
     },
+    async updateMetricEntry(
+      metricId: string,
+      entryId: string,
+      payload: UpdateMetricEntryPayload,
+    ): Promise<boolean> {
+      this.submissionState = "submitting";
+      this.errorMessage = "";
+
+      try {
+        await updateMetricEntry(metricId, entryId, payload);
+        await this.loadMetrics();
+        return true;
+      } catch (error: unknown) {
+        this.errorMessage = error instanceof Error ? error.message : "Unable to update metric value.";
+        return false;
+      } finally {
+        this.submissionState = "idle";
+      }
+    },
     async recordDateMetricDecision(
       metricId: string,
       payload: RecordDateMetricDecisionPayload,
@@ -151,6 +173,21 @@ export const useMetricsStore = defineStore("metrics", {
       } catch (error: unknown) {
         this.errorMessage =
           error instanceof Error ? error.message : "Unable to update metric archive state.";
+        return false;
+      } finally {
+        this.submissionState = "idle";
+      }
+    },
+    async deleteMetricEntry(metricId: string, entryId: string): Promise<boolean> {
+      this.submissionState = "submitting";
+      this.errorMessage = "";
+
+      try {
+        await deleteMetricEntry(metricId, entryId);
+        await this.loadMetrics();
+        return true;
+      } catch (error: unknown) {
+        this.errorMessage = error instanceof Error ? error.message : "Unable to delete metric value.";
         return false;
       } finally {
         this.submissionState = "idle";

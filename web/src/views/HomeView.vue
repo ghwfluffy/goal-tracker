@@ -282,6 +282,7 @@ onBeforeUnmount(() => {
       <MetricHistoryDialog
         v-model:visible="metricHistoryVisible"
         :metric="selectedMetricHistory"
+        @updated="void refreshDependentTrackingViews()"
       />
       <HomeNotificationsDialog
         v-model:visible="notificationsVisible"

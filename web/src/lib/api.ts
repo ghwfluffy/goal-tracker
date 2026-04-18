@@ -159,6 +159,12 @@ export interface CreateMetricEntryPayload {
   recorded_at?: string | null;
 }
 
+export interface UpdateMetricEntryPayload {
+  date_value?: string | null;
+  number_value?: number | null;
+  recorded_at?: string | null;
+}
+
 export interface RecordDateMetricDecisionPayload {
   decision: "yes" | "no";
   decision_date: string;
@@ -899,6 +905,22 @@ export function addMetricEntry(
   );
 }
 
+export function updateMetricEntry(
+  metricId: string,
+  entryId: string,
+  payload: UpdateMetricEntryPayload,
+  fetcher: Fetcher = fetch,
+): Promise<MetricSummary> {
+  return requestJson<MetricSummary>(
+    `/metrics/${metricId}/entries/${entryId}`,
+    {
+      body: JSON.stringify(payload),
+      method: "PATCH",
+    },
+    fetcher,
+  );
+}
+
 export function recordDateMetricDecision(
   metricId: string,
   payload: RecordDateMetricDecisionPayload,
@@ -989,6 +1011,20 @@ export function deleteMetric(
 ): Promise<void> {
   return requestNoContent(
     `/metrics/${metricId}`,
+    {
+      method: "DELETE",
+    },
+    fetcher,
+  );
+}
+
+export function deleteMetricEntry(
+  metricId: string,
+  entryId: string,
+  fetcher: Fetcher = fetch,
+): Promise<MetricSummary> {
+  return requestJson<MetricSummary>(
+    `/metrics/${metricId}/entries/${entryId}`,
     {
       method: "DELETE",
     },

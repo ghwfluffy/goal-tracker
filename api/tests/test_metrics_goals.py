@@ -118,6 +118,178 @@ def test_count_metric_accumulates_even_with_same_minute_recorded_at(client: Test
     ]
 
 
+def test_update_number_metric_entry(client: TestClient) -> None:
+    bootstrap_admin(client)
+
+    create_response = client.post(
+        "/api/v1/metrics",
+        json={
+            "name": "Weight",
+            "metric_type": "number",
+            "decimal_places": 1,
+            "initial_number_value": 245.5,
+            "recorded_at": "2026-04-15T01:21:00Z",
+        },
+    )
+    assert create_response.status_code == 201
+    metric_id = create_response.json()["id"]
+
+    update_response = client.post(
+        f"/api/v1/metrics/{metric_id}/entries",
+        json={
+            "number_value": 242.3,
+            "recorded_at": "2026-04-16T01:21:00Z",
+        },
+    )
+    assert update_response.status_code == 200
+    entry_id = update_response.json()["latest_entry"]["id"]
+
+    edit_response = client.patch(
+        f"/api/v1/metrics/{metric_id}/entries/{entry_id}",
+        json={
+            "number_value": 241.8,
+            "recorded_at": "2026-04-16T05:00:00Z",
+        },
+    )
+
+    assert edit_response.status_code == 200
+    payload = edit_response.json()
+    assert payload["latest_entry"]["id"] == entry_id
+    assert payload["latest_entry"]["number_value"] == 241.8
+    assert payload["latest_entry"]["recorded_at"] == "2026-04-16T05:00:00"
+
+
+def test_update_count_metric_entry_reconciles_later_totals(client: TestClient) -> None:
+    bootstrap_admin(client)
+
+    create_response = client.post(
+        "/api/v1/metrics",
+        json={
+            "name": "Miles run",
+            "metric_type": "count",
+            "decimal_places": 1,
+            "initial_number_value": 10.0,
+            "recorded_at": "2026-04-15T01:21:00Z",
+        },
+    )
+    assert create_response.status_code == 201
+    metric_id = create_response.json()["id"]
+
+    second_response = client.post(
+        f"/api/v1/metrics/{metric_id}/entries",
+        json={
+            "number_value": 5.0,
+            "recorded_at": "2026-04-16T01:21:00Z",
+        },
+    )
+    assert second_response.status_code == 200
+    second_entry_id = second_response.json()["latest_entry"]["id"]
+
+    third_response = client.post(
+        f"/api/v1/metrics/{metric_id}/entries",
+        json={
+            "number_value": 2.0,
+            "recorded_at": "2026-04-17T01:21:00Z",
+        },
+    )
+    assert third_response.status_code == 200
+    third_entry_id = third_response.json()["latest_entry"]["id"]
+
+    edit_response = client.patch(
+        f"/api/v1/metrics/{metric_id}/entries/{second_entry_id}",
+        json={
+            "number_value": 13.0,
+            "recorded_at": "2026-04-16T12:00:00Z",
+        },
+    )
+
+    assert edit_response.status_code == 200
+    payload = edit_response.json()
+    assert [entry["id"] for entry in payload["entries"]] == [
+        third_entry_id,
+        second_entry_id,
+        payload["entries"][2]["id"],
+    ]
+    assert [entry["number_value"] for entry in payload["entries"]] == [15.0, 13.0, 10.0]
+    assert payload["entries"][1]["recorded_at"] == "2026-04-16T12:00:00"
+
+
+def test_delete_count_metric_entry_reconciles_later_totals(client: TestClient) -> None:
+    bootstrap_admin(client)
+
+    create_response = client.post(
+        "/api/v1/metrics",
+        json={
+            "name": "Miles run",
+            "metric_type": "count",
+            "decimal_places": 1,
+            "initial_number_value": 10.0,
+            "recorded_at": "2026-04-15T01:21:00Z",
+        },
+    )
+    assert create_response.status_code == 201
+    metric_id = create_response.json()["id"]
+    first_entry_id = create_response.json()["latest_entry"]["id"]
+
+    second_response = client.post(
+        f"/api/v1/metrics/{metric_id}/entries",
+        json={
+            "number_value": 5.0,
+            "recorded_at": "2026-04-16T01:21:00Z",
+        },
+    )
+    assert second_response.status_code == 200
+
+    third_response = client.post(
+        f"/api/v1/metrics/{metric_id}/entries",
+        json={
+            "number_value": 2.0,
+            "recorded_at": "2026-04-17T01:21:00Z",
+        },
+    )
+    assert third_response.status_code == 200
+
+    delete_response = client.delete(f"/api/v1/metrics/{metric_id}/entries/{first_entry_id}")
+
+    assert delete_response.status_code == 200
+    payload = delete_response.json()
+    assert [entry["number_value"] for entry in payload["entries"]] == [7.0, 5.0]
+
+
+def test_delete_number_metric_entry(client: TestClient) -> None:
+    bootstrap_admin(client)
+
+    create_response = client.post(
+        "/api/v1/metrics",
+        json={
+            "name": "Weight",
+            "metric_type": "number",
+            "decimal_places": 1,
+            "initial_number_value": 245.5,
+            "recorded_at": "2026-04-15T01:21:00Z",
+        },
+    )
+    assert create_response.status_code == 201
+    metric_id = create_response.json()["id"]
+
+    update_response = client.post(
+        f"/api/v1/metrics/{metric_id}/entries",
+        json={
+            "number_value": 242.3,
+            "recorded_at": "2026-04-16T01:21:00Z",
+        },
+    )
+    assert update_response.status_code == 200
+    entry_id = update_response.json()["latest_entry"]["id"]
+
+    delete_response = client.delete(f"/api/v1/metrics/{metric_id}/entries/{entry_id}")
+
+    assert delete_response.status_code == 200
+    payload = delete_response.json()
+    assert len(payload["entries"]) == 1
+    assert payload["latest_entry"]["number_value"] == 245.5
+
+
 def test_create_date_metric(client: TestClient) -> None:
     bootstrap_admin(client)
 

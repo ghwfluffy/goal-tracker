@@ -34,6 +34,10 @@ class MetricNotFoundError(Exception):
     pass
 
 
+class MetricEntryNotFoundError(Exception):
+    pass
+
+
 @dataclass(frozen=True)
 class MetricImportRow:
     recorded_at: datetime
@@ -318,6 +322,166 @@ def create_metric_entry(
     metric.updated_at = utcnow()
     resolve_pending_notifications_for_entry(db, metric=metric, entry=entry)
     db.flush()
+    return get_metric_for_user(db, user=metric.user, metric_id=metric.id)
+
+
+def sort_metric_entries_chronologically(entries: list[MetricEntry]) -> list[MetricEntry]:
+    return sorted(
+        entries,
+        key=lambda entry: (
+            normalize_metric_recorded_at(entry.recorded_at),
+            normalize_metric_recorded_at(entry.created_at),
+            entry.id,
+        ),
+    )
+
+
+def get_metric_entry_for_metric(*, metric: Metric, entry_id: str) -> MetricEntry:
+    for entry in metric.entries:
+        if entry.id == entry_id:
+            return entry
+    raise MetricEntryNotFoundError("Metric entry was not found.")
+
+
+def reconcile_count_metric_entries(
+    db: Session,
+    *,
+    metric: Metric,
+    removed_entry: MetricEntry | None = None,
+    updated_entry: MetricEntry | None = None,
+    updated_number_value: Decimal | None = None,
+    updated_recorded_at: datetime | None = None,
+) -> None:
+    if metric.metric_type != METRIC_TYPE_COUNT:
+        return
+
+    chronological_entries = sort_metric_entries_chronologically(metric.entries)
+    increments_by_entry_id: dict[str, Decimal] = {}
+    running_total = Decimal("0")
+    for entry in chronological_entries:
+        current_total = normalize_number_value(
+            value=entry.number_value or 0,
+            decimal_places=metric.decimal_places or 0,
+        )
+        increments_by_entry_id[entry.id] = current_total - running_total
+        running_total = current_total
+
+    remaining_entries = [
+        entry for entry in chronological_entries if removed_entry is None or entry.id != removed_entry.id
+    ]
+    if updated_entry is not None and removed_entry is not None and updated_entry.id == removed_entry.id:
+        insertion_baseline = Decimal("0")
+        inserted = False
+        reordered_entries: list[MetricEntry] = []
+        if updated_number_value is None or updated_recorded_at is None:
+            raise MetricError("Updated count entries require a value and recorded time.")
+
+        updated_entry.number_value = float(updated_number_value)
+        updated_entry.recorded_at = updated_recorded_at
+
+        for entry in remaining_entries:
+            entry_time = normalize_metric_recorded_at(entry.recorded_at)
+            updated_time = normalize_metric_recorded_at(updated_recorded_at)
+            if not inserted and entry_time >= updated_time:
+                updated_increment = updated_number_value - insertion_baseline
+                increments_by_entry_id[updated_entry.id] = updated_increment
+                reordered_entries.append(updated_entry)
+                inserted = True
+
+            insertion_baseline += increments_by_entry_id[entry.id]
+            reordered_entries.append(entry)
+
+        if not inserted:
+            updated_increment = updated_number_value - insertion_baseline
+            increments_by_entry_id[updated_entry.id] = updated_increment
+            reordered_entries.append(updated_entry)
+
+        remaining_entries = reordered_entries
+
+    running_total = Decimal("0")
+    for entry in remaining_entries:
+        running_total += increments_by_entry_id[entry.id]
+        entry.number_value = float(running_total)
+
+    metric.updated_at = utcnow()
+    db.flush()
+
+
+def update_metric_entry(
+    db: Session,
+    *,
+    metric: Metric,
+    entry_id: str,
+    update_fields: set[str],
+    number_value: float | None = None,
+    date_value: date | None = None,
+    recorded_at: datetime | None = None,
+) -> Metric:
+    if metric.archived_at is not None:
+        raise MetricError("Archived metrics cannot be updated.")
+
+    entry = get_metric_entry_for_metric(metric=metric, entry_id=entry_id)
+    resolved_number_value = entry.number_value if "number_value" not in update_fields else number_value
+    resolved_date_value = entry.date_value if "date_value" not in update_fields else date_value
+    resolved_recorded_at = (
+        normalize_metric_recorded_at(entry.recorded_at)
+        if "recorded_at" not in update_fields
+        else normalize_metric_recorded_at(recorded_at)
+    )
+
+    validate_metric_value(
+        metric_type=metric.metric_type,
+        number_value=float(resolved_number_value) if resolved_number_value is not None else None,
+        date_value=resolved_date_value,
+        decimal_places=metric.decimal_places,
+    )
+
+    if is_numeric_metric_type(metric.metric_type):
+        if metric.decimal_places is None:
+            raise MetricError("Numeric metrics require a decimal-places setting.")
+        normalized_number_value = normalize_number_value(
+            value=resolved_number_value or 0,
+            decimal_places=metric.decimal_places,
+        )
+    else:
+        normalized_number_value = None
+
+    if metric.metric_type == METRIC_TYPE_COUNT:
+        reconcile_count_metric_entries(
+            db,
+            metric=metric,
+            removed_entry=entry,
+            updated_entry=entry,
+            updated_number_value=normalized_number_value,
+            updated_recorded_at=resolved_recorded_at,
+        )
+    else:
+        entry.number_value = float(normalized_number_value) if normalized_number_value is not None else None
+        entry.date_value = None if is_numeric_metric_type(metric.metric_type) else resolved_date_value
+        entry.recorded_at = resolved_recorded_at
+        metric.updated_at = utcnow()
+        db.flush()
+
+    return get_metric_for_user(db, user=metric.user, metric_id=metric.id)
+
+
+def delete_metric_entry(
+    db: Session,
+    *,
+    metric: Metric,
+    entry_id: str,
+) -> Metric:
+    if metric.archived_at is not None:
+        raise MetricError("Archived metrics cannot be updated.")
+
+    entry = get_metric_entry_for_metric(metric=metric, entry_id=entry_id)
+    db.delete(entry)
+    reconcile_count_metric_entries(db, metric=metric, removed_entry=entry)
+
+    if metric.metric_type != METRIC_TYPE_COUNT:
+        metric.updated_at = utcnow()
+        db.flush()
+
     return get_metric_for_user(db, user=metric.user, metric_id=metric.id)
 
 

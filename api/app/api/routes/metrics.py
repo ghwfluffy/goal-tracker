@@ -11,17 +11,20 @@ from sqlalchemy.orm import Session
 from app.api.routes.auth import get_current_user
 from app.db import Metric, MetricEntry, User, get_db
 from app.services.metrics import (
+    MetricEntryNotFoundError,
     MetricError,
     MetricNotFoundError,
     create_metric,
     create_metric_entry,
     delete_metric,
+    delete_metric_entry,
     get_metric_for_user,
     import_metric_entries,
     list_metrics_for_user,
     parse_metric_import_text,
     record_date_metric_decision,
     update_metric,
+    update_metric_entry,
 )
 
 router = APIRouter(prefix="/metrics")
@@ -71,6 +74,12 @@ class CreateMetricRequest(BaseModel):
 
 
 class CreateMetricEntryRequest(BaseModel):
+    number_value: float | None = None
+    date_value: date | None = None
+    recorded_at: datetime | None = None
+
+
+class UpdateMetricEntryRequest(BaseModel):
     number_value: float | None = None
     date_value: date | None = None
     recorded_at: datetime | None = None
@@ -212,6 +221,39 @@ def post_metric_entry(
     return serialize_metric(updated_metric)
 
 
+@router.patch("/{metric_id}/entries/{entry_id}", response_model=MetricSummary)
+def patch_metric_entry(
+    metric_id: str,
+    entry_id: str,
+    payload: UpdateMetricEntryRequest,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> MetricSummary:
+    try:
+        metric = get_metric_for_user(db, user=user, metric_id=metric_id)
+        updated_metric = update_metric_entry(
+            db,
+            metric=metric,
+            entry_id=entry_id,
+            update_fields=set(payload.model_fields_set),
+            number_value=payload.number_value,
+            date_value=payload.date_value,
+            recorded_at=payload.recorded_at,
+        )
+        db.commit()
+    except (MetricNotFoundError, MetricEntryNotFoundError) as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except MetricError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(exc),
+        ) from exc
+
+    return serialize_metric(updated_metric)
+
+
 @router.post("/{metric_id}/date-decision", response_model=MetricSummary)
 def post_date_metric_decision(
     metric_id: str,
@@ -334,3 +376,27 @@ def remove_metric(
         ) from exc
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.delete("/{metric_id}/entries/{entry_id}", response_model=MetricSummary)
+def remove_metric_entry(
+    metric_id: str,
+    entry_id: str,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> MetricSummary:
+    try:
+        metric = get_metric_for_user(db, user=user, metric_id=metric_id)
+        updated_metric = delete_metric_entry(db, metric=metric, entry_id=entry_id)
+        db.commit()
+    except (MetricNotFoundError, MetricEntryNotFoundError) as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except MetricError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(exc),
+        ) from exc
+
+    return serialize_metric(updated_metric)

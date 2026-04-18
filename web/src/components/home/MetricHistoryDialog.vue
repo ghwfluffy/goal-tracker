@@ -1,12 +1,19 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import Button from "primevue/button";
 import Dialog from "primevue/dialog";
 import TabPanel from "primevue/tabpanel";
 import TabView from "primevue/tabview";
 
 import type { MetricSummary } from "../../lib/api";
 import { formatDateTime, formatMetricValue } from "../../lib/tracking";
+import { getBrowserTimezone } from "../../lib/time";
+import { useAppToast } from "../../lib/toast";
+import { useGoalsStore } from "../../stores/goals";
+import { useMetricsStore } from "../../stores/metrics";
+import { useNotificationsStore } from "../../stores/notifications";
 import MetricHistoryChart from "../MetricHistoryChart.vue";
+import MetricHistoryEntryEditDialog from "./MetricHistoryEntryEditDialog.vue";
 
 const props = defineProps<{
   metric: MetricSummary | null;
@@ -14,10 +21,18 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
+  updated: [];
   "update:visible": [value: boolean];
 }>();
 
+const metricsStore = useMetricsStore();
+const goalsStore = useGoalsStore();
+const notificationsStore = useNotificationsStore();
+const { showSuccess } = useAppToast();
+
 const metricHistoryTabIndex = ref(0);
+const editingEntryId = ref("");
+const editDialogVisible = ref(false);
 
 const currentValueText = computed(() => {
   if (props.metric === null) {
@@ -31,6 +46,39 @@ const currentValueText = computed(() => {
     props.metric.decimal_places,
   );
 });
+
+const editingEntry = computed(() => {
+  if (props.metric === null || editingEntryId.value === "") {
+    return null;
+  }
+  return props.metric.entries.find((entry) => entry.id === editingEntryId.value) ?? null;
+});
+
+function openEditDialog(entryId: string): void {
+  editingEntryId.value = entryId;
+  editDialogVisible.value = true;
+}
+
+async function deleteEntry(entryId: string): Promise<void> {
+  if (props.metric === null) {
+    return;
+  }
+
+  const confirmed = window.confirm("Delete this metric history value?");
+  if (!confirmed) {
+    return;
+  }
+
+  const deleted = await metricsStore.deleteMetricEntry(props.metric.id, entryId);
+  if (!deleted) {
+    return;
+  }
+
+  await notificationsStore.loadNotifications(getBrowserTimezone());
+  await goalsStore.loadGoals();
+  showSuccess("Metric value deleted.", "Metrics");
+  emit("updated");
+}
 </script>
 
 <template>
@@ -69,6 +117,7 @@ const currentValueText = computed(() => {
                   <tr>
                     <th>Value</th>
                     <th>Recorded</th>
+                    <th class="actions-column">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -87,6 +136,26 @@ const currentValueText = computed(() => {
                       </span>
                     </td>
                     <td>{{ formatDateTime(entry.recorded_at) }}</td>
+                    <td class="actions-cell">
+                      <Button
+                        icon="pi pi-pencil"
+                        text
+                        rounded
+                        severity="secondary"
+                        aria-label="Edit metric value"
+                        :disabled="metricsStore.submissionState === 'submitting'"
+                        @click="openEditDialog(entry.id)"
+                      />
+                      <Button
+                        icon="pi pi-trash"
+                        text
+                        rounded
+                        severity="danger"
+                        aria-label="Delete metric value"
+                        :disabled="metricsStore.submissionState === 'submitting'"
+                        @click="void deleteEntry(entry.id)"
+                      />
+                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -95,6 +164,13 @@ const currentValueText = computed(() => {
         </TabView>
       </section>
     </div>
+
+    <MetricHistoryEntryEditDialog
+      v-model:visible="editDialogVisible"
+      :entry="editingEntry"
+      :metric="metric"
+      @updated="emit('updated')"
+    />
   </Dialog>
 </template>
 
@@ -141,5 +217,14 @@ const currentValueText = computed(() => {
 
 .metric-history-table tbody tr:last-child td {
   border-bottom: 0;
+}
+
+.actions-column {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.actions-cell {
+  white-space: nowrap;
 }
 </style>
