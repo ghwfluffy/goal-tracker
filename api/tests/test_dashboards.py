@@ -349,24 +349,82 @@ def test_mobile_widget_updates_restack_a_vertical_dashboard_layout(client: TestC
 
     assert [first_widget["mobile_grid_h"], second_widget["mobile_grid_h"]] == [1, 1]
     assert [first_widget["mobile_grid_y"], second_widget["mobile_grid_y"]] == [0, 1]
+    assert [first_widget["mobile_order"], second_widget["mobile_order"]] == [0.0, 1.0]
 
     mobile_move_response = client.patch(
         f"/api/v1/dashboards/{dashboard_id}/widgets/{second_widget['id']}",
-        json={"layout_mode": "mobile", "grid_y": 0},
+        json={"layout_mode": "mobile", "mobile_order": -1},
     )
     assert mobile_move_response.status_code == 200
     assert mobile_move_response.json()["mobile_grid_y"] == 0
+    assert mobile_move_response.json()["mobile_order"] == -1.0
 
     dashboards_response = client.get("/api/v1/dashboards")
     assert dashboards_response.status_code == 200
     widgets = dashboards_response.json()["dashboards"][0]["widgets"]
-    assert [widget["title"] for widget in sorted(widgets, key=lambda widget: widget["mobile_grid_y"])] == [
+    mobile_widgets = sorted(widgets, key=lambda widget: widget["mobile_order"])
+    assert [widget["title"] for widget in mobile_widgets] == [
         "Second",
         "First",
     ]
-    assert [
-        widget["mobile_grid_y"] for widget in sorted(widgets, key=lambda widget: widget["mobile_grid_y"])
-    ] == [0, 1]
+    assert [widget["mobile_grid_y"] for widget in mobile_widgets] == [0, 1]
+    assert [widget["mobile_order"] for widget in mobile_widgets] == [-1.0, 0.0]
+
+
+def test_deleting_a_mobile_widget_restacks_remaining_widgets(client: TestClient) -> None:
+    bootstrap_admin(client)
+
+    metric_response = client.post(
+        "/api/v1/metrics",
+        json={
+            "name": "Weight",
+            "metric_type": "number",
+            "decimal_places": 1,
+            "initial_number_value": 200.0,
+        },
+    )
+    assert metric_response.status_code == 201
+    metric_id = metric_response.json()["id"]
+
+    dashboard_response = client.post("/api/v1/dashboards", json={"name": "Mobile"})
+    assert dashboard_response.status_code == 201
+    dashboard_id = dashboard_response.json()["id"]
+
+    first_widget_response = client.post(
+        f"/api/v1/dashboards/{dashboard_id}/widgets",
+        json={
+            "title": "First",
+            "widget_type": "metric_summary",
+            "metric_id": metric_id,
+        },
+    )
+    assert first_widget_response.status_code == 201
+
+    second_widget_response = client.post(
+        f"/api/v1/dashboards/{dashboard_id}/widgets",
+        json={
+            "title": "Second",
+            "widget_type": "metric_history",
+            "metric_id": metric_id,
+        },
+    )
+    assert second_widget_response.status_code == 201
+    second_widget = second_widget_response.json()
+    assert second_widget["mobile_grid_y"] == 1
+    assert second_widget["mobile_grid_h"] == 4
+
+    delete_response = client.delete(
+        f"/api/v1/dashboards/{dashboard_id}/widgets/{first_widget_response.json()['id']}"
+    )
+    assert delete_response.status_code == 204
+
+    dashboards_response = client.get("/api/v1/dashboards")
+    assert dashboards_response.status_code == 200
+    widgets = dashboards_response.json()["dashboards"][0]["widgets"]
+    assert len(widgets) == 1
+    assert widgets[0]["title"] == "Second"
+    assert widgets[0]["mobile_grid_y"] == 0
+    assert widgets[0]["mobile_order"] == 1.0
 
 
 def test_date_goal_progress_widget_uses_compliance_percent(client: TestClient) -> None:

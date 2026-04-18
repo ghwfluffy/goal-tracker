@@ -143,6 +143,15 @@ function layoutForMode(
 const orderedWidgets = computed(() => {
   const widgets = selectedDashboard.value?.widgets ?? [];
   return [...widgets].sort((left, right) => {
+    if (activeLayoutMode.value === "mobile") {
+      const leftMobileOrder = left.mobile_order ?? left.mobile_grid_y ?? left.grid_y;
+      const rightMobileOrder = right.mobile_order ?? right.mobile_grid_y ?? right.grid_y;
+      if (leftMobileOrder !== rightMobileOrder) {
+        return leftMobileOrder - rightMobileOrder;
+      }
+      return left.display_order - right.display_order;
+    }
+
     const leftLayout = getWidgetLayout(left);
     const rightLayout = getWidgetLayout(right);
     if (leftLayout.grid_y !== rightLayout.grid_y) {
@@ -749,22 +758,35 @@ async function moveWidgetInMobileStack(widgetId: string, direction: "up" | "down
   }
 
   const currentWidget = orderedWidgets.value[index];
-  const currentLayout = getWidgetLayout(currentWidget);
-  const targetWidget = orderedWidgets.value[direction === "up" ? index - 1 : index + 1];
-  if (targetWidget === undefined) {
+  const nextIndex = direction === "up" ? index - 1 : index + 1;
+  if (nextIndex < 0 || nextIndex >= orderedWidgets.value.length) {
     return;
   }
 
-  const targetLayout = getWidgetLayout(targetWidget);
-  const nextY =
-    direction === "up"
-      ? Math.max(0, targetLayout.grid_y - 1)
-      : targetLayout.grid_y + targetLayout.grid_h + 1;
+  const reorderedWidgets = [...orderedWidgets.value];
+  reorderedWidgets.splice(index, 1);
+  reorderedWidgets.splice(nextIndex, 0, currentWidget);
+
+  const previousWidget = reorderedWidgets[nextIndex - 1];
+  const followingWidget = reorderedWidgets[nextIndex + 1];
+  let nextMobileOrder: number;
+
+  if (previousWidget === undefined && followingWidget === undefined) {
+    nextMobileOrder = 0;
+  } else if (previousWidget === undefined) {
+    nextMobileOrder = (followingWidget.mobile_order ?? followingWidget.mobile_grid_y ?? 0) - 1;
+  } else if (followingWidget === undefined) {
+    nextMobileOrder = (previousWidget.mobile_order ?? previousWidget.mobile_grid_y ?? 0) + 1;
+  } else {
+    nextMobileOrder =
+      ((previousWidget.mobile_order ?? previousWidget.mobile_grid_y ?? 0) +
+        (followingWidget.mobile_order ?? followingWidget.mobile_grid_y ?? 0)) /
+      2;
+  }
 
   const updated = await dashboardsStore.updateWidget(selectedDashboard.value.id, widgetId, {
-    grid_h: currentLayout.grid_h,
-    grid_y: nextY,
     layout_mode: "mobile",
+    mobile_order: nextMobileOrder,
   });
   if (!updated) {
     return;

@@ -36,6 +36,7 @@ function buildWidget(overrides: Partial<DashboardWidgetSummary> = {}): Dashboard
       name: "Weight",
       unit_label: "lbs",
     },
+    mobile_order: 0,
     rolling_window_days: null,
     series: [],
     target_met: false,

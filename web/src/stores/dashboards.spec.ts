@@ -45,6 +45,7 @@ function buildWidget(overrides: Partial<DashboardWidgetSummary> = {}): Dashboard
     id: "widget-1",
     metric: null,
     mobile_grid_h: 3,
+    mobile_order: 0,
     mobile_grid_w: 1,
     mobile_grid_x: 0,
     mobile_grid_y: 0,
@@ -160,12 +161,12 @@ describe("useDashboardsStore", () => {
         }),
       ],
     });
-    updateDashboardWidgetMock.mockResolvedValue(buildWidget({ mobile_grid_y: 3 }));
+    updateDashboardWidgetMock.mockResolvedValue(buildWidget({ mobile_grid_y: 3, mobile_order: 3 }));
 
     await expect(
       store.updateWidget("dashboard-1", "widget-1", {
-        grid_y: 3,
         layout_mode: "mobile",
+        mobile_order: 3,
       }),
     ).resolves.toBe(true);
 

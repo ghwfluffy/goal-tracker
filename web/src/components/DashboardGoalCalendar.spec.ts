@@ -59,6 +59,7 @@ function buildWidget(overrides: Partial<DashboardWidgetSummary> = {}): Dashboard
     id: "widget-calendar",
     metric: null,
     mobile_grid_h: 5,
+    mobile_order: 0,
     mobile_grid_w: 1,
     mobile_grid_x: 0,
     mobile_grid_y: 0,

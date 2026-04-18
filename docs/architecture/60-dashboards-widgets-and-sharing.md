@@ -45,6 +45,7 @@ Important design direction:
 - a user should be able to keep a long-running metric widget, such as `weight` history, across multiple goal phases
 - widgets should be able to distinguish `done`, `missed`, `skipped`, and `unknown` when the underlying goal pattern is schedule-based
 - dashboards and widgets should remain usable on phone-sized screens, even when the desktop layout is richer
+- mobile dashboard widget ordering should be stored as an independent rank so phone layouts can reorder cheaply without treating the stack like a freeform grid
 
 ## Organization Model
 

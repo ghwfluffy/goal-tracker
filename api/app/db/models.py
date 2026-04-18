@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, time
+from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
@@ -429,6 +430,7 @@ class DashboardWidget(Base):
     mobile_grid_y: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     mobile_grid_w: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     mobile_grid_h: Mapped[int] = mapped_column(Integer, nullable=False, default=4)
+    mobile_order: Mapped[Decimal] = mapped_column(Numeric(18, 6), nullable=False, default=0)
     display_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

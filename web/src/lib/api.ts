@@ -374,6 +374,7 @@ export interface DashboardWidgetSummary {
   goal_scope: "selected" | "all" | null;
   goals: DashboardGoalReference[];
   mobile_grid_h?: number;
+  mobile_order: number;
   mobile_grid_w?: number;
   mobile_grid_x?: number;
   mobile_grid_y?: number;
@@ -483,6 +484,7 @@ export interface UpdateDashboardWidgetPayload {
   grid_x?: number | null;
   grid_y?: number | null;
   layout_mode?: "desktop" | "mobile" | null;
+  mobile_order?: number | null;
   rolling_window_days?: number | null;
   title?: string | null;
 }

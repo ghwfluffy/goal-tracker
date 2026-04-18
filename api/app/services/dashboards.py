@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from decimal import Decimal
 from typing import Any
 from uuid import uuid4
 
@@ -54,6 +55,10 @@ class DashboardWidgetNotFoundError(Exception):
     pass
 
 
+MOBILE_ORDER_STEP = Decimal("1")
+MOBILE_ORDER_MIN_GAP = Decimal("0.000001")
+
+
 def default_widget_title(
     *,
     widget_type: str,
@@ -79,22 +84,123 @@ def restack_mobile_layouts(
     db: Session,
     *,
     dashboard: Dashboard,
-    priority_widget_id: str | None = None,
 ) -> None:
     widgets = list(db.scalars(select(DashboardWidget).where(DashboardWidget.dashboard_id == dashboard.id)))
-    widgets.sort(
-        key=lambda widget: (
-            widget.mobile_grid_y,
-            0 if priority_widget_id is not None and widget.id == priority_widget_id else 1,
-            widget.display_order,
-        )
-    )
+    widgets.sort(key=_mobile_widget_sort_key)
     next_y = 0
     for widget in widgets:
         widget.mobile_grid_x = 0
         widget.mobile_grid_w = 1
         widget.mobile_grid_y = next_y
         next_y += widget.mobile_grid_h
+
+
+def _mobile_widget_sort_key(widget: DashboardWidget) -> tuple[Decimal, int, Any, str]:
+    return (widget.mobile_order, widget.display_order, widget.created_at, widget.id)
+
+
+def _ordered_mobile_widgets(
+    db: Session,
+    *,
+    dashboard: Dashboard,
+    ignore_widget_id: str | None = None,
+) -> list[DashboardWidget]:
+    widgets = list(db.scalars(select(DashboardWidget).where(DashboardWidget.dashboard_id == dashboard.id)))
+    if ignore_widget_id is not None:
+        widgets = [widget for widget in widgets if widget.id != ignore_widget_id]
+    widgets.sort(key=_mobile_widget_sort_key)
+    return widgets
+
+
+def _renormalize_mobile_orders(widgets: list[DashboardWidget]) -> None:
+    for index, ordered_widget in enumerate(widgets):
+        ordered_widget.mobile_order = Decimal(index)
+
+
+def _mobile_order_between(
+    *,
+    previous_order: Decimal | None,
+    next_order: Decimal | None,
+) -> Decimal:
+    if previous_order is None and next_order is None:
+        return Decimal("0")
+    if previous_order is None:
+        assert next_order is not None
+        return next_order - MOBILE_ORDER_STEP
+    if next_order is None:
+        return previous_order + MOBILE_ORDER_STEP
+
+    midpoint = (previous_order + next_order) / 2
+    if midpoint <= previous_order or midpoint >= next_order:
+        raise DashboardError("Unable to determine a mobile widget order.")
+    return midpoint
+
+
+def _normalize_mobile_order(value: Decimal | float | None) -> Decimal | None:
+    if value is None:
+        return None
+    return Decimal(str(value))
+
+
+def _mobile_insertion_index_for_y(
+    widgets: list[DashboardWidget],
+    *,
+    requested_y: int,
+) -> int:
+    for index, ordered_widget in enumerate(widgets):
+        if requested_y <= ordered_widget.mobile_grid_y:
+            return index
+    return len(widgets)
+
+
+def _assign_mobile_order(
+    db: Session,
+    *,
+    dashboard: Dashboard,
+    widget: DashboardWidget,
+    requested_mobile_order: Decimal | None = None,
+    requested_mobile_y: int | None = None,
+) -> None:
+    ordered_widgets = _ordered_mobile_widgets(db, dashboard=dashboard, ignore_widget_id=widget.id)
+    insertion_index: int | None = None
+
+    if requested_mobile_order is not None:
+        insertion_index = next(
+            (
+                index
+                for index, ordered_widget in enumerate(ordered_widgets)
+                if requested_mobile_order < ordered_widget.mobile_order
+            ),
+            len(ordered_widgets),
+        )
+    elif requested_mobile_y is not None:
+        insertion_index = _mobile_insertion_index_for_y(ordered_widgets, requested_y=requested_mobile_y)
+
+    if insertion_index is None:
+        widget.mobile_order = (
+            ordered_widgets[-1].mobile_order + MOBILE_ORDER_STEP if len(ordered_widgets) > 0 else Decimal("0")
+        )
+        return
+
+    previous_widget = ordered_widgets[insertion_index - 1] if insertion_index > 0 else None
+    next_widget = ordered_widgets[insertion_index] if insertion_index < len(ordered_widgets) else None
+
+    previous_order = previous_widget.mobile_order if previous_widget is not None else None
+    next_order = next_widget.mobile_order if next_widget is not None else None
+
+    if (
+        previous_order is not None
+        and next_order is not None
+        and next_order - previous_order <= MOBILE_ORDER_MIN_GAP
+    ):
+        _renormalize_mobile_orders(ordered_widgets)
+        previous_order = previous_widget.mobile_order if previous_widget is not None else None
+        next_order = next_widget.mobile_order if next_widget is not None else None
+
+    widget.mobile_order = _mobile_order_between(
+        previous_order=previous_order,
+        next_order=next_order,
+    )
 
 
 def _dashboard_loading_options() -> tuple[Any, ...]:
@@ -395,26 +501,10 @@ def create_dashboard_widget(
 
     mobile_width = 1
     mobile_height = default_mobile_widget_height(normalized_widget_type)
-    mobile_x, mobile_y = find_first_available_layout_slot(
-        db,
-        dashboard=dashboard,
-        layout_mode=LAYOUT_MODE_MOBILE,
-        grid_w=mobile_width,
-        grid_h=mobile_height,
-    )
     mobile_x, mobile_y, mobile_width, mobile_height = normalize_widget_layout(
         layout_mode=LAYOUT_MODE_MOBILE,
-        grid_x=mobile_x,
-        grid_y=mobile_y,
-        grid_w=mobile_width,
-        grid_h=mobile_height,
-    )
-    ensure_layout_slot_is_available(
-        db,
-        dashboard=dashboard,
-        layout_mode=LAYOUT_MODE_MOBILE,
-        grid_x=mobile_x,
-        grid_y=mobile_y,
+        grid_x=0,
+        grid_y=0,
         grid_w=mobile_width,
         grid_h=mobile_height,
     )
@@ -461,11 +551,13 @@ def create_dashboard_widget(
         mobile_grid_y=mobile_y,
         mobile_grid_w=mobile_width,
         mobile_grid_h=mobile_height,
+        mobile_order=Decimal("0"),
         display_order=display_order + 1,
         updated_at=utcnow(),
     )
     db.add(widget)
     db.flush()
+    _assign_mobile_order(db, dashboard=dashboard, widget=widget)
 
     if (
         normalized_widget_type == WIDGET_TYPE_GOAL_CALENDAR
@@ -502,6 +594,7 @@ def update_dashboard_widget(
     forecast_algorithm: str | None = None,
     calendar_period: str | None = None,
     layout_mode: str | None = None,
+    mobile_order: Decimal | float | None = None,
     grid_x: int | None = None,
     grid_y: int | None = None,
     grid_w: int | None = None,
@@ -529,7 +622,8 @@ def update_dashboard_widget(
         if widget.widget_type != WIDGET_TYPE_GOAL_CALENDAR:
             raise DashboardError("Only goal calendar widgets can set a calendar period.")
         widget.calendar_period = normalize_calendar_period(calendar_period)
-    if any(value is not None for value in (grid_x, grid_y, grid_w, grid_h)):
+    normalized_mobile_order = _normalize_mobile_order(mobile_order)
+    if any(value is not None for value in (normalized_mobile_order, grid_x, grid_y, grid_w, grid_h)):
         if normalized_layout_mode == LAYOUT_MODE_MOBILE:
             _, normalized_y, _, normalized_height = normalize_widget_layout(
                 layout_mode=normalized_layout_mode,
@@ -539,11 +633,20 @@ def update_dashboard_widget(
                 grid_h=grid_h if grid_h is not None else widget.mobile_grid_h,
             )
             widget.mobile_grid_x = 0
-            widget.mobile_grid_y = normalized_y
             widget.mobile_grid_w = 1
             widget.mobile_grid_h = normalized_height
-            restack_mobile_layouts(db, dashboard=dashboard, priority_widget_id=widget.id)
+            if normalized_mobile_order is not None or grid_y is not None:
+                _assign_mobile_order(
+                    db,
+                    dashboard=dashboard,
+                    widget=widget,
+                    requested_mobile_order=normalized_mobile_order,
+                    requested_mobile_y=normalized_y if grid_y is not None else None,
+                )
+            restack_mobile_layouts(db, dashboard=dashboard)
         else:
+            if normalized_mobile_order is not None:
+                raise DashboardError("Mobile widget order can only be updated in mobile layout mode.")
             normalized_x, normalized_y, normalized_width, normalized_height = normalize_widget_layout(
                 layout_mode=normalized_layout_mode,
                 grid_x=grid_x if grid_x is not None else widget.grid_x,
@@ -576,8 +679,12 @@ def update_dashboard_widget(
 
 
 def delete_dashboard_widget(db: Session, *, widget: DashboardWidget) -> None:
+    dashboard = widget.dashboard
     db.delete(widget)
     db.flush()
+    if dashboard is not None:
+        restack_mobile_layouts(db, dashboard=dashboard)
+        db.flush()
 
 
 def filter_entries_to_window(

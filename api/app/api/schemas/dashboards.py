@@ -127,6 +127,7 @@ class WidgetSummary(BaseModel):
     mobile_grid_y: int
     mobile_grid_w: int
     mobile_grid_h: int
+    mobile_order: float
     rolling_window_days: int | None
     forecast_algorithm: ForecastAlgorithm | None
     goal_scope: WidgetGoalScope | None
@@ -222,6 +223,7 @@ class UpdateWidgetRequest(BaseModel):
     forecast_algorithm: ForecastAlgorithm | None = None
     calendar_period: CalendarPeriod | None = None
     layout_mode: LayoutMode | None = None
+    mobile_order: float | None = None
     grid_x: int | None = Field(default=None, ge=0, le=11)
     grid_y: int | None = Field(default=None, ge=0, le=10000)
     grid_w: int | None = Field(default=None, ge=1, le=12)
@@ -341,6 +343,7 @@ def serialize_widget(widget: DashboardWidget) -> WidgetSummary:
         mobile_grid_y=widget.mobile_grid_y,
         mobile_grid_w=widget.mobile_grid_w,
         mobile_grid_h=widget.mobile_grid_h,
+        mobile_order=decimal_to_float(widget.mobile_order) or 0.0,
         rolling_window_days=widget.rolling_window_days,
         forecast_algorithm=cast(ForecastAlgorithm | None, widget.forecast_algorithm),
         goal_scope=cast(WidgetGoalScope | None, widget.goal_scope),

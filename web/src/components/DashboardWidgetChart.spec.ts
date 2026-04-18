@@ -53,6 +53,7 @@ function buildGoalWidget(
     goals: [],
     id: "widget-1",
     metric: null,
+    mobile_order: 0,
     rolling_window_days: null,
     series: [],
     target_met: false,
