@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 from fastapi.testclient import TestClient
 
+from app.api.routes import auth as auth_routes
 from app.core.config import get_settings
 from app.services import auth as auth_service
 
@@ -31,6 +33,7 @@ def test_bootstrap_creates_first_admin_and_authenticates_session(client: TestCli
     me_response = client.get("/api/v1/auth/me")
     assert me_response.status_code == 200
     assert me_response.json()["user"]["username"] == "admin"
+    assert me_response.json()["user"]["avatar_url"] is None
 
 
 def test_bootstrap_is_rejected_after_first_user_exists(client: TestClient) -> None:
@@ -71,6 +74,59 @@ def test_login_and_logout_flow(client: TestClient) -> None:
 
         after_logout_response = fresh_client.get("/api/v1/auth/me")
         assert after_logout_response.status_code == 401
+
+
+def test_oauth_mode_disables_local_auth_and_creates_app_session(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("AUTH_MODE", "oauth")
+    monkeypatch.setenv("AUTH_BASE_URL", "http://auth.local/auth")
+    monkeypatch.setenv("OAUTH_CLIENT_ID", "goals")
+    get_settings.cache_clear()
+
+    bootstrap_status_response = client.get("/api/v1/auth/bootstrap-status")
+    assert bootstrap_status_response.status_code == 200
+    assert bootstrap_status_response.json() == {"bootstrap_required": False}
+
+    local_login_response = client.post(
+        "/api/v1/auth/login",
+        json={"username": "admin", "password": "supersafepassword"},
+    )
+    assert local_login_response.status_code == 409
+
+    login_response = client.get("/api/v1/auth/oauth/login", follow_redirects=False)
+    assert login_response.status_code == 302
+    authorize_url = urlparse(login_response.headers["location"])
+    authorize_params = parse_qs(authorize_url.query)
+    assert authorize_url.geturl().startswith("http://auth.local/auth/oauth/authorize")
+    assert authorize_params["client_id"] == ["goals"]
+    assert authorize_params["redirect_uri"] == ["http://testserver/api/v1/auth/oauth/callback"]
+
+    def fake_exchange_oauth_code(*_: object, **__: object) -> dict[str, object]:
+        return {
+            "sub": "central-user-1",
+            "preferred_username": "admin",
+            "name": "Central Admin",
+            "picture": "http://auth.local/auth/api/v1/users/central-user-1/avatar?v=1",
+            "is_admin": True,
+        }
+
+    monkeypatch.setattr(auth_routes, "exchange_oauth_code", fake_exchange_oauth_code)
+    callback_response = client.get(
+        f"/api/v1/auth/oauth/callback?code=abc&state={authorize_params['state'][0]}",
+        follow_redirects=False,
+    )
+    assert callback_response.status_code == 302
+    assert "goal_tracker_session" in callback_response.cookies
+
+    me_response = client.get("/api/v1/auth/me")
+    assert me_response.status_code == 200
+    user_payload = me_response.json()["user"]
+    assert user_payload["username"] == "admin"
+    assert user_payload["display_name"] == "Central Admin"
+    assert user_payload["is_admin"] is True
+    assert user_payload["avatar_url"] == "http://auth.local/auth/api/v1/users/central-user-1/avatar?v=1"
 
 
 def test_active_session_expiration_slides_forward_with_authenticated_requests(

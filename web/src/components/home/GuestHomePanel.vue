@@ -10,6 +10,7 @@ import TabPanel from "primevue/tabpanel";
 import TabView from "primevue/tabview";
 
 import { joinBasePath } from "../../lib/basePath";
+import { authMode, oauthLoginUrl } from "../../lib/api";
 import { useAuthStore } from "../../stores/auth";
 
 const authStore = useAuthStore();
@@ -22,6 +23,7 @@ const signupPassword = ref("");
 const signupInvitationCode = ref("");
 const signupExampleData = ref(false);
 const authTabIndex = ref(0);
+const usesCentralAuth = authMode === "oauth";
 
 const authTitle = computed(() => {
   if (authStore.bootstrapRequired) {
@@ -32,6 +34,9 @@ const authTitle = computed(() => {
 });
 
 const authSummary = computed(() => {
+  if (usesCentralAuth) {
+    return "Sign in through the configured identity provider.";
+  }
   if (authStore.bootstrapRequired) {
     return "The first account becomes the administrator and unlocks invited signups.";
   }
@@ -51,6 +56,10 @@ async function submitBootstrapForm(): Promise<void> {
 }
 
 async function submitLoginForm(): Promise<void> {
+  if (usesCentralAuth) {
+    window.location.assign(oauthLoginUrl);
+    return;
+  }
   await authStore.login({
     password: loginPassword.value,
     username: loginUsername.value,
@@ -121,6 +130,16 @@ watch(authTabIndex, () => {
               :loading="isBusy"
             />
           </form>
+
+          <div v-else-if="usesCentralAuth" class="auth-form">
+            <Button
+              type="button"
+              label="Sign in"
+              icon="pi pi-arrow-right"
+              :loading="isBusy"
+              @click="submitLoginForm"
+            />
+          </div>
 
           <TabView v-else v-model:activeIndex="authTabIndex">
             <TabPanel header="Sign in">

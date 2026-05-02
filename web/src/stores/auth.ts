@@ -2,6 +2,7 @@ import { defineStore } from "pinia";
 
 import {
   ApiError,
+  authMode,
   bootstrapFirstUser,
   changeCurrentPassword,
   deleteCurrentAccount,
@@ -10,6 +11,7 @@ import {
   loginWithPassword,
   registerWithInvitationCode,
   logoutCurrentSession,
+  oauthLoginUrl,
   updateCurrentProfile,
   uploadCurrentAvatar,
   type ChangePasswordPayload,
@@ -65,7 +67,7 @@ export const useAuthStore = defineStore("auth", {
 
       try {
         const bootstrapStatus = await fetchBootstrapStatus();
-        this.bootstrapRequired = bootstrapStatus.bootstrap_required;
+        this.bootstrapRequired = authMode === "local" && bootstrapStatus.bootstrap_required;
       } catch (error: unknown) {
         this.errorMessage = error instanceof Error ? error.message : "Unable to load auth state.";
       }
@@ -74,6 +76,10 @@ export const useAuthStore = defineStore("auth", {
       this.viewState = "guest";
     },
     async bootstrap(credentials: CredentialsPayload): Promise<void> {
+      if (authMode === "oauth") {
+        window.location.assign(oauthLoginUrl);
+        return;
+      }
       this.submissionState = "submitting";
       this.errorMessage = "";
 
@@ -88,6 +94,10 @@ export const useAuthStore = defineStore("auth", {
       }
     },
     async login(credentials: CredentialsPayload): Promise<void> {
+      if (authMode === "oauth") {
+        window.location.assign(oauthLoginUrl);
+        return;
+      }
       this.submissionState = "submitting";
       this.errorMessage = "";
 
@@ -101,6 +111,10 @@ export const useAuthStore = defineStore("auth", {
       }
     },
     async register(payload: RegistrationPayload): Promise<void> {
+      if (authMode === "oauth") {
+        window.location.assign(oauthLoginUrl);
+        return;
+      }
       this.submissionState = "submitting";
       this.errorMessage = "";
 

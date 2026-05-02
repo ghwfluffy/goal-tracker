@@ -107,6 +107,12 @@ const avatarLabel = computed(() => {
 });
 
 const avatarUrl = computed(() => {
+  if (
+    authStore.currentUser?.avatar_url !== null &&
+    authStore.currentUser?.avatar_url !== undefined
+  ) {
+    return authStore.currentUser.avatar_url;
+  }
   const version = authStore.currentUser?.avatar_version;
   if (version === null || version === undefined) {
     return null;

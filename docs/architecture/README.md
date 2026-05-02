@@ -14,6 +14,7 @@ These documents are intended to answer two questions:
 - [Domain Model](./30-domain-model.md)
 - [Goal Engine](./40-goal-engine.md)
 - [Auth, Accounts, And Access](./50-auth-accounts-and-access.md)
+- [Optional Central Auth](./55-optional-central-auth.md)
 - [Dashboards, Widgets, And Sharing](./60-dashboards-widgets-and-sharing.md)
 - [Notifications And Reminders](./65-notifications-and-reminders.md)
 - [Seeded Data And Data Evolution](./70-seeded-data-and-data-evolution.md)

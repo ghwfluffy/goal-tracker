@@ -13,6 +13,7 @@ export interface BootstrapStatusResponse {
 }
 
 export interface UserSummary {
+  avatar_url: string | null;
   avatar_version: string | null;
   display_name: string | null;
   id: string;
@@ -499,6 +500,9 @@ const apiBaseUrl = buildApiBaseUrl(
   import.meta.env.VITE_API_BASE_URL,
 );
 const loginRoute = joinBasePath(import.meta.env.BASE_URL, "/");
+export const authMode = import.meta.env.VITE_AUTH_MODE === "oauth" ? "oauth" : "local";
+export const centralAuthBaseUrl = (import.meta.env.VITE_AUTH_BASE_URL ?? "/auth").replace(/\/+$/, "");
+export const oauthLoginUrl = `${apiBaseUrl}/auth/oauth/login`;
 let unauthorizedRedirectPromise: Promise<void> | null = null;
 
 export class ApiError extends Error {

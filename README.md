@@ -19,6 +19,8 @@ Instead of treating every goal like the same checkbox list, Goal Tracker is desi
 
 The bigger idea is that the app should not just store updates. It should make progress visible and motivating.
 
+Goal Tracker can run standalone with its built-in accounts, or be configured to sign in through a central OAuth identity site.
+
 ## What The App Aims To Show
 
 - clear status for each goal

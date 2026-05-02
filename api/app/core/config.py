@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     app_base_path: str = ""
     api_v1_prefix: str = "/api/v1"
     public_url: str = "http://localhost:8082"
+    auth_mode: Literal["local", "oauth"] = "local"
+    auth_base_url: str = "http://localhost:8090/auth"
+    oauth_client_id: str = "goals"
+    oauth_scope: str = "openid profile"
+    oauth_state_cookie_name: str = "goal_tracker_oauth_state"
     postgres_user: str = "ghw"
     postgres_password: str = "supersecure"
     postgres_db: str = "goals"
@@ -42,6 +47,7 @@ class Settings(BaseSettings):
     session_key: str | None = None
     session_key_source: Literal["env", "default", "generated"] = "env"
     session_cookie_name: str = "goal_tracker_session"
+    session_cookie_path: str | None = None
     session_duration_minutes: int = 60
     auth_max_failed_attempts: int = 5
     auth_lockout_minutes: int = 15
@@ -79,6 +85,27 @@ class Settings(BaseSettings):
     @property
     def session_cookie_secure(self) -> bool:
         return self.app_env not in {"development", "test"}
+
+    @property
+    def public_base_url(self) -> str:
+        return f"{self.public_origin}{self.normalized_app_base_path}"
+
+    @property
+    def oauth_redirect_uri(self) -> str:
+        return f"{self.public_base_url}{self.api_v1_prefix}/auth/oauth/callback"
+
+    @property
+    def resolved_session_cookie_path(self) -> str:
+        configured_path = normalize_path_prefix(self.session_cookie_path or "")
+        if configured_path != "":
+            return configured_path
+        if self.app_env == "test":
+            return "/"
+        return self.normalized_app_base_path or "/"
+
+    @property
+    def normalized_auth_base_url(self) -> str:
+        return self.auth_base_url.rstrip("/")
 
 
 @lru_cache

@@ -6,7 +6,7 @@ import Button from "primevue/button";
 import Menu from "primevue/menu";
 import Tag from "primevue/tag";
 
-import type { UserSummary } from "../../lib/api";
+import { authMode, centralAuthBaseUrl, type UserSummary } from "../../lib/api";
 import { buildApiBaseUrl, joinBasePath } from "../../lib/basePath";
 
 const props = defineProps<{
@@ -32,6 +32,7 @@ const avatarApiBaseUrl = buildApiBaseUrl(
   import.meta.env.BASE_URL,
   import.meta.env.VITE_API_BASE_URL,
 );
+const usesCentralAuth = authMode === "oauth";
 
 const currentDisplayName = computed(
   () => props.user.display_name || props.user.username,
@@ -52,6 +53,9 @@ const avatarLabel = computed(() => {
 
 const avatarUrl = computed(() => {
   if (props.user.avatar_version === null) {
+    if (props.user.avatar_url !== null) {
+      return props.user.avatar_url;
+    }
     return null;
   }
 
@@ -63,12 +67,24 @@ const profileMenuItems = computed<MenuItem[]>(() => {
     {
       icon: "pi pi-user-edit",
       label: "Edit profile",
-      command: () => emit("openProfile"),
+      command: () => {
+        if (usesCentralAuth) {
+          window.location.assign(centralAuthBaseUrl);
+          return;
+        }
+        emit("openProfile");
+      },
     },
     {
       icon: "pi pi-key",
       label: "Change password",
-      command: () => emit("openPassword"),
+      command: () => {
+        if (usesCentralAuth) {
+          window.location.assign(centralAuthBaseUrl);
+          return;
+        }
+        emit("openPassword");
+      },
     },
     {
       icon: "pi pi-share-alt",
@@ -86,22 +102,29 @@ const profileMenuItems = computed<MenuItem[]>(() => {
     items.push({
       icon: "pi pi-ticket",
       label: "Invitation codes",
-      command: () => emit("openInvitationCodes"),
+      command: () => {
+        if (usesCentralAuth) {
+          window.location.assign(centralAuthBaseUrl);
+          return;
+        }
+        emit("openInvitationCodes");
+      },
     });
   }
 
-  items.push(
-    {
+  if (!usesCentralAuth) {
+    items.push({
       icon: "pi pi-trash",
       label: "Delete account",
       command: () => emit("deleteAccount"),
-    },
-    {
-      icon: "pi pi-sign-out",
-      label: "Sign out",
-      command: () => emit("logout"),
-    },
-  );
+    });
+  }
+
+  items.push({
+    icon: "pi pi-sign-out",
+    label: "Sign out",
+    command: () => emit("logout"),
+  });
 
   return items;
 });

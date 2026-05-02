@@ -44,6 +44,13 @@ class AppConfig(Base):
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (
+        UniqueConstraint(
+            "identity_provider",
+            "external_subject",
+            name="uq_users_identity_provider_external_subject",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     username: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
@@ -54,6 +61,9 @@ class User(Base):
         default="America/Chicago",
     )
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    identity_provider: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    external_subject: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    central_avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     failed_login_attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     is_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

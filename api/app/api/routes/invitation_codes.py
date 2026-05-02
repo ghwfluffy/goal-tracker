@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.routes.auth import get_current_admin_user
+from app.core.config import Settings, get_settings
 from app.db import InvitationCode, User, get_db
 from app.services.invitations import (
     InvitationCodeError,
@@ -80,11 +81,21 @@ def serialize_invitation_code(invitation_code: InvitationCode) -> InvitationCode
     )
 
 
+def ensure_local_invitation_mode(settings: Settings) -> None:
+    if settings.auth_mode == "oauth":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Registration-code management is handled by the configured auth site.",
+        )
+
+
 @router.get("", response_model=InvitationCodeListResponse)
 def get_invitation_codes(
     _admin_user: Annotated[User, Depends(get_current_admin_user)],
     db: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> InvitationCodeListResponse:
+    ensure_local_invitation_mode(settings)
     return InvitationCodeListResponse(
         invitation_codes=[serialize_invitation_code(code) for code in list_invitation_codes(db)]
     )
@@ -95,7 +106,9 @@ def post_invitation_code(
     payload: CreateInvitationCodeRequest,
     admin_user: Annotated[User, Depends(get_current_admin_user)],
     db: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> InvitationCodeSummary:
+    ensure_local_invitation_mode(settings)
     try:
         invitation_code = create_invitation_code(
             db,
@@ -119,7 +132,9 @@ def patch_invitation_code(
     payload: UpdateInvitationCodeRequest,
     _admin_user: Annotated[User, Depends(get_current_admin_user)],
     db: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> InvitationCodeSummary:
+    ensure_local_invitation_mode(settings)
     try:
         invitation_code = get_invitation_code_by_id(db, invitation_code_id)
         updated_invitation_code = update_invitation_code(
@@ -146,7 +161,9 @@ def delete_invitation_code(
     invitation_code_id: str,
     _admin_user: Annotated[User, Depends(get_current_admin_user)],
     db: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> Response:
+    ensure_local_invitation_mode(settings)
     try:
         invitation_code = get_invitation_code_by_id(db, invitation_code_id)
         delete_invitation_code_record(db, invitation_code=invitation_code)

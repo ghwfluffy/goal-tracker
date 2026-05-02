@@ -1203,7 +1203,7 @@ def test_goals_and_metrics_are_scoped_to_current_user(client: TestClient) -> Non
 
     create_code_response = client.post(
         "/api/v1/invitation-codes",
-        json={"expires_at": "2026-05-01T00:00:00Z"},
+        json={"expires_at": "2026-06-01T00:00:00Z"},
     )
     assert create_code_response.status_code == 201
 
@@ -1234,7 +1234,7 @@ def test_example_data_user_is_seeded_with_metrics_and_goals(client: TestClient) 
 
     create_code_response = client.post(
         "/api/v1/invitation-codes",
-        json={"expires_at": "2026-05-01T00:00:00Z"},
+        json={"expires_at": "2026-06-01T00:00:00Z"},
     )
     assert create_code_response.status_code == 201
 

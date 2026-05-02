@@ -59,12 +59,22 @@ def serialize_user_profile(user: User) -> UserProfileResponse:
     )
 
 
+def ensure_local_profile_mode(settings: Settings) -> None:
+    if settings.auth_mode == "oauth":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Profile management is handled by the configured auth site.",
+        )
+
+
 @router.patch("/me", response_model=UserProfileResponse)
 def patch_current_user_profile(
     payload: UpdateProfileRequest,
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> UserProfileResponse:
+    ensure_local_profile_mode(settings)
     try:
         updated_user = update_profile(
             db,
@@ -85,7 +95,9 @@ async def post_current_user_avatar(
     avatar: Annotated[UploadFile, File(...)],
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> UserProfileResponse:
+    ensure_local_profile_mode(settings)
     avatar_bytes = await avatar.read()
     if avatar_bytes == b"":
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Avatar file is empty.")
@@ -115,7 +127,9 @@ def post_change_password(
     payload: ChangePasswordRequest,
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> UserProfileResponse:
+    ensure_local_profile_mode(settings)
     try:
         updated_user = change_password(
             db,
@@ -138,6 +152,7 @@ def delete_current_account(
     db: Annotated[Session, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> Response:
+    ensure_local_profile_mode(settings)
     try:
         delete_account(db, user=user, password=payload.password)
         db.commit()

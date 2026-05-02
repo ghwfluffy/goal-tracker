@@ -142,6 +142,22 @@ Keep `PUBLIC_URL` as the scheme + host for the public site, for example
 If the API is published somewhere else entirely, you can still override the frontend API root with
 `VITE_API_BASE_URL`.
 
+Optional central auth is disabled by default. To test against a central OAuth identity site, set:
+
+```bash
+AUTH_MODE=oauth
+AUTH_BASE_URL=http://localhost:8090/auth
+OAUTH_CLIENT_ID=goals
+SESSION_COOKIE_NAME=goal_tracker_session
+SESSION_COOKIE_PATH=/goals
+VITE_AUTH_MODE=oauth
+VITE_AUTH_BASE_URL=http://localhost:8090/auth
+```
+
+The OAuth client registered in the central auth site must allow
+`${PUBLIC_URL}${APP_BASE_PATH}/api/v1/auth/oauth/callback` as a redirect URI. Local auth remains the
+default when `AUTH_MODE=local`.
+
 The repo-level [`go.sh`](/home/tfuller/git/goals/go.sh) script now reads `.env`, normalizes
 `APP_BASE_PATH`, and defaults `VITE_APP_BASE_PATH` plus `VITE_API_BASE_URL` from that value before
 running `docker compose build` and `docker compose up`.
