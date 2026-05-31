@@ -1,4 +1,4 @@
-import { buildApiBaseUrl, joinBasePath } from "./basePath";
+import { buildApiBaseUrl, joinBasePath, normalizeBasePath } from "./basePath";
 
 export interface StatusResponse {
   application: string;
