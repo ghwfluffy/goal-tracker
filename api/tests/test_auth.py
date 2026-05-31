@@ -146,6 +146,22 @@ def test_oauth_mode_resolves_relative_auth_base_url(
     assert authorize_url.geturl().startswith("http://app.local/identity/oauth/authorize")
 
 
+def test_oauth_mode_uses_internal_server_base_for_token_exchange(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("AUTH_MODE", "oauth")
+    monkeypatch.setenv("AUTH_BASE_URL", "/identity")
+    monkeypatch.setenv("OAUTH_SERVER_BASE_URL", "http://central-api:8000")
+    monkeypatch.setenv("PUBLIC_URL", "http://app.local")
+    get_settings.cache_clear()
+
+    settings = get_settings()
+
+    assert settings.normalized_auth_base_url == "http://app.local/identity"
+    assert settings.normalized_oauth_server_base_url == "http://central-api:8000"
+
+
 def test_oauth_callback_redirects_to_login_on_exchange_failure(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,

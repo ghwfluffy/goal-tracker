@@ -9,8 +9,9 @@ When `AUTH_MODE=oauth`, Goal Tracker delegates login and identity management to 
 - failed or expired OAuth callbacks redirect back to the app landing screen with
   an `oauth_error` query value so the frontend can show a toast instead of
   leaving users on an API error response
-- relative `AUTH_BASE_URL` values are resolved against `PUBLIC_URL` for backend
-  token and userinfo calls
+- `AUTH_BASE_URL` is the public browser/issuer base, while
+  `OAUTH_SERVER_BASE_URL` can point backend token and userinfo calls at an
+  internal auth API URL
 - first OAuth login links an existing local user by username when that user is not already linked
 - otherwise first OAuth login creates a local user linked by central issuer and subject
 - profile, password, avatar, and invitation-code menu actions open `VITE_AUTH_BASE_URL`

@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     public_url: str = "http://localhost:8082"
     auth_mode: Literal["local", "oauth"] = "local"
     auth_base_url: str = "http://localhost:8090/auth"
+    oauth_server_base_url: str | None = None
     oauth_client_id: str = "goals"
     oauth_scope: str = "openid profile"
     oauth_state_cookie_name: str = "goal_tracker_oauth_state"
@@ -111,6 +112,15 @@ class Settings(BaseSettings):
         if stripped.startswith("/"):
             return f"{self.public_origin}{stripped}"
         return f"{self.public_origin}/{stripped}"
+
+    @property
+    def normalized_oauth_server_base_url(self) -> str:
+        raw = (self.oauth_server_base_url or self.auth_base_url).rstrip("/")
+        if raw.startswith("http://") or raw.startswith("https://"):
+            return raw
+        if raw.startswith("/"):
+            return f"{self.public_origin}{raw}"
+        return f"{self.public_origin}/{raw}"
 
 
 @lru_cache

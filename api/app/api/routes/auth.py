@@ -180,7 +180,7 @@ def decode_oauth_state_cookie(cookie_value: str, settings: Settings) -> dict[str
 
 def exchange_oauth_code(settings: Settings, *, code: str, verifier: str) -> dict[str, object]:
     token_response = httpx.post(
-        f"{settings.normalized_auth_base_url}/oauth/token",
+        f"{settings.normalized_oauth_server_base_url}/oauth/token",
         data={
             "grant_type": "authorization_code",
             "client_id": settings.oauth_client_id,
@@ -196,7 +196,7 @@ def exchange_oauth_code(settings: Settings, *, code: str, verifier: str) -> dict
     if not isinstance(access_token, str):
         raise ValueError("OAuth token response did not include an access token.")
     userinfo_response = httpx.get(
-        f"{settings.normalized_auth_base_url}/oauth/userinfo",
+        f"{settings.normalized_oauth_server_base_url}/oauth/userinfo",
         headers={"Authorization": f"Bearer {access_token}"},
         timeout=10,
     )
