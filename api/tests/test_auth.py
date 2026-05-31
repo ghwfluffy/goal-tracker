@@ -95,7 +95,7 @@ def test_oauth_mode_disables_local_auth_and_creates_app_session(
     )
     assert local_login_response.status_code == 409
 
-    login_response = client.get("/api/v1/auth/oauth/login", follow_redirects=False)
+    login_response = client.get("/api/v1/auth/oauth/login?next=/dashboard", follow_redirects=False)
     assert login_response.status_code == 302
     authorize_url = urlparse(login_response.headers["location"])
     authorize_params = parse_qs(authorize_url.query)
@@ -118,6 +118,7 @@ def test_oauth_mode_disables_local_auth_and_creates_app_session(
         follow_redirects=False,
     )
     assert callback_response.status_code == 302
+    assert callback_response.headers["location"] == "http://testserver/dashboard"
     assert "goal_tracker_session" in callback_response.cookies
 
     me_response = client.get("/api/v1/auth/me")

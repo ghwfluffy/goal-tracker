@@ -502,7 +502,20 @@ const apiBaseUrl = buildApiBaseUrl(
 const loginRoute = joinBasePath(import.meta.env.BASE_URL, "/");
 export const authMode = import.meta.env.VITE_AUTH_MODE === "oauth" ? "oauth" : "local";
 export const centralAuthBaseUrl = (import.meta.env.VITE_AUTH_BASE_URL ?? "/auth").replace(/\/+$/, "");
-export const oauthLoginUrl = `${apiBaseUrl}/auth/oauth/login`;
+
+function currentAppPath(): string {
+  const basePath = normalizeBasePath(import.meta.env.BASE_URL);
+  const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  if (basePath && currentPath.startsWith(`${basePath}/`)) {
+    return currentPath.slice(basePath.length) || "/";
+  }
+  if (basePath && currentPath === basePath) {
+    return "/";
+  }
+  return currentPath.startsWith("/") ? currentPath : "/";
+}
+
+export const oauthLoginUrl = `${apiBaseUrl}/auth/oauth/login?next=${encodeURIComponent(currentAppPath())}`;
 let unauthorizedRedirectPromise: Promise<void> | null = null;
 
 export class ApiError extends Error {

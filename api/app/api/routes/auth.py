@@ -8,7 +8,7 @@ from urllib.parse import urlencode
 from uuid import uuid4
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -128,6 +128,15 @@ def base64url(data: bytes) -> str:
 
 def pkce_challenge(verifier: str) -> str:
     return base64url(hashlib.sha256(verifier.encode("ascii")).digest())
+
+
+def safe_next_path(value: str | None) -> str:
+    if value is None:
+        return "/"
+    stripped = value.strip()
+    if not stripped.startswith("/") or stripped.startswith("//"):
+        return "/"
+    return stripped
 
 
 def encode_oauth_state_cookie(payload: dict[str, str], settings: Settings) -> str:
@@ -403,7 +412,7 @@ def register(
 @router.get("/oauth/login")
 def oauth_login(
     settings: Annotated[Settings, Depends(get_settings)],
-    next_path: str = "/",
+    next_path: str = Query(default="/", alias="next"),
 ) -> RedirectResponse:
     if settings.auth_mode != "oauth":
         raise HTTPException(
@@ -430,7 +439,7 @@ def oauth_login(
     response.set_cookie(
         key=settings.oauth_state_cookie_name,
         value=encode_oauth_state_cookie(
-            {"state": state, "verifier": verifier, "next": next_path},
+            {"state": state, "verifier": verifier, "next": safe_next_path(next_path)},
             settings,
         ),
         max_age=300,
@@ -477,9 +486,7 @@ def oauth_callback(
         db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OAuth login failed.") from exc
 
-    redirect_path = state_payload.get("next") or "/"
-    if not redirect_path.startswith("/") or redirect_path.startswith("//"):
-        redirect_path = "/"
+    redirect_path = safe_next_path(state_payload.get("next"))
     response = RedirectResponse(
         f"{settings.public_base_url}{redirect_path}",
         status_code=status.HTTP_302_FOUND,
