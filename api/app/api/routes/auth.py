@@ -4,7 +4,7 @@ import base64
 import hashlib
 import json
 from typing import Annotated, cast
-from urllib.parse import urlencode
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from uuid import uuid4
 
 import httpx
@@ -137,6 +137,24 @@ def safe_next_path(value: str | None) -> str:
     if not stripped.startswith("/") or stripped.startswith("//"):
         return "/"
     return stripped
+
+
+def app_redirect_url(settings: Settings, path: str, query: dict[str, str] | None = None) -> str:
+    split = urlsplit(f"{settings.public_base_url}{path}")
+    query_items = dict(parse_qsl(split.query, keep_blank_values=True))
+    query_items.update(query or {})
+    return urlunsplit((split.scheme, split.netloc, split.path, urlencode(query_items), split.fragment))
+
+
+def oauth_error_response(
+    settings: Settings,
+    *,
+    reason: str,
+) -> RedirectResponse:
+    return RedirectResponse(
+        app_redirect_url(settings, "/", {"oauth_error": reason}),
+        status_code=status.HTTP_302_FOUND,
+    )
 
 
 def encode_oauth_state_cookie(payload: dict[str, str], settings: Settings) -> str:
@@ -467,10 +485,26 @@ def oauth_callback(
     state_cookie = request.cookies.get(settings.oauth_state_cookie_name)
     state_payload = decode_oauth_state_cookie(state_cookie or "", settings)
     if state_payload is None or state_payload.get("state") != state:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid OAuth state.")
+        response = oauth_error_response(settings, reason="oauth_state")
+        response.delete_cookie(
+            key=settings.oauth_state_cookie_name,
+            httponly=True,
+            samesite="lax",
+            secure=settings.session_cookie_secure,
+            path=settings.resolved_session_cookie_path,
+        )
+        return response
     verifier = state_payload.get("verifier")
     if verifier is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid OAuth verifier.")
+        response = oauth_error_response(settings, reason="oauth_state")
+        response.delete_cookie(
+            key=settings.oauth_state_cookie_name,
+            httponly=True,
+            samesite="lax",
+            secure=settings.session_cookie_secure,
+            path=settings.resolved_session_cookie_path,
+        )
+        return response
     try:
         userinfo = exchange_oauth_code(settings, code=code, verifier=verifier)
         user = find_or_create_oauth_user(db, settings=settings, userinfo=userinfo)
@@ -482,13 +516,21 @@ def oauth_callback(
             ip_address=request.client.host if request.client is not None else None,
         )
         db.commit()
-    except (httpx.HTTPError, ValueError) as exc:
+    except (httpx.HTTPError, ValueError):
         db.rollback()
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OAuth login failed.") from exc
+        response = oauth_error_response(settings, reason="oauth_failed")
+        response.delete_cookie(
+            key=settings.oauth_state_cookie_name,
+            httponly=True,
+            samesite="lax",
+            secure=settings.session_cookie_secure,
+            path=settings.resolved_session_cookie_path,
+        )
+        return response
 
     redirect_path = safe_next_path(state_payload.get("next"))
     response = RedirectResponse(
-        f"{settings.public_base_url}{redirect_path}",
+        app_redirect_url(settings, redirect_path),
         status_code=status.HTTP_302_FOUND,
     )
     set_session_cookie(response, settings=settings, cookie_value=cookie_value)

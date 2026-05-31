@@ -25,6 +25,31 @@ import {
 type AuthViewState = "loading" | "guest" | "authenticated";
 type AuthSubmissionState = "idle" | "submitting";
 
+const oauthErrorMessages: Record<string, string> = {
+  oauth_failed: "Central sign-in could not be completed. Please try again.",
+  oauth_state: "Central sign-in expired. Please start again.",
+};
+
+function consumeOAuthErrorMessage(): string {
+  if (typeof window === "undefined") {
+    return "";
+  }
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get("oauth_error");
+  if (code === null) {
+    return "";
+  }
+
+  params.delete("oauth_error");
+  const nextSearch = params.toString();
+  window.history.replaceState(
+    window.history.state,
+    "",
+    `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}${window.location.hash}`,
+  );
+  return oauthErrorMessages[code] ?? "Central sign-in could not be completed. Please try again.";
+}
+
 interface AuthStoreState {
   bootstrapRequired: boolean;
   currentUser: UserSummary | null;
@@ -52,7 +77,8 @@ export const useAuthStore = defineStore("auth", {
     },
     async initialize(): Promise<void> {
       this.viewState = "loading";
-      this.errorMessage = "";
+      const oauthErrorMessage = consumeOAuthErrorMessage();
+      this.errorMessage = oauthErrorMessage;
 
       try {
         const session = await fetchCurrentSession();

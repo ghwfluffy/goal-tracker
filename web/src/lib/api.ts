@@ -504,6 +504,9 @@ export const authMode = import.meta.env.VITE_AUTH_MODE === "oauth" ? "oauth" : "
 export const centralAuthBaseUrl = (import.meta.env.VITE_AUTH_BASE_URL ?? "/auth").replace(/\/+$/, "");
 
 function currentAppPath(): string {
+  if (typeof window === "undefined") {
+    return "/";
+  }
   const basePath = normalizeBasePath(import.meta.env.BASE_URL);
   const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
   if (basePath && currentPath.startsWith(`${basePath}/`)) {

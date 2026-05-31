@@ -6,6 +6,11 @@ When `AUTH_MODE=oauth`, Goal Tracker delegates login and identity management to 
 
 - unauthenticated users start OAuth through `/api/v1/auth/oauth/login`
 - the OAuth callback creates a Goal Tracker session cookie for this app only
+- failed or expired OAuth callbacks redirect back to the app landing screen with
+  an `oauth_error` query value so the frontend can show a toast instead of
+  leaving users on an API error response
+- relative `AUTH_BASE_URL` values are resolved against `PUBLIC_URL` for backend
+  token and userinfo calls
 - first OAuth login links an existing local user by username when that user is not already linked
 - otherwise first OAuth login creates a local user linked by central issuer and subject
 - profile, password, avatar, and invitation-code menu actions open `VITE_AUTH_BASE_URL`

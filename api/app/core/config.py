@@ -105,7 +105,12 @@ class Settings(BaseSettings):
 
     @property
     def normalized_auth_base_url(self) -> str:
-        return self.auth_base_url.rstrip("/")
+        stripped = self.auth_base_url.rstrip("/")
+        if stripped.startswith("http://") or stripped.startswith("https://"):
+            return stripped
+        if stripped.startswith("/"):
+            return f"{self.public_origin}{stripped}"
+        return f"{self.public_origin}/{stripped}"
 
 
 @lru_cache

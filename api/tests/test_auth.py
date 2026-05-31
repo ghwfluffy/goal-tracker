@@ -130,6 +130,62 @@ def test_oauth_mode_disables_local_auth_and_creates_app_session(
     assert user_payload["avatar_url"] == "http://auth.local/auth/api/v1/users/central-user-1/avatar?v=1"
 
 
+def test_oauth_mode_resolves_relative_auth_base_url(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("AUTH_MODE", "oauth")
+    monkeypatch.setenv("AUTH_BASE_URL", "/identity")
+    monkeypatch.setenv("PUBLIC_URL", "http://app.local")
+    get_settings.cache_clear()
+
+    login_response = client.get("/api/v1/auth/oauth/login", follow_redirects=False)
+
+    assert login_response.status_code == 302
+    authorize_url = urlparse(login_response.headers["location"])
+    assert authorize_url.geturl().startswith("http://app.local/identity/oauth/authorize")
+
+
+def test_oauth_callback_redirects_to_login_on_exchange_failure(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("AUTH_MODE", "oauth")
+    monkeypatch.setenv("AUTH_BASE_URL", "http://auth.local/auth")
+    get_settings.cache_clear()
+
+    login_response = client.get("/api/v1/auth/oauth/login", follow_redirects=False)
+    authorize_params = parse_qs(urlparse(login_response.headers["location"]).query)
+
+    def fake_exchange_oauth_code(*_: object, **__: object) -> dict[str, object]:
+        raise ValueError("token exchange failed")
+
+    monkeypatch.setattr(auth_routes, "exchange_oauth_code", fake_exchange_oauth_code)
+    callback_response = client.get(
+        f"/api/v1/auth/oauth/callback?code=abc&state={authorize_params['state'][0]}",
+        follow_redirects=False,
+    )
+
+    assert callback_response.status_code == 302
+    assert callback_response.headers["location"] == "http://testserver/?oauth_error=oauth_failed"
+
+
+def test_oauth_callback_redirects_to_login_on_invalid_state(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("AUTH_MODE", "oauth")
+    get_settings.cache_clear()
+
+    callback_response = client.get(
+        "/api/v1/auth/oauth/callback?code=abc&state=invalid",
+        follow_redirects=False,
+    )
+
+    assert callback_response.status_code == 302
+    assert callback_response.headers["location"] == "http://testserver/?oauth_error=oauth_state"
+
+
 def test_active_session_expiration_slides_forward_with_authenticated_requests(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
