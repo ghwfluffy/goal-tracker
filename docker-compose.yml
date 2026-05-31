@@ -92,6 +92,11 @@ services:
         VITE_AUTH_MODE: ${VITE_AUTH_MODE:-local}
         VITE_AUTH_BASE_URL: ${VITE_AUTH_BASE_URL:-http://localhost:8090/auth}
     restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      APP_BASE_PATH: ${APP_BASE_PATH:-}
+      API_V1_PREFIX: ${API_V1_PREFIX:-/api/v1}
     depends_on:
       - api
     ports:

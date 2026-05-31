@@ -6,7 +6,7 @@ The frontend now uses a shared token-driven CSS system instead of treating each 
 
 ### Global design tokens
 
-The root token layer lives in [`web/src/style.css`](/home/tfuller/git/goals/web/src/style.css).
+The root token layer lives in [`web/src/style.css`](./web/src/style.css).
 
 That file owns the stable visual primitives for the app:
 
@@ -21,7 +21,7 @@ If a style choice should be reusable across more than one feature, it should usu
 
 ### Shared global utilities
 
-[`web/src/style.css`](/home/tfuller/git/goals/web/src/style.css) also contains a few global utility classes for patterns that are intentionally reused across many views:
+[`web/src/style.css`](./web/src/style.css) also contains a few global utility classes for patterns that are intentionally reused across many views:
 
 - `panel-card`
 - `status-card`
@@ -33,7 +33,7 @@ These are for stable shell-level patterns, not one-off layout hacks.
 
 ### Shared home-management styles
 
-Metrics and goals share management UI CSS in [`web/src/components/home/management.css`](/home/tfuller/git/goals/web/src/components/home/management.css).
+Metrics and goals share management UI CSS in [`web/src/components/home/management.css`](./web/src/components/home/management.css).
 
 That file owns the common patterns for:
 
@@ -47,13 +47,13 @@ If metrics and goals diverge visually, fix the shared file instead of patching o
 
 ### Shared management toolbar component
 
-The metrics/goals toolbar now comes from [`web/src/components/home/ManagementToolbar.vue`](/home/tfuller/git/goals/web/src/components/home/ManagementToolbar.vue).
+The metrics/goals toolbar now comes from [`web/src/components/home/ManagementToolbar.vue`](./web/src/components/home/ManagementToolbar.vue).
 
 If a backend-managed entry screen needs the same toolbar pattern, reuse that component before inventing another toolbar.
 
 ### Chart theme bridge
 
-Chart colors are sourced from CSS variables through [`web/src/lib/theme.ts`](/home/tfuller/git/goals/web/src/lib/theme.ts).
+Chart colors are sourced from CSS variables through [`web/src/lib/theme.ts`](./web/src/lib/theme.ts).
 
 Charts should not hardcode palette values if the equivalent token already exists. If the visual language changes, update the CSS variables first so both CSS and charts move together.
 
@@ -72,7 +72,7 @@ Even in scoped CSS, prefer token references over raw literals for color, spacing
 
 Use this rough decision order:
 
-1. If the style is part of the app’s visual language, add or reuse a token in [`web/src/style.css`](/home/tfuller/git/goals/web/src/style.css).
+1. If the style is part of the app’s visual language, add or reuse a token in [`web/src/style.css`](./web/src/style.css).
 2. If the pattern repeats across multiple screens, create or reuse a shared utility class or shared component stylesheet.
 3. If the pattern is specific to one component’s structure, keep it scoped in that component.
 

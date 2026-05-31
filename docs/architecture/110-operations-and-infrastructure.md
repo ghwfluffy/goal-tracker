@@ -27,7 +27,7 @@ Current direction:
 Backend code quality expectations:
 
 - full type hints
-- linting via [`api/lint.sh`](/home/tfuller/git/goals/api/lint.sh)
+- linting via [`api/lint.sh`](./api/lint.sh)
 - lint script runs `mypy`, `flake8`, and `ruff`
 
 ## Frontend Container
@@ -40,7 +40,7 @@ Current direction:
 
 Build validation expectation:
 
-- [`web/build.sh`](/home/tfuller/git/goals/web/build.sh) should validate TypeScript and production build viability
+- [`web/build.sh`](./web/build.sh) should validate TypeScript and production build viability
 
 ## Database
 
@@ -48,7 +48,7 @@ Current direction:
 
 - PostgreSQL 18 container
 - credentials sourced from environment variables
-- bootstrap SQL in [`db/init.sql`](/home/tfuller/git/goals/db/init.sql) for initial user provisioning only
+- bootstrap SQL in [`db/init.sql`](./db/init.sql) for initial user provisioning only
 - schema creation and evolution owned by the Python application through Alembic
 
 The database should persist:

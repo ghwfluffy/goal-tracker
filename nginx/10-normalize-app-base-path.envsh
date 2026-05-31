@@ -1,0 +1,13 @@
+#!/bin/sh
+set -eu
+
+raw_base="${APP_BASE_PATH:-${VITE_APP_BASE_PATH:-}}"
+trimmed="$(printf '%s' "$raw_base" | sed 's#^/*##; s#/*$##')"
+
+if [ -z "$trimmed" ]; then
+  export APP_BASE_PATH="/__base_path_disabled__"
+else
+  export APP_BASE_PATH="/$trimmed"
+fi
+
+export API_V1_PREFIX="${API_V1_PREFIX:-/api/v1}"

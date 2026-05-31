@@ -17,10 +17,10 @@ Run the full repository validation flow from the repo root:
 
 That script runs:
 
-1. backend linting via [`api/lint.sh`](/home/tfuller/git/goals/api/lint.sh)
-2. backend tests via [`api/test.sh`](/home/tfuller/git/goals/api/test.sh)
-3. frontend tests via [`web/test.sh`](/home/tfuller/git/goals/web/test.sh)
-4. frontend production build via [`web/build.sh`](/home/tfuller/git/goals/web/build.sh)
+1. backend linting via [`api/lint.sh`](./api/lint.sh)
+2. backend tests via [`api/test.sh`](./api/test.sh)
+3. frontend tests via [`web/test.sh`](./web/test.sh)
+4. frontend production build via [`web/build.sh`](./web/build.sh)
 
 ## Smoke Test Contract
 
@@ -158,19 +158,19 @@ The OAuth client registered in the central auth site must allow
 `${PUBLIC_URL}${APP_BASE_PATH}/api/v1/auth/oauth/callback` as a redirect URI. Local auth remains the
 default when `AUTH_MODE=local`.
 
-The repo-level [`go.sh`](/home/tfuller/git/goals/go.sh) script now reads `.env`, normalizes
+The repo-level [`go.sh`](./go.sh) script now reads `.env`, normalizes
 `APP_BASE_PATH`, and defaults `VITE_APP_BASE_PATH` plus `VITE_API_BASE_URL` from that value before
 running `docker compose build` and `docker compose up`.
 
-The bundled [`nginx/default.conf`](/home/tfuller/git/goals/nginx/default.conf) now assumes
-root-relative upstream requests. Do not configure both this stack and an outer ingress to route
-`/goals` independently, or you will re-apply the prefix and break asset URLs.
+The bundled Nginx image renders [`nginx/default.conf.template`](./nginx/default.conf.template)
+at container startup. It accepts both root-relative API requests and requests under the configured
+`APP_BASE_PATH`, so an outer ingress can forward `/goals/*` without stripping the prefix.
 
 The default Docker Compose stack now exposes both frontend modes:
 
 1. nginx builds the Vue app with `vite build`
 2. nginx serves the compiled `web/dist` files directly
-3. nginx proxies only `/api/*` requests to FastAPI
+3. nginx proxies `/api/*` and `${APP_BASE_PATH}/api/*` requests to FastAPI
 4. the separate `web` service still exposes the Vite dev server on port `8081` for manual debugging
 
 That means:

@@ -4,10 +4,10 @@ Future agents should use this order when adding frontend styles.
 
 ## Extension Rules
 
-1. Look for an existing token in [`web/src/style.css`](/home/tfuller/git/goals/web/src/style.css) before adding any new color, spacing, radius, border, or shadow literal.
+1. Look for an existing token in [`web/src/style.css`](./web/src/style.css) before adding any new color, spacing, radius, border, or shadow literal.
 2. If the same pattern appears in more than one component, extract it into a shared class, shared stylesheet, or shared Vue component instead of duplicating scoped CSS.
-3. If the change affects metrics/goals management screens, check [`web/src/components/home/management.css`](/home/tfuller/git/goals/web/src/components/home/management.css) and [`web/src/components/home/ManagementToolbar.vue`](/home/tfuller/git/goals/web/src/components/home/ManagementToolbar.vue) first.
-4. If the change affects chart styling, update the CSS token layer and [`web/src/lib/theme.ts`](/home/tfuller/git/goals/web/src/lib/theme.ts) instead of hardcoding ECharts colors in-place.
+3. If the change affects metrics/goals management screens, check [`web/src/components/home/management.css`](./web/src/components/home/management.css) and [`web/src/components/home/ManagementToolbar.vue`](./web/src/components/home/ManagementToolbar.vue) first.
+4. If the change affects chart styling, update the CSS token layer and [`web/src/lib/theme.ts`](./web/src/lib/theme.ts) instead of hardcoding ECharts colors in-place.
 5. Keep scoped CSS for component-specific structure, but use token references inside that scoped CSS whenever possible.
 
 ## When To Add A New Token
@@ -50,4 +50,4 @@ Before finishing a frontend styling change, check:
 2. Did I move repeated styles to a shared location if more than one component needs them?
 3. Does this change preserve consistency with existing management screens and shell panels?
 4. If charts are affected, do their colors still come from the shared chart theme bridge?
-5. Did I run [`./scripts/validate.sh`](/home/tfuller/git/goals/scripts/validate.sh)?
+5. Did I run [`./scripts/validate.sh`](./scripts/validate.sh)?
