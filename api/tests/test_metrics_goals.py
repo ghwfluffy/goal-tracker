@@ -14,6 +14,10 @@ def bootstrap_admin(client: TestClient) -> None:
     assert response.status_code == 201
 
 
+def future_timestamp() -> str:
+    return (datetime.now(UTC) + timedelta(days=365)).isoformat().replace("+00:00", "Z")
+
+
 def test_create_and_update_number_metric(client: TestClient) -> None:
     bootstrap_admin(client)
 
@@ -1203,7 +1207,7 @@ def test_goals_and_metrics_are_scoped_to_current_user(client: TestClient) -> Non
 
     create_code_response = client.post(
         "/api/v1/invitation-codes",
-        json={"expires_at": "2026-06-01T00:00:00Z"},
+        json={"expires_at": future_timestamp()},
     )
     assert create_code_response.status_code == 201
 
@@ -1234,7 +1238,7 @@ def test_example_data_user_is_seeded_with_metrics_and_goals(client: TestClient) 
 
     create_code_response = client.post(
         "/api/v1/invitation-codes",
-        json={"expires_at": "2026-06-01T00:00:00Z"},
+        json={"expires_at": future_timestamp()},
     )
     assert create_code_response.status_code == 201
 

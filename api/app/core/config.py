@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     oauth_client_id: str = "goals"
     oauth_scope: str = "openid profile"
     oauth_state_cookie_name: str = "goal_tracker_oauth_state"
+    agent_integration_token_secret: str | None = None
     postgres_user: str = "ghw"
     postgres_password: str = "supersecure"
     postgres_db: str = "goals"

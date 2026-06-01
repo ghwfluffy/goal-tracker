@@ -22,6 +22,7 @@ from app.core.security import (
     hash_password,
 )
 from app.db import AuthSession, User, get_db
+from app.services.agent_tokens import bearer_token, user_from_agent_token
 from app.services.auth import (
     AccountLockedError,
     AuthenticationError,
@@ -295,8 +296,16 @@ def get_authenticated_session(
 
 
 def get_current_user(
-    auth_session: Annotated[AuthSession, Depends(get_authenticated_session)],
+    request: Request,
+    db: Annotated[Session, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> User:
+    if bearer_token(request) is not None:
+        user = user_from_agent_token(request=request, db=db, settings=settings)
+        if user is None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid agent token.")
+        return user
+    auth_session = get_authenticated_session(request, db, settings)
     return auth_session.user
 
 

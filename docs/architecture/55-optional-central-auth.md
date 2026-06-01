@@ -18,3 +18,19 @@ When `AUTH_MODE=oauth`, Goal Tracker delegates login and identity management to 
 - share links, backups, goals, metrics, dashboards, and notifications remain local app features
 
 The local session cookie is still app-owned. Configure `SESSION_COOKIE_NAME` and `SESSION_COOKIE_PATH` so same-host deployments do not collide with other apps.
+
+## Agent-Scoped Bearer Tokens
+
+The omnisite AI assistant can call selected Goal Tracker APIs through
+short-lived signed bearer tokens. Set `AGENT_INTEGRATION_TOKEN_SECRET` to the
+same ignored secret value used by the agent service. Tokens must have:
+
+- issuer `ghwiz-agent`;
+- audience `goals`;
+- subject matching this user's central OAuth subject;
+- scope matching the exact allowed agent action, such as `goals.list_goals`;
+- a valid HMAC-SHA256 signature and future expiration.
+
+Agent tokens do not create sessions and are not accepted for local auth,
+profile, backup, invitation-code, or share-link APIs. They only map to users
+that already have a central OAuth-linked local account.
