@@ -9,6 +9,7 @@ import Tag from "primevue/tag";
 
 import type { DashboardForecastAlgorithm, DashboardWidgetSummary } from "../lib/api";
 import { isDashboardMobileCompactWidget } from "../lib/dashboardWidgets";
+import { parseRollingWindowDays } from "../lib/rollingWindow";
 import { copyCacheBustedShareLink } from "../lib/shareLinks";
 import { getBrowserTimezone } from "../lib/time";
 import { useAppToast } from "../lib/toast";
@@ -293,15 +294,6 @@ function normalizeOptionalText(value: string): string | null {
   return normalized === "" ? null : normalized;
 }
 
-function parseRollingWindow(value: string): number | null {
-  if (value.trim() === "") {
-    return null;
-  }
-
-  const parsed = Number.parseInt(value, 10);
-  return Number.isNaN(parsed) ? null : parsed;
-}
-
 function openCreateDashboardDialog(): void {
   dashboardDialogMode.value = "create";
   dashboardNameInput.value = "";
@@ -534,7 +526,7 @@ async function submitWidgetDialog(): Promise<void> {
       rolling_window_days:
         widgetUsesGoalTimeline.value || widgetIsGoalCalendar.value
           ? null
-          : parseRollingWindow(widgetRollingWindowDaysInput.value),
+          : parseRollingWindowDays(widgetRollingWindowDaysInput.value),
       title: normalizeOptionalText(widgetTitleInput.value),
       widget_type: widgetTypeInput.value,
     });
@@ -552,7 +544,7 @@ async function submitWidgetDialog(): Promise<void> {
     rolling_window_days:
       widgetUsesGoalTimeline.value || widgetIsGoalCalendar.value
         ? null
-        : parseRollingWindow(widgetRollingWindowDaysInput.value),
+        : parseRollingWindowDays(widgetRollingWindowDaysInput.value),
     title: widgetTitleInput.value,
   });
   if (updated) {
