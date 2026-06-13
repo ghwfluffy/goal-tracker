@@ -15,7 +15,7 @@ from app.core.config import Settings
 from app.db import User
 
 TOKEN_PREFIX = "agent-v1"
-ISSUER = "ghwiz-agent"
+ISSUER = "agent-service"
 AUDIENCE = "goals"
 
 

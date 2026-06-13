@@ -25,7 +25,7 @@ The omnisite AI assistant can call selected Goal Tracker APIs through
 short-lived signed bearer tokens. Set `AGENT_INTEGRATION_TOKEN_SECRET` to the
 same ignored secret value used by the agent service. Tokens must have:
 
-- issuer `ghwiz-agent`;
+- issuer `agent-service`;
 - audience `goals`;
 - subject matching this user's central OAuth subject;
 - scope matching the exact allowed agent action, such as `goals.list_goals`;
