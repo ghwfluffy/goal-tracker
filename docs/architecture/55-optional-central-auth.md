@@ -4,11 +4,11 @@ Goal Tracker defaults to local standalone authentication. Local login, registrat
 
 When `AUTH_MODE=oauth`, Goal Tracker delegates login and identity management to the configured central auth site:
 
-- unauthenticated users start OAuth through `/api/v1/auth/oauth/login`
+- unauthenticated users automatically start OAuth through `/api/v1/auth/oauth/login`
 - the OAuth callback creates a Goal Tracker session cookie for this app only
 - failed or expired OAuth callbacks redirect back to the app landing screen with
   an `oauth_error` query value so the frontend can show a toast instead of
-  leaving users on an API error response
+  leaving users on an API error response or immediately starting another redirect
 - `AUTH_BASE_URL` is the public browser/issuer base, while
   `OAUTH_SERVER_BASE_URL` can point backend token and userinfo calls at an
   internal auth API URL

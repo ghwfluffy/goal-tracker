@@ -91,6 +91,16 @@ export const useAuthStore = defineStore("auth", {
         }
       }
 
+      if (authMode === "oauth") {
+        this.currentUser = null;
+        this.bootstrapRequired = false;
+        this.viewState = "guest";
+        if (oauthErrorMessage === "" && this.errorMessage === "") {
+          window.location.assign(oauthLoginUrl);
+        }
+        return;
+      }
+
       try {
         const bootstrapStatus = await fetchBootstrapStatus();
         this.bootstrapRequired = authMode === "local" && bootstrapStatus.bootstrap_required;
