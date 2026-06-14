@@ -10,7 +10,7 @@ import TabPanel from "primevue/tabpanel";
 import TabView from "primevue/tabview";
 
 import { joinBasePath } from "../../lib/basePath";
-import { authMode, oauthLoginUrl } from "../../lib/api";
+import { authMode, buildOAuthLoginUrl } from "../../lib/api";
 import { useAuthStore } from "../../stores/auth";
 
 const authStore = useAuthStore();
@@ -57,7 +57,7 @@ async function submitBootstrapForm(): Promise<void> {
 
 async function submitLoginForm(): Promise<void> {
   if (usesCentralAuth) {
-    window.location.assign(oauthLoginUrl);
+    window.location.assign(buildOAuthLoginUrl());
     return;
   }
   await authStore.login({

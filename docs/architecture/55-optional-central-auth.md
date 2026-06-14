@@ -6,9 +6,13 @@ When `AUTH_MODE=oauth`, Goal Tracker delegates login and identity management to 
 
 - unauthenticated users automatically start OAuth through `/api/v1/auth/oauth/login`
 - the OAuth callback creates a Goal Tracker session cookie for this app only
-- failed or expired OAuth callbacks redirect back to the app landing screen with
-  an `oauth_error` query value so the frontend can show a toast instead of
-  leaving users on an API error response or immediately starting another redirect
+- expired OAuth state callbacks redirect back to the app landing screen with
+  `oauth_error=oauth_state`; the frontend removes the query and performs one
+  automatic OAuth retry so a central Remember Me session can restore and finish
+  the sign-in hop
+- other failed OAuth callbacks, and a repeated expired-state callback after the
+  one retry, leave the user on the landing screen with a friendly toast instead
+  of an API error response or redirect loop
 - `AUTH_BASE_URL` is the public browser/issuer base, while
   `OAUTH_SERVER_BASE_URL` can point backend token and userinfo calls at an
   internal auth API URL

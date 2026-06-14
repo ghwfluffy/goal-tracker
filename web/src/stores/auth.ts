@@ -8,10 +8,10 @@ import {
   deleteCurrentAccount,
   fetchBootstrapStatus,
   fetchCurrentSession,
+  buildOAuthLoginUrl,
   loginWithPassword,
   registerWithInvitationCode,
   logoutCurrentSession,
-  oauthLoginUrl,
   updateCurrentProfile,
   uploadCurrentAvatar,
   type ChangePasswordPayload,
@@ -30,14 +30,21 @@ const oauthErrorMessages: Record<string, string> = {
   oauth_state: "Central sign-in expired. Please start again.",
 };
 
-function consumeOAuthErrorMessage(): string {
+type OAuthError = {
+  code: string;
+  message: string;
+};
+
+const oauthAutoRetryKey = "goals.oauth_state_auto_retry";
+
+function consumeOAuthError(): OAuthError | null {
   if (typeof window === "undefined") {
-    return "";
+    return null;
   }
   const params = new URLSearchParams(window.location.search);
   const code = params.get("oauth_error");
   if (code === null) {
-    return "";
+    return null;
   }
 
   params.delete("oauth_error");
@@ -47,7 +54,36 @@ function consumeOAuthErrorMessage(): string {
     "",
     `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}${window.location.hash}`,
   );
-  return oauthErrorMessages[code] ?? "Central sign-in could not be completed. Please try again.";
+  return {
+    code,
+    message: oauthErrorMessages[code] ?? "Central sign-in could not be completed. Please try again.",
+  };
+}
+
+function claimOAuthStateAutoRetry(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  try {
+    if (window.sessionStorage.getItem(oauthAutoRetryKey) === "1") {
+      return false;
+    }
+    window.sessionStorage.setItem(oauthAutoRetryKey, "1");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function clearOAuthStateAutoRetry(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.sessionStorage.removeItem(oauthAutoRetryKey);
+  } catch {
+    // Ignore unavailable session storage.
+  }
 }
 
 interface AuthStoreState {
@@ -71,14 +107,15 @@ export const useAuthStore = defineStore("auth", {
   },
   actions: {
     applyCurrentUser(user: UserSummary): void {
+      clearOAuthStateAutoRetry();
       this.currentUser = user;
       this.bootstrapRequired = false;
       this.viewState = "authenticated";
     },
     async initialize(): Promise<void> {
       this.viewState = "loading";
-      const oauthErrorMessage = consumeOAuthErrorMessage();
-      this.errorMessage = oauthErrorMessage;
+      const oauthError = consumeOAuthError();
+      this.errorMessage = oauthError?.message ?? "";
 
       try {
         const session = await fetchCurrentSession();
@@ -95,8 +132,12 @@ export const useAuthStore = defineStore("auth", {
         this.currentUser = null;
         this.bootstrapRequired = false;
         this.viewState = "guest";
-        if (oauthErrorMessage === "" && this.errorMessage === "") {
-          window.location.assign(oauthLoginUrl);
+        if (oauthError?.code === "oauth_state" && claimOAuthStateAutoRetry()) {
+          window.location.assign(buildOAuthLoginUrl());
+          return;
+        }
+        if (oauthError === null && this.errorMessage === "") {
+          window.location.assign(buildOAuthLoginUrl());
         }
         return;
       }
@@ -113,7 +154,7 @@ export const useAuthStore = defineStore("auth", {
     },
     async bootstrap(credentials: CredentialsPayload): Promise<void> {
       if (authMode === "oauth") {
-        window.location.assign(oauthLoginUrl);
+        window.location.assign(buildOAuthLoginUrl());
         return;
       }
       this.submissionState = "submitting";
@@ -131,7 +172,7 @@ export const useAuthStore = defineStore("auth", {
     },
     async login(credentials: CredentialsPayload): Promise<void> {
       if (authMode === "oauth") {
-        window.location.assign(oauthLoginUrl);
+        window.location.assign(buildOAuthLoginUrl());
         return;
       }
       this.submissionState = "submitting";
@@ -148,7 +189,7 @@ export const useAuthStore = defineStore("auth", {
     },
     async register(payload: RegistrationPayload): Promise<void> {
       if (authMode === "oauth") {
-        window.location.assign(oauthLoginUrl);
+        window.location.assign(buildOAuthLoginUrl());
         return;
       }
       this.submissionState = "submitting";

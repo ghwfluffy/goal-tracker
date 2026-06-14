@@ -518,7 +518,9 @@ function currentAppPath(): string {
   return currentPath.startsWith("/") ? currentPath : "/";
 }
 
-export const oauthLoginUrl = `${apiBaseUrl}/auth/oauth/login?next=${encodeURIComponent(currentAppPath())}`;
+export function buildOAuthLoginUrl(): string {
+  return `${apiBaseUrl}/auth/oauth/login?next=${encodeURIComponent(currentAppPath())}`;
+}
 let unauthorizedRedirectPromise: Promise<void> | null = null;
 
 export class ApiError extends Error {
