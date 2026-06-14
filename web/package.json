@@ -10,6 +10,7 @@
     "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
+    "@ghwiz/federated-banner": "file:../vendor/federated-banner",
     "pinia": "^2.3.1",
     "primeicons": "^7.0.0",
     "primevue": "^3.53.1",

@@ -16,6 +16,8 @@ When `AUTH_MODE=oauth`, Goal Tracker delegates login and identity management to 
 - otherwise first OAuth login creates a local user linked by central issuer and subject
 - profile, password, avatar, and invitation-code menu actions open `VITE_AUTH_BASE_URL`
 - share links, backups, goals, metrics, dashboards, and notifications remain local app features
+- the shared federated banner is loaded from `vendor/federated-banner` in OAuth
+  mode and uses root-provided app base paths for cross-app switching
 
 The local session cookie is still app-owned. Configure `SESSION_COOKIE_NAME` and `SESSION_COOKIE_PATH` so same-host deployments do not collide with other apps.
 

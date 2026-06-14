@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
-import type { MenuItem } from "primevue/menuitem";
-import Avatar from "primevue/avatar";
-import Button from "primevue/button";
-import Menu from "primevue/menu";
-import Tag from "primevue/tag";
+import {
+  FederatedBanner,
+  accountSettingsUrl,
+  createGhwizFederatedSites,
+  type FederatedBannerMenuItem,
+  type FederatedBannerUser,
+} from "@ghwiz/federated-banner";
+import { computed } from "vue";
 
 import { authMode, centralAuthBaseUrl, type UserSummary } from "../../lib/api";
 import { buildApiBaseUrl, joinBasePath } from "../../lib/basePath";
@@ -26,8 +28,7 @@ const emit = defineEmits<{
   openSharedLinks: [];
 }>();
 
-const profileMenu = ref<InstanceType<typeof Menu> | null>(null);
-const brandLogoUrl = joinBasePath(import.meta.env.BASE_URL, "/logo-medium.png");
+const appUrl = joinBasePath(import.meta.env.BASE_URL, "/");
 const avatarApiBaseUrl = buildApiBaseUrl(
   import.meta.env.BASE_URL,
   import.meta.env.VITE_API_BASE_URL,
@@ -62,127 +63,107 @@ const avatarUrl = computed(() => {
   return `${avatarApiBaseUrl}/users/me/avatar?v=${encodeURIComponent(props.user.avatar_version)}`;
 });
 
-const profileMenuItems = computed<MenuItem[]>(() => {
-  const items: MenuItem[] = [
-    {
-      icon: "pi pi-user-edit",
-      label: "Edit profile",
-      command: () => {
-        if (usesCentralAuth) {
-          window.location.assign(centralAuthBaseUrl);
-          return;
-        }
-        emit("openProfile");
-      },
-    },
-    {
-      icon: "pi pi-key",
-      label: "Change password",
-      command: () => {
-        if (usesCentralAuth) {
-          window.location.assign(centralAuthBaseUrl);
-          return;
-        }
-        emit("openPassword");
-      },
-    },
-    {
-      icon: "pi pi-share-alt",
-      label: "Shared links",
-      command: () => emit("openSharedLinks"),
-    },
+const bannerUser = computed<FederatedBannerUser>(() => ({
+  displayName: currentDisplayName.value,
+  username: props.user.username,
+  avatarUrl: avatarUrl.value,
+  avatarFallback: avatarLabel.value,
+  isAdmin: props.user.is_admin,
+}));
+
+const bannerSites = computed(() =>
+  createGhwizFederatedSites({
+    authBaseUrl: centralAuthBaseUrl,
+    goalsBaseUrl: import.meta.env.VITE_GOALS_BASE_URL,
+    moneyPlannerBaseUrl: import.meta.env.VITE_MONEY_PLANNER_BASE_URL,
+    agentBaseUrl: import.meta.env.VITE_AGENT_BASE_URL,
+    apartmentGateBaseUrl: import.meta.env.VITE_APARTMENT_GATE_BASE_URL,
+    fileShareBaseUrl: import.meta.env.VITE_FILE_SHARE_BASE_URL,
+  }),
+);
+
+const localAccountItems = computed<FederatedBannerMenuItem[]>(() => {
+  if (usesCentralAuth) {
+    return [];
+  }
+  return [
+    { id: "open-profile", label: "Edit Profile" },
+    { id: "open-password", label: "Change Password" },
   ];
+});
 
+const appMenuItems = computed<FederatedBannerMenuItem[]>(() => {
+  const items: FederatedBannerMenuItem[] = [
+    {
+      id: "open-notifications",
+      label: props.notificationCount > 0
+        ? `Notifications (${props.notificationCount})`
+        : "Notifications",
+    },
+    { id: "open-shared-links", label: "Shared Links" },
+  ];
   if (props.user.is_admin) {
-    items.push({
-      icon: "pi pi-database",
-      label: "Backups",
-      command: () => emit("openBackups"),
-    });
-    items.push({
-      icon: "pi pi-ticket",
-      label: "Invitation codes",
-      command: () => {
-        if (usesCentralAuth) {
-          window.location.assign(centralAuthBaseUrl);
-          return;
-        }
-        emit("openInvitationCodes");
-      },
-    });
+    items.push({ id: "open-backups", label: "Backups" });
+    items.push(
+      usesCentralAuth
+        ? { id: "central-invitation-codes", label: "Registration Codes", href: `${centralAuthBaseUrl}?tab=codes` }
+        : { id: "open-invitation-codes", label: "Invitation Codes" },
+    );
   }
-
   if (!usesCentralAuth) {
-    items.push({
-      icon: "pi pi-trash",
-      label: "Delete account",
-      command: () => emit("deleteAccount"),
-    });
+    items.push({ id: "delete-account", label: "Delete Account", danger: true });
   }
-
-  items.push({
-    icon: "pi pi-sign-out",
-    label: "Sign out",
-    command: () => emit("logout"),
-  });
-
   return items;
 });
 
-function toggleProfileMenu(event: Event): void {
-  profileMenu.value?.toggle(event);
+const bannerAccountSettingsUrl = computed(() =>
+  usesCentralAuth ? accountSettingsUrl(centralAuthBaseUrl) : "#",
+);
+
+function handleBannerAction(action: string): void {
+  if (action === "open-profile") {
+    emit("openProfile");
+    return;
+  }
+  if (action === "open-password") {
+    emit("openPassword");
+    return;
+  }
+  if (action === "open-notifications") {
+    emit("openNotifications");
+    return;
+  }
+  if (action === "open-shared-links") {
+    emit("openSharedLinks");
+    return;
+  }
+  if (action === "open-backups") {
+    emit("openBackups");
+    return;
+  }
+  if (action === "open-invitation-codes") {
+    emit("openInvitationCodes");
+    return;
+  }
+  if (action === "delete-account") {
+    emit("deleteAccount");
+  }
 }
 </script>
 
 <template>
-  <header class="app-header surface-panel-soft">
-    <div class="brand-block">
-      <img class="brand-logo" :src="brandLogoUrl" alt="Goal Tracker" />
-      <h1 class="brand-title">
-        <span class="brand-title-desktop">Goal Tracker</span>
-        <span class="brand-title-mobile">Goals</span>
-      </h1>
-    </div>
-
-    <div class="header-actions">
-      <Tag
-        v-if="version !== null"
-        class="version-badge"
-        :value="`v${version}`"
-        severity="success"
-      />
-      <Button
-        class="notification-button"
-        severity="secondary"
-        text
-        aria-label="Open notifications"
-        @click="emit('openNotifications')"
-      >
-        <span class="notification-button-content">
-          <i class="pi pi-bell" />
-          <span v-if="notificationCount > 0" class="notification-badge">{{
-            notificationCount
-          }}</span>
-        </span>
-      </Button>
-      <Button
-        class="profile-button"
-        severity="secondary"
-        text
-        @click="toggleProfileMenu"
-      >
-        <span class="profile-button-content">
-          <Avatar
-            :image="avatarUrl ?? undefined"
-            :label="avatarUrl === null ? avatarLabel : undefined"
-            shape="circle"
-          />
-          <span class="profile-name">{{ currentDisplayName }}</span>
-        </span>
-      </Button>
-      <Menu ref="profileMenu" :model="profileMenuItems" popup />
-    </div>
-  </header>
+  <FederatedBanner
+    app-name="Goal Tracker"
+    :app-url="appUrl"
+    current-app-slug="goals"
+    :account-settings-url="bannerAccountSettingsUrl"
+    :account-items="localAccountItems"
+    :app-items="appMenuItems"
+    :sites="bannerSites"
+    :user="bannerUser"
+    @action="handleBannerAction"
+    @sign-out="emit('logout')"
+  />
 </template>
 
 <style scoped>
