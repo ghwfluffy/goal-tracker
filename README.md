@@ -25,8 +25,8 @@ Goal Tracker can run standalone with its built-in accounts, or be configured to 
 
 - clear status for each goal
 - history over time, not just the latest number
-- dashboards made from reusable widgets
-- reminders when something important has not been logged
+- dashboards made from reusable widgets, with quick value entry from metric-backed widgets
+- reminders when something important has not been logged, with stale notifications removed after 72 hours
 - future forecasting where it actually helps
 - shareable visual widgets for showing progress outside the app
 

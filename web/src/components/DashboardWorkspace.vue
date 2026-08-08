@@ -8,7 +8,10 @@ import ProgressSpinner from "primevue/progressspinner";
 import Tag from "primevue/tag";
 
 import type { DashboardForecastAlgorithm, DashboardWidgetSummary } from "../lib/api";
-import { isDashboardMobileCompactWidget } from "../lib/dashboardWidgets";
+import {
+  getDashboardWidgetEntryMetricId,
+  isDashboardMobileCompactWidget,
+} from "../lib/dashboardWidgets";
 import { parseRollingWindowDays } from "../lib/rollingWindow";
 import { copyCacheBustedShareLink } from "../lib/shareLinks";
 import { getBrowserTimezone } from "../lib/time";
@@ -437,12 +440,23 @@ async function refreshTrackingData(): Promise<void> {
 
 function openMetricEntryDialog(
   metricId: string,
-  payload: { recordedDate: string; dateValue: string | null },
+  payload: { recordedDate: string | null; dateValue: string | null } = {
+    dateValue: null,
+    recordedDate: null,
+  },
 ): void {
   metricEntryMetricId.value = metricId;
   metricEntryInitialRecordedDate.value = payload.recordedDate;
   metricEntryInitialDateValue.value = payload.dateValue;
   metricEntryVisible.value = true;
+}
+
+function openWidgetMetricEntryDialog(widget: DashboardWidgetSummary): void {
+  const metricId = getDashboardWidgetEntryMetricId(widget);
+  if (metricId === null) {
+    return;
+  }
+  openMetricEntryDialog(metricId);
 }
 
 function openDateDecisionDialog(metricId: string, decisionDate: string): void {
@@ -1017,6 +1031,15 @@ onBeforeUnmount(() => {
               >
                 <i class="pi pi-share-alt" />
               </button>
+              <button
+                v-if="getDashboardWidgetEntryMetricId(widget) !== null"
+                class="widget-icon-button"
+                type="button"
+                title="Add metric value"
+                @click="openWidgetMetricEntryDialog(widget)"
+              >
+                <i class="pi pi-plus" />
+              </button>
               <template v-if="editMode">
                 <button
                   class="widget-icon-button"
@@ -1088,6 +1111,15 @@ onBeforeUnmount(() => {
                 @click="void copyWidgetShareLink(widget)"
               >
                 <i class="pi pi-share-alt" />
+              </button>
+              <button
+                v-if="getDashboardWidgetEntryMetricId(widget) !== null"
+                class="widget-icon-button"
+                type="button"
+                title="Add metric value"
+                @click="openWidgetMetricEntryDialog(widget)"
+              >
+                <i class="pi pi-plus" />
               </button>
               <button
                 v-if="editMode"

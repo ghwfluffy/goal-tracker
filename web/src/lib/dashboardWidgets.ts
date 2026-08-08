@@ -35,6 +35,27 @@ export function isDashboardMobileCompactWidget(widgetType: DashboardWidgetSummar
   return DASHBOARD_MOBILE_COMPACT_WIDGET_TYPES.has(widgetType);
 }
 
+export function getDashboardWidgetEntryMetricId(widget: DashboardWidgetSummary): string | null {
+  if (widget.metric !== null) {
+    return widget.metric.id;
+  }
+
+  if (widget.goal?.metric !== null && widget.goal?.metric !== undefined) {
+    return widget.goal.metric.id;
+  }
+
+  const metricIds = new Set(
+    widget.goals
+      .map((goal) => goal.metric?.id ?? null)
+      .filter((metricId): metricId is string => metricId !== null),
+  );
+  if (metricIds.size === 1) {
+    return [...metricIds][0] ?? null;
+  }
+
+  return null;
+}
+
 export function isDashboardPercentWidget(
   widgetType: DashboardWidgetSummary["widget_type"],
 ): boolean {

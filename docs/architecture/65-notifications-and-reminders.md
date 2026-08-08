@@ -110,7 +110,13 @@ Current design direction:
 - reminder rules should be explicit, not implicit magic
 - repeated reminders should be constrained
 - reminders should stop once the required action is completed
+- pending in-app notifications expire 72 hours after their scheduled local date and time
 - users should eventually be able to manage reminder preferences
+
+Expiration is applied when notifications are synchronized for a user. Expired
+records remain stored with an `expired` status for auditability, but are omitted
+from the notification list and are not regenerated. A notification is still
+available at exactly 72 hours and expires once it is older than that boundary.
 
 ## Auditability
 

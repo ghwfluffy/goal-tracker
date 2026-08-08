@@ -556,6 +556,55 @@ def test_due_number_metric_notification_can_be_completed(
     assert notification_list_response.json() == {"notifications": []}
 
 
+def test_pending_metric_notification_expires_after_72_hours(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bootstrap_admin(client)
+    scheduled_at = datetime(2026, 6, 1, 8, 0, tzinfo=UTC)
+    created_at = scheduled_at - timedelta(minutes=1)
+
+    monkeypatch.setattr("app.services.metrics.utcnow", lambda: created_at)
+    create_response = client.post(
+        "/api/v1/metrics",
+        json={
+            "name": "Weight",
+            "metric_type": "number",
+            "decimal_places": 1,
+            "reminder_time_1": scheduled_at.strftime("%H:%M"),
+        },
+    )
+    assert create_response.status_code == 201
+
+    current_time = scheduled_at
+    monkeypatch.setattr("app.services.notifications.utcnow", lambda: current_time)
+
+    initial_response = client.get("/api/v1/notifications?timezone=UTC")
+    assert initial_response.status_code == 200
+    notification_id = initial_response.json()["notifications"][0]["id"]
+
+    current_time = scheduled_at + timedelta(hours=72)
+    boundary_response = client.get("/api/v1/notifications?timezone=UTC")
+    assert boundary_response.status_code == 200
+    assert notification_id in {
+        notification["id"] for notification in boundary_response.json()["notifications"]
+    }
+
+    current_time += timedelta(seconds=1)
+    expired_response = client.get("/api/v1/notifications?timezone=UTC")
+    assert expired_response.status_code == 200
+    assert notification_id not in {
+        notification["id"] for notification in expired_response.json()["notifications"]
+    }
+
+    complete_response = client.post(
+        f"/api/v1/notifications/{notification_id}/complete",
+        json={"number_value": 244.4, "timezone": "UTC"},
+    )
+    assert complete_response.status_code == 422
+    assert complete_response.json()["detail"] == "Notification has already been resolved."
+
+
 def test_manual_metric_entry_clears_matching_pending_notification(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,

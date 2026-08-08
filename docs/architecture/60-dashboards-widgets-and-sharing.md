@@ -33,6 +33,7 @@ Current implemented slice:
 - metric-history, metric-summary, goal-progress, goal-summary, goal-calendar, and goal-checklist widgets
 - date-metric `days since` summary widgets for streak-style dashboards
 - goal-progress series derived from metric history rather than stored separately
+- quick metric-value entry from metric widgets and goal widgets backed by one unambiguous metric
 - goal-calendar widgets can aggregate one goal, an explicit goal set, or all active goals across goal-length, current-month, and rolling-four-week views
 - checklist widgets can render ordered goal subtasks as checkboxes and write completions back to the goal
 - user-managed share links for dashboards and widgets

@@ -13,6 +13,8 @@ from app.services.metrics import create_metric_entry, is_numeric_metric_type
 NOTIFICATION_STATUS_PENDING = "pending"
 NOTIFICATION_STATUS_COMPLETED = "completed"
 NOTIFICATION_STATUS_SKIPPED = "skipped"
+NOTIFICATION_STATUS_EXPIRED = "expired"
+NOTIFICATION_RETENTION = timedelta(hours=72)
 
 
 class NotificationError(Exception):
@@ -97,6 +99,21 @@ def notification_default_recorded_at(
     )
 
 
+def notification_is_expired(
+    *,
+    notification_date: date,
+    scheduled_time: time,
+    timezone: ZoneInfo,
+    now: datetime,
+) -> bool:
+    scheduled_at = datetime.combine(
+        notification_date,
+        scheduled_time,
+        tzinfo=timezone,
+    ).astimezone(UTC)
+    return scheduled_at + NOTIFICATION_RETENTION < now.astimezone(UTC)
+
+
 def sync_metric_notifications(
     db: Session,
     *,
@@ -110,12 +127,33 @@ def sync_metric_notifications(
     }
     metric_created_local = local_datetime(metric.created_at, timezone)
     current_local_date = now.date()
-    date_cursor = metric_created_local.date()
+    retention_start_date = (now.astimezone(UTC) - NOTIFICATION_RETENTION).astimezone(timezone).date()
+    date_cursor = max(metric_created_local.date(), retention_start_date)
+
+    for notification in metric.notifications:
+        if notification.status == NOTIFICATION_STATUS_PENDING and notification_is_expired(
+            notification_date=notification.notification_date,
+            scheduled_time=notification.scheduled_time,
+            timezone=timezone,
+            now=now,
+        ):
+            notification.status = NOTIFICATION_STATUS_EXPIRED
+            notification.resolved_at = now.astimezone(UTC)
+            notification.updated_at = now.astimezone(UTC)
 
     while date_cursor <= current_local_date:
         for slot_index, scheduled_time in due_slots_for_metric(metric):
             scheduled_local = datetime.combine(date_cursor, scheduled_time, tzinfo=timezone)
-            if scheduled_local > now or scheduled_local < metric_created_local:
+            if (
+                scheduled_local > now
+                or scheduled_local < metric_created_local
+                or notification_is_expired(
+                    notification_date=date_cursor,
+                    scheduled_time=scheduled_time,
+                    timezone=timezone,
+                    now=now,
+                )
+            ):
                 continue
 
             existing = existing_by_slot.get((date_cursor, slot_index))
