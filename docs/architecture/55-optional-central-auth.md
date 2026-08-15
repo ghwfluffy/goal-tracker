@@ -26,6 +26,10 @@ When `AUTH_MODE=oauth`, Goal Tracker delegates login and identity management to 
   mode it uses root-provided app base paths for cross-app switching, while local
   mode keeps the same banner shell without federated app links
 
+In a parent deployment, `VITE_FEDERATED_APPS` supplies the complete JSON app
+inventory. The older individual base URL variables are a standalone fallback,
+so the deployed switcher does not silently omit newer apps.
+
 The local session cookie is still app-owned. Configure `SESSION_COOKIE_NAME` and `SESSION_COOKIE_PATH` so same-host deployments do not collide with other apps.
 
 ## Agent-Scoped Bearer Tokens

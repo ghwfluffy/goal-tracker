@@ -3,6 +3,7 @@ import {
   FederatedBanner,
   accountSettingsUrl,
   createGhwizFederatedSites,
+  parseFederatedSites,
   type FederatedBannerMenuItem,
   type FederatedBannerUser,
 } from "@ghwiz/federated-banner";
@@ -34,6 +35,7 @@ const avatarApiBaseUrl = buildApiBaseUrl(
   import.meta.env.VITE_API_BASE_URL,
 );
 const usesCentralAuth = authMode === "oauth";
+const configuredBannerSites = parseFederatedSites(import.meta.env.VITE_FEDERATED_APPS);
 
 const currentDisplayName = computed(
   () => props.user.display_name || props.user.username,
@@ -75,7 +77,7 @@ const bannerSites = computed(() => {
   if (!usesCentralAuth) {
     return [];
   }
-  return createGhwizFederatedSites({
+  return configuredBannerSites.length > 0 ? configuredBannerSites : createGhwizFederatedSites({
     authBaseUrl: centralAuthBaseUrl,
     goalsBaseUrl: import.meta.env.VITE_GOALS_BASE_URL,
     moneyPlannerBaseUrl: import.meta.env.VITE_MONEY_PLANNER_BASE_URL,
