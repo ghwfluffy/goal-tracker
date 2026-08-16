@@ -111,7 +111,8 @@ Current implemented direction:
 
 - public share pages are server-rendered so preview crawlers do not depend on client-side JavaScript
 - shared widget pages render the actual widget graph inline from the saved series rather than showing only the OG preview image
-- widgets have a simplified server-side PNG renderer focused on the main value and uncluttered trend context
+- shared metric-goal graphs and their PNG previews use the widget's configured forecast algorithm, including the same weighted-algorithm fallback order as the authenticated dashboard
+- widget PNG previews show the goal's target metric value and end date alongside the forecast graph
 - dashboards render as read-only public HTML rather than editable app chrome
 - avoid exposing internal database identifiers in public URLs
 - support widgets that can explain why a scheduled day is excluded, such as exception dates rendered as `skipped`

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
+from PIL import ImageDraw
 
 
 def bootstrap_admin(client: TestClient) -> None:
@@ -96,7 +99,10 @@ def seed_dashboard_with_widgets(client: TestClient) -> dict[str, str]:
     }
 
 
-def test_widget_share_links_render_public_og_pages_and_png_previews(client: TestClient) -> None:
+def test_widget_share_links_render_public_og_pages_and_png_previews(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     bootstrap_admin(client)
     seeded = seed_dashboard_with_widgets(client)
 
@@ -148,14 +154,30 @@ def test_widget_share_links_render_public_og_pages_and_png_previews(client: Test
     assert 'class="widget-chart"' in page_response.text
     assert "/vendor/echarts.min.js" in page_response.text
     assert "Widget graph" in page_response.text
+    assert '"algorithm": "weighted_week_over_week"' in page_response.text
     assert 'class="preview-image"' not in page_response.text
     assert "Edit dashboard" not in page_response.text
 
+    rendered_text: list[str] = []
+    original_text = ImageDraw.ImageDraw.text
+
+    def record_text(
+        draw: ImageDraw.ImageDraw,
+        xy: tuple[float, float],
+        text: str,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        rendered_text.append(text)
+        original_text(draw, xy, text, *args, **kwargs)
+
+    monkeypatch.setattr(ImageDraw.ImageDraw, "text", record_text)
     preview_response = client.get(share_link["preview_image_path"])
     assert preview_response.status_code == 200
     assert preview_response.headers["content-type"] == "image/png"
     assert preview_response.headers["cache-control"] == "no-cache, no-store, must-revalidate"
     assert preview_response.content.startswith(b"\x89PNG\r\n\x1a\n")
+    assert "GOAL 220.0 lbs · ENDS Jun 1, 2026" in rendered_text
 
 
 def test_dashboard_share_links_support_unlimited_expiration_and_read_only_dashboard_view(

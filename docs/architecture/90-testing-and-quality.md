@@ -28,6 +28,7 @@ Coverage priorities:
 - multi-entry-per-day metric history and attempt-based performance goals
 - reminder generation logic
 - share-link management
+- configured forecast parity across authenticated charts, public widget pages, and PNG previews
 - seed-data application logic
 - audit-event generation for important writes
 

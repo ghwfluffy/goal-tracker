@@ -16,6 +16,7 @@ from app.api.schemas.dashboards import (
     MetricReferenceSummary,
     WidgetSummary,
 )
+from app.services.goal_forecast import ForecastPoint, ForecastSeries, build_goal_forecast_series
 from app.services.metrics import is_numeric_metric_type
 
 PREVIEW_WIDTH = 1200
@@ -315,6 +316,62 @@ def _widget_chart_target(widget: WidgetSummary) -> float | None:
     return None
 
 
+def _widget_forecast_series(
+    widget: WidgetSummary,
+    *,
+    profile_timezone: str,
+    now_timestamp: datetime | None = None,
+) -> ForecastSeries:
+    if widget.widget_type != "goal_progress" or _widget_chart_mode(widget) == "progress_percent":
+        return ForecastSeries(bridge_series=[], future_series=[], now_point=None)
+
+    target_value = _widget_chart_target(widget)
+    if target_value is None:
+        return ForecastSeries(bridge_series=[], future_series=[], now_point=None)
+
+    actual_points = [
+        ForecastPoint(timestamp=timestamp, value=value) for timestamp, value in _widget_chart_points(widget)
+    ]
+    return build_goal_forecast_series(
+        actual_points=actual_points,
+        algorithm=widget.forecast_algorithm or "simple",
+        now_timestamp=now_timestamp or datetime.now(UTC),
+        target_value=target_value,
+        profile_timezone=profile_timezone,
+    )
+
+
+def _widget_goal_endpoint_text(widget: WidgetSummary) -> str | None:
+    if widget.goal is None or widget.goal.target_date is None:
+        return None
+    target = _format_goal_target(widget.goal)
+    if target is None:
+        return None
+    target_date = _format_calendar_date(date.fromisoformat(widget.goal.target_date))
+    return f"GOAL {target} · ENDS {target_date}"
+
+
+def _forecast_point_payload(widget: WidgetSummary, point: ForecastPoint) -> list[float | int]:
+    value = point.value
+    if _widget_chart_mode(widget) == "metric_date":
+        epoch_ordinal = date(1970, 1, 1).toordinal()
+        clamped_ordinal = min(max(value, date.min.toordinal()), date.max.toordinal())
+        value = (clamped_ordinal - epoch_ordinal) * 86400000
+    return [round(point.timestamp.timestamp() * 1000), value]
+
+
+def _widget_forecast_payload(widget: WidgetSummary, *, profile_timezone: str) -> dict[str, object]:
+    forecast = _widget_forecast_series(widget, profile_timezone=profile_timezone)
+    return {
+        "algorithm": widget.forecast_algorithm or "simple",
+        "bridgeSeries": [_forecast_point_payload(widget, point) for point in forecast.bridge_series],
+        "futureSeries": [_forecast_point_payload(widget, point) for point in forecast.future_series],
+        "nowPoint": (
+            None if forecast.now_point is None else _forecast_point_payload(widget, forecast.now_point)
+        ),
+    }
+
+
 def _widget_accent_color(widget: WidgetSummary) -> tuple[int, int, int, int]:
     if widget.widget_type == "goal_failure_risk":
         return COLOR_RED
@@ -355,6 +412,25 @@ def _sample_series_points(
     *,
     max_points: int,
 ) -> list[tuple[datetime, float]]:
+    if len(values) <= max_points:
+        return values
+    if max_points <= 1:
+        return [values[-1]]
+
+    sampled = [values[0]]
+    last_index = len(values) - 1
+    for position in range(1, max_points - 1):
+        index = round(position * last_index / (max_points - 1))
+        sampled.append(values[index])
+    sampled.append(values[-1])
+    return sampled
+
+
+def _sample_forecast_points(
+    values: list[ForecastPoint],
+    *,
+    max_points: int,
+) -> list[ForecastPoint]:
     if len(values) <= max_points:
         return values
     if max_points <= 1:
@@ -433,7 +509,8 @@ def _format_chart_value(widget: WidgetSummary, value: float) -> str:
     if chart_mode == "progress_percent":
         return f"{round(value)}%"
     if chart_mode == "metric_date":
-        return _format_calendar_date(date.fromordinal(round(value)))
+        ordinal = min(max(round(value), date.min.toordinal()), date.max.toordinal())
+        return _format_calendar_date(date.fromordinal(ordinal))
     if widget.metric is not None:
         return _format_number(value, widget.metric.decimal_places, widget.metric.unit_label)
     if widget.goal is not None:
@@ -539,6 +616,10 @@ def _render_widget_preview_image(
     metric_label_font = _font(21, bold=True)
     point_value_font = _font(30, bold=True)
 
+    goal_endpoint_text = _widget_goal_endpoint_text(widget)
+    if goal_endpoint_text is not None:
+        draw.text((82, 72), goal_endpoint_text, font=metric_label_font, fill=COLOR_MUTED)
+
     progress_label = _widget_progress_label(widget)
     if progress_label is not None:
         progress_width = draw.textlength(progress_label, font=metric_font)
@@ -579,23 +660,21 @@ def _render_widget_preview_image(
 
     if len(chart_values) >= 1 and len(actual_points) >= 1:
         now_timestamp = datetime.now(UTC)
-        target_timestamp: datetime | None = None
-        if widget.goal is not None and widget.goal.target_date is not None:
-            target_timestamp = datetime.combine(
-                date.fromisoformat(widget.goal.target_date),
-                datetime.max.time(),
-                tzinfo=UTC,
-            )
+        forecast = _widget_forecast_series(
+            widget,
+            profile_timezone=profile_timezone,
+            now_timestamp=now_timestamp,
+        )
 
         comparison_values = [*chart_values]
         if target_value is not None:
             comparison_values.append(target_value)
+        comparison_values.extend(point.value for point in forecast.bridge_series)
+        comparison_values.extend(point.value for point in forecast.future_series)
 
         actual_timestamps = [point[0].timestamp() for point in actual_points]
-        if target_timestamp is not None:
-            actual_timestamps.append(target_timestamp.timestamp())
-        if now_timestamp > actual_points[-1][0]:
-            actual_timestamps.append(now_timestamp.timestamp())
+        actual_timestamps.extend(point.timestamp.timestamp() for point in forecast.bridge_series)
+        actual_timestamps.extend(point.timestamp.timestamp() for point in forecast.future_series)
 
         min_timestamp = min(actual_timestamps)
         max_timestamp = max(actual_timestamps)
@@ -603,7 +682,7 @@ def _render_widget_preview_image(
             min_timestamp -= 1
             max_timestamp += 1
 
-        minimum, maximum = _normalize_chart_bounds(chart_values, target_value=target_value)
+        minimum, maximum = _normalize_chart_bounds(comparison_values)
 
         def chart_x_for(timestamp: datetime) -> float:
             return (
@@ -624,45 +703,29 @@ def _render_widget_preview_image(
         current_label_text = widget_primary_value_text(widget, profile_timezone=profile_timezone)
         current_point_x, current_point_y = actual_line_points[-1]
         current_point_fill = COLOR_GREEN
+        end_point_x: float | None = None
+        end_point_y: float | None = None
 
-        if (
-            target_timestamp is not None
-            and target_value is not None
-            and now_timestamp > actual_points[-1][0]
-            and target_timestamp > actual_points[-1][0]
-        ):
-            bridge_end_timestamp = min(now_timestamp, target_timestamp)
-            bridge_end_value = _forecast_value_at_timestamp(
-                bridge_end_timestamp,
-                last_actual_timestamp=actual_points[-1][0],
-                last_actual_value=actual_points[-1][1],
-                target_timestamp=target_timestamp,
-                target_value=target_value,
-            )
+        if len(forecast.bridge_series) > 1:
             bridge_points = [
-                actual_line_points[-1],
-                (chart_x_for(bridge_end_timestamp), chart_y_for(bridge_end_value)),
+                (chart_x_for(point.timestamp), chart_y_for(point.value))
+                for point in _sample_forecast_points(forecast.bridge_series, max_points=96)
             ]
-            draw.line(bridge_points, fill=COLOR_BLUE, width=5)
-            current_point_x, current_point_y = bridge_points[-1]
-            current_point_fill = COLOR_BLUE
-            current_label_text = _format_chart_value(widget, bridge_end_value)
+            draw.line(bridge_points, fill=COLOR_BLUE, width=5, joint="curve")
 
-            if target_timestamp > bridge_end_timestamp:
-                future_points = [
-                    bridge_points[-1],
-                    (chart_x_for(target_timestamp), chart_y_for(target_value)),
-                ]
-                draw.line(future_points, fill=COLOR_RED, width=5)
-                end_point_x, end_point_y = future_points[-1]
-            else:
-                end_point_x, end_point_y = bridge_points[-1]
-        elif target_timestamp is not None and target_value is not None:
-            end_point_x = chart_x_for(target_timestamp)
-            end_point_y = chart_y_for(target_value)
-        else:
-            end_point_x = current_point_x
-            end_point_y = current_point_y
+        if forecast.now_point is not None:
+            current_point_x = chart_x_for(forecast.now_point.timestamp)
+            current_point_y = chart_y_for(forecast.now_point.value)
+            current_point_fill = COLOR_BLUE
+            current_label_text = _format_chart_value(widget, forecast.now_point.value)
+
+        if len(forecast.future_series) > 1:
+            future_points = [
+                (chart_x_for(point.timestamp), chart_y_for(point.value))
+                for point in _sample_forecast_points(forecast.future_series, max_points=96)
+            ]
+            draw.line(future_points, fill=COLOR_RED, width=5, joint="curve")
+            end_point_x, end_point_y = future_points[-1]
 
         draw.ellipse(
             (current_point_x - 8, current_point_y - 8, current_point_x + 8, current_point_y + 8),
@@ -673,7 +736,7 @@ def _render_widget_preview_image(
             fill=current_point_fill,
         )
 
-        if target_value is not None:
+        if end_point_x is not None and end_point_y is not None:
             draw.ellipse((end_point_x - 6, end_point_y - 6, end_point_x + 6, end_point_y + 6), fill=COLOR_RED)
 
         current_label_width = draw.textlength(current_label_text, font=point_value_font)
@@ -689,7 +752,7 @@ def _render_widget_preview_image(
             fill=COLOR_TEXT,
         )
 
-        if target_value is not None:
+        if target_value is not None and end_point_x is not None and end_point_y is not None:
             end_label_text = _format_chart_value(widget, target_value)
             end_label_width = draw.textlength(end_label_text, font=point_value_font)
             end_label_x = min(
@@ -959,11 +1022,13 @@ def _widget_chart_svg(widget: WidgetSummary, *, compact: bool = False) -> str:
     )
 
 
-def _widget_chart_bootstrap_script(widget: WidgetSummary) -> str:
+def _widget_chart_bootstrap_script(widget: WidgetSummary, *, profile_timezone: str) -> str:
     payload = json.dumps(widget.model_dump(mode="json"))
+    forecast_payload = json.dumps(_widget_forecast_payload(widget, profile_timezone=profile_timezone))
     return f"""
 (() => {{
   const widget = {payload};
+  const goalForecast = {forecast_payload};
   const chartRoot = document.getElementById("widget-share-chart");
   if (chartRoot === null || window.echarts === undefined) {{
     return;
@@ -1162,48 +1227,19 @@ def _widget_chart_bootstrap_script(widget: WidgetSummary) -> str:
   function createGoalMetricProgressOption() {{
     const actualPoints = goalMetricChartPoints();
     const targetValue = goalTargetValue();
-    const targetEndTimestamp = goalTargetEndTimestamp();
-    const nowTimestamp = Date.now();
     const actualSeries = actualPoints.map((point) => [point.timestamp, point.value]);
     const values = actualPoints.map((point) => point.value);
     if (typeof targetValue === "number") {{
       values.push(targetValue);
     }}
+    values.push(...goalForecast.bridgeSeries.map((point) => point[1]));
+    values.push(...goalForecast.futureSeries.map((point) => point[1]));
     const numericBounds =
       widget.goal?.metric.metric_type !== "date" ? getPaddedNumericAxisBounds(values) : null;
 
-    const bridgeSeries = [];
-    const futureSeries = [];
-    const nowPoint = [];
-    const lastActualPoint = actualPoints.at(-1) ?? null;
-
-    if (
-      lastActualPoint !== null &&
-      typeof targetValue === "number" &&
-      targetEndTimestamp !== null &&
-      targetEndTimestamp > lastActualPoint.timestamp
-    ) {{
-      const bridgeEndTimestamp = Math.min(nowTimestamp, targetEndTimestamp);
-      if (bridgeEndTimestamp > lastActualPoint.timestamp) {{
-        bridgeSeries.push([lastActualPoint.timestamp, lastActualPoint.value]);
-        const bridgeEndValue = forecastValueAtTimestamp(
-          bridgeEndTimestamp,
-          lastActualPoint.timestamp,
-          lastActualPoint.value,
-          targetEndTimestamp,
-          targetValue,
-        );
-        bridgeSeries.push([bridgeEndTimestamp, bridgeEndValue]);
-        nowPoint.push([bridgeEndTimestamp, bridgeEndValue]);
-      }}
-
-      if (targetEndTimestamp > nowTimestamp && bridgeSeries.length > 0) {{
-        const futureStart = bridgeSeries.at(-1);
-        if (futureStart !== undefined) {{
-          futureSeries.push(futureStart, [targetEndTimestamp, targetValue]);
-        }}
-      }}
-    }}
+    const bridgeSeries = goalForecast.bridgeSeries;
+    const futureSeries = goalForecast.futureSeries;
+    const nowPoint = goalForecast.nowPoint === null ? [] : [goalForecast.nowPoint];
 
     return {{
       animation: false,
@@ -1645,7 +1681,7 @@ def render_widget_share_page(
     vendor_script_path: str,
 ) -> str:
     title = widget_og_title(widget, profile_timezone=profile_timezone)
-    chart_script = _widget_chart_bootstrap_script(widget)
+    chart_script = _widget_chart_bootstrap_script(widget, profile_timezone=profile_timezone)
     chart_html = (
         """
     <section class="panel chart-panel">
