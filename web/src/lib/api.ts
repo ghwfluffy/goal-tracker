@@ -1,3 +1,4 @@
+import { createSessionRecovery } from "./sessionRecovery";
 import { buildApiBaseUrl, joinBasePath, normalizeBasePath } from "./basePath";
 
 export interface StatusResponse {
@@ -622,15 +623,17 @@ async function forceLogoutRedirect(fetcher: Fetcher): Promise<void> {
   await unauthorizedRedirectPromise;
 }
 
+const recoverSession = createSessionRecovery(() => `${apiBaseUrl}/auth/oauth/login?next=%2F`, authMode === "oauth");
+
 async function requestJson<T>(
   path: string,
   init?: RequestInit,
   fetcher: Fetcher = fetch,
 ): Promise<T> {
-  const response = await fetcher(
+  const response = await recoverSession(() => fetcher(
     `${apiBaseUrl}${path}`,
     buildRequestInit(init),
-  );
+  ), !path.startsWith("/auth/") || path === "/auth/me");
 
   if (!response.ok) {
     const error = await parseError(response);
@@ -648,10 +651,10 @@ async function requestNoContent(
   init?: RequestInit,
   fetcher: Fetcher = fetch,
 ): Promise<void> {
-  const response = await fetcher(
+  const response = await recoverSession(() => fetcher(
     `${apiBaseUrl}${path}`,
     buildRequestInit(init),
-  );
+  ), !path.startsWith("/auth/") || path === "/auth/me");
 
   if (!response.ok) {
     const error = await parseError(response);
@@ -1246,3 +1249,4 @@ export function revokeShareLink(
     fetcher,
   );
 }
+
